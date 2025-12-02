@@ -1,9 +1,9 @@
 # Создание внешнего IP-адреса в Yandex Cloud
 resource "yandex_vpc_address" "addr" {
-  name = "gitlab-runner-pip"  # Имя ресурса внешнего IP-адреса
+  name = "vmalert-pip"  # Имя ресурса внешнего IP-адреса
 
   external_ipv4_address {
-    zone_id = yandex_vpc_subnet.gitlab-runner-a.zone  # Зона доступности, где будет выделен IP-адрес
+    zone_id = yandex_vpc_subnet.vmalert-a.zone  # Зона доступности, где будет выделен IP-адрес
   }
 }
 
@@ -15,7 +15,7 @@ resource "yandex_dns_zone" "apatsev-org-ru" {
   public = true                  # Указание, что зона является публичной
 
   # Привязка зоны к VPC-сети, чтобы можно было использовать приватный DNS внутри сети
-  private_networks = [yandex_vpc_network.gitlab-runner.id]
+  private_networks = [yandex_vpc_network.vmalert.id]
 }
 
 # Создание DNS-записи типа A, указывающей на внешний IP
