@@ -13,7 +13,7 @@ helm repo update
 
 helm upgrade --install vmks vm/victoria-metrics-k8s-stack \
   --namespace vmks --create-namespace \
-  --values vmks-values.yaml
+  --wait --values vmks-values.yaml
 ```
 
 
