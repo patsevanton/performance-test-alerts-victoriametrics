@@ -60,9 +60,8 @@ def generate_vmrule(vmrule_index, num_alerts_in_group):
 
 
 def main():
-    # ⚠️ Настройки - уменьшите количество алертов в одном VMRule
     num_vmrules = 1000
-    alerts_per_vmrule = 200  # Уменьшено с 1000 до 200
+    alerts_per_vmrule = 200
     
     output_dir = "vmrules"
     os.makedirs(output_dir, exist_ok=True)
