@@ -70,7 +70,7 @@ def main():
     for vmrule_idx in range(1, num_vmrules + 1):
         vmrule = generate_vmrule(vmrule_idx, alerts_per_vmrule)
 
-        file_path = os.path.join(output_dir, f"vmrule-{vmrule_idx}.yaml")
+        file_path = os.path.join(output_dir, f"vmrule-{str(vmrule_idx).zfill(5)}.yaml")
 
         with open(file_path, "w") as f:
             yaml.dump(vmrule, f, sort_keys=False, default_flow_style=False)
