@@ -41,7 +41,7 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
    Нажмите **+ New Annotation**.
 
 3. **Заполните основные настройки:**  
-   - **Name** — название аннотации (например, `Vmrule-deploy`).  
+   - **Name** — название аннотации (например, `vmrule-deploy`).  
    - **Data source** — выберите источник данных (например, `-- Grafana --` для встроенных).  
    - **Query** — оставьте **Annotations & Alerts**.  
    - **Filter by Tags** — можно указать теги для фильтрации (опционально).
