@@ -1,6 +1,8 @@
 import yaml
 import datetime
 import random
+import os
+
 
 def generate_alert(alert_index, vmrule_index):
     """Генерирует один алерт"""
@@ -8,11 +10,11 @@ def generate_alert(alert_index, vmrule_index):
     severity = random.choice(severities)
 
     alert_name = f"LoadTestAlert_{vmrule_index}_{alert_index+1}"
-    alert_id = f"loadtest_{vmrule_index}_{str(alert_index+1).zfill(3)}"
+    alert_id = f"loadtest_{vmrule_index}_{str(alert_index+1).zfill(4)}"
 
-    rule = {
+    return {
         "alert": alert_name,
-        "expr": "vector(1)",  # Всегда истинное выражение
+        "expr": "vector(1)",
         "for": f"{random.choice([0, 5, 10, 15, 30])}s",
         "labels": {
             "severity": severity,
@@ -23,15 +25,18 @@ def generate_alert(alert_index, vmrule_index):
         },
         "annotations": {
             "summary": f"Load Test Alert {vmrule_index}-{alert_index+1} - {severity.capitalize()}",
-            "description": f"This is load testing alert from VMRule {vmrule_index}. Generated at {datetime.datetime.now().isoformat()}",
+            "description": (
+                f"This is load testing alert from VMRule {vmrule_index}. "
+                f"Generated at {datetime.datetime.now().isoformat()}"
+            ),
             "test_iteration": f"{vmrule_index}-{alert_index+1}"
         }
     }
-    return rule
+
 
 def generate_vmrule(vmrule_index, num_alerts_in_group):
     """Генерирует один VMRule с указанным количеством алертов"""
-    rules_group = {
+    return {
         "apiVersion": "operator.victoriametrics.com/v1beta1",
         "kind": "VMRule",
         "metadata": {
@@ -47,42 +52,42 @@ def generate_vmrule(vmrule_index, num_alerts_in_group):
                 {
                     "name": f"loadtest-generated-{vmrule_index}",
                     "interval": "30s",
-                    "rules": [generate_alert(i, vmrule_index) for i in range(num_alerts_in_group)]
+                    "rules": [
+                        generate_alert(i, vmrule_index)
+                        for i in range(num_alerts_in_group)
+                    ]
                 }
             ]
         }
     }
-    return rules_group
+
 
 def main():
-    # Конфигурация
-    num_vmrules = 2  # Количество VMRule объектов
-    alerts_per_vmrule = 2  # Количество алертов в каждом VMRule
-    
-    all_vmrules = []
-    
-    # Генерируем VMRule объекты
+    # ⚠️ Настройки
+    num_vmrules = 1000
+    alerts_per_vmrule = 1000
+
+    output_dir = "vmrules"
+    os.makedirs(output_dir, exist_ok=True)
+
+    print("Генерация YAML файлов...")
     for vmrule_idx in range(1, num_vmrules + 1):
         vmrule = generate_vmrule(vmrule_idx, alerts_per_vmrule)
-        all_vmrules.append(vmrule)
-    
-    # Записываем в YAML с разделителем "---" между документами
-    with open("loadtest-vmrules.yaml", "w") as f:
-        for i, vmrule in enumerate(all_vmrules):
+
+        file_path = os.path.join(output_dir, f"vmrule-{vmrule_idx}.yaml")
+
+        with open(file_path, "w") as f:
             yaml.dump(vmrule, f, sort_keys=False, default_flow_style=False)
-            if i < len(all_vmrules) - 1:
-                f.write("\n---\n")  # Разделитель YAML документов
-    
-    print(f"loadtest-vmrules.yaml успешно создан!")
-    print(f"Всего VMRule: {num_vmrules}")
+
+        if vmrule_idx % 50 == 0:
+            print(f"Создано файлов: {vmrule_idx}/{num_vmrules}")
+
+    print("\nГенерация завершена!")
+    print(f"Каталог: {output_dir}")
+    print(f"Всего файлов: {num_vmrules}")
     print(f"Алертов в каждом VMRule: {alerts_per_vmrule}")
-    print(f"Всего алертов: {num_vmrules * alerts_per_vmrule}")
-    print("\nСозданные VMRule и алерты:")
-    
-    for vmrule_idx in range(1, num_vmrules + 1):
-        print(f"\nVMRule {vmrule_idx} (loadtest-alerts-{vmrule_idx}):")
-        for alert_idx in range(1, alerts_per_vmrule + 1):
-            print(f"  - LoadTestAlert_{vmrule_idx}_{alert_idx}")
+    print(f"Общее количество алертов: {num_vmrules * alerts_per_vmrule}")
+
 
 if __name__ == "__main__":
     main()
