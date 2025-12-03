@@ -24,11 +24,8 @@ def generate_alert(alert_index, vmrule_index):
             "vmrule_group": f"group-{vmrule_index}"
         },
         "annotations": {
-            "summary": f"Load Test Alert {vmrule_index}-{alert_index+1} - {severity.capitalize()}",
-            "description": (
-                f"This is load testing alert from VMRule {vmrule_index}. "
-                f"Generated at {datetime.datetime.now().isoformat()}"
-            ),
+            "summary": f"Load Test Alert {vmrule_index}-{alert_index+1}",
+            "description": f"Test alert {alert_id}",
             "test_iteration": f"{vmrule_index}-{alert_index+1}"
         }
     }
@@ -63,10 +60,10 @@ def generate_vmrule(vmrule_index, num_alerts_in_group):
 
 
 def main():
-    # ⚠️ Настройки
+    # ⚠️ Настройки - уменьшите количество алертов в одном VMRule
     num_vmrules = 1000
-    alerts_per_vmrule = 1000
-
+    alerts_per_vmrule = 200  # Уменьшено с 1000 до 200
+    
     output_dir = "vmrules"
     os.makedirs(output_dir, exist_ok=True)
 
