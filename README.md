@@ -21,7 +21,15 @@ helm upgrade --install vmks vm/victoria-metrics-k8s-stack \
 
 Получение пароля grafana для admin юзера
 ```shell
-kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | base64 --decode
+kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | base64 --decode; echo
+
 ```
+
+# Создание Service Account через UI:
+1. Administration → Users and access → Service accounts
+2. "Add service account" → deploy_vmrule
+3. Добавьте permissions (роли)
+4. Нажмите "Add service account token"
+5. Скопируйте токен
 
 ## Заключение
