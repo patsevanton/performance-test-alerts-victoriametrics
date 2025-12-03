@@ -1,18 +1,38 @@
 #!/bin/bash
+
 echo "Поиск YAML файлов в директории vmrules..."
 
-# Находим все .yaml и .yml файлы в директории vmrules и поддиректориях
-find vmrules -name "*.yaml" -o -name "*.yml" | while read -r file; do
-    echo "Применяю: $file"
+# Собираем и сортируем список файлов
+mapfile -t files < <(find vmrules -type f \( -name "*.yaml" -o -name "*.yml" \) | sort -V)
+
+total=${#files[@]}
+
+if [ "$total" -eq 0 ]; then
+    echo "YAML файлы не найдены."
+    exit 1
+fi
+
+echo "Найдено $total YAML файлов (отсортировано):"
+printf '%s\n' "${files[@]}"
+
+# Проходим по массиву
+for ((i=0; i<total; i++)); do
+    file="${files[$i]}"
+    index=$((i+1))
+
+    echo "Применяю $index из $total: $file"
     kubectl apply -f "$file"
-    
-    # Проверка успешности выполнения
+
     if [ $? -eq 0 ]; then
         echo "✓ Успешно применен: $file"
     else
         echo "✗ Ошибка при применении: $file"
-        # Можно добавить exit 1 для остановки при ошибке
         # exit 1
+    fi
+
+    if [ "$index" -lt "$total" ]; then
+        echo "Ждём 5 минут перед следующим применением..."
+        sleep 300
     fi
 done
 
