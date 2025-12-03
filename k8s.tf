@@ -112,7 +112,12 @@ resource "helm_release" "ingress_nginx" {
   version          = "4.10.6"
   namespace        = "ingress-nginx"
   create_namespace = true
-  depends_on       = [yandex_kubernetes_cluster.vmalert]
+  depends_on       = [
+    yandex_kubernetes_cluster.vmalert,
+    yandex_kubernetes_node_group.k8s-node-group, 
+    time_sleep.wait_sa,
+    yandex_vpc_address.addr
+    ]
 
   set = [
     {
