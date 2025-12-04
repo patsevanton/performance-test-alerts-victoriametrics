@@ -28,9 +28,10 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 # Создание Service Account через UI:
 1. Administration → Users and access → Service accounts
 2. "Add service account" → deploy_vmrule
-3. Добавьте permissions (роли)
+3. Добавьте permissions Editor
 4. Нажмите "Add service account token"
-5. Скопируйте токен
+5. Выберите "No expiration"
+6. Скопируйте токен
 
 **Краткая инструкция по добавлению аннотации в Grafana:**
 
