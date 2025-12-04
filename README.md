@@ -24,7 +24,10 @@ helm upgrade --install vmks vm/victoria-metrics-k8s-stack \
 kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | base64 --decode; echo
 ```
 
-Из директории alerts запустите скрипт ./generate_alerts.py
+Из директории alerts запустите скрипт ./generate_alerts.py который будет генерировать vmrule.
+
+
+Из директории alerts запустите скрипт `apply-yaml.sh`, который будет применять vmrule в kubernetes и делать аннотации в grafana.
 
 # Создание Service Account через UI:
 1. Administration → Users and access → Service accounts
