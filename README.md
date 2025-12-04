@@ -22,8 +22,9 @@ helm upgrade --install vmks vm/victoria-metrics-k8s-stack \
 Получение пароля grafana для admin юзера
 ```shell
 kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | base64 --decode; echo
-
 ```
+
+Из директории alerts запустите скрипт ./generate_alerts.py
 
 # Создание Service Account через UI:
 1. Administration → Users and access → Service accounts
