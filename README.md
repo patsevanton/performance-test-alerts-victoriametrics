@@ -40,3 +40,18 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 
 Первый рестарт vmalert на default ресурсах случился на 7 файле с 200 алертами, то есть на 1400 алерте.
 ![первый restart vmalert](image.png)
+
+После этого увеличиваем ресурсы для vmalert
+```
+vmalert:
+  spec:
+    resources:
+      limits:
+        cpu: 600m
+        memory: 2000Mi
+      requests:
+        cpu: 600m
+        memory: 2000Mi
+```
+
+И запускаем тест снова
