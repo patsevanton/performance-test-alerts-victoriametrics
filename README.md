@@ -55,3 +55,17 @@ vmalert:
 ```
 
 И запускаем тест снова
+
+С помощью команды 
+```
+kubectl get ep kubernetes
+NAME         ENDPOINTS      AGE
+kubernetes   10.0.1.9:443   32m
+```
+
+А в exporer смотрим метрику 
+
+```
+process_resident_memory_bytes{endpoint="https", instance="10.0.1.9:443", job="apiserver", namespace="default", prometheus="vmks/vmks-victoria-metrics-k8s-stack", service="kubernetes"}
+```
+По этим двум фактам удостоверяемся что дашборд `Kubernetes / System / API Server` действительно показывает метрик API Server.
