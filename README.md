@@ -38,10 +38,5 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 6. Скопируйте токен
 
 
-# Добавление Annotations в дашборды. 
-
-В каждом дашборде нажимаем make editable, затем Settings, выбираем вкладку Annotations, нажимаем new query, в поле Name указываем название аннотации `vmrule-deploy`, выбираем data source `grafana`, выбираем viter by tag, выбираем tag `vmrule-deploy`.
-
-сохранить dashboard не дает, но вы можете не закрывать grafana и увидите аннотации или сохрать json и создать новый дашборд.
-
-## Заключение
+Первый рестарт vmalert на default ресурсах случился на 7 файле с 200 алертами, то есть на 1400 алерте.
+![первый restart vmalert](image.png)
