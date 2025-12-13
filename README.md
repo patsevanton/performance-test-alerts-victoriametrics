@@ -37,87 +37,61 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 5. Выберите "No expiration"
 6. Скопируйте токен
 
-### **Перераспределение алертов по ConfigMap с названием `rulefiles`**
+### **Механизм распределения алертов и перезапуски vmalert**
 
-При увеличении количества алертов
+VictoriaMetrics Operator хранит все правила оповещений (`VMRule`) в ConfigMap'ах с именем `rulefiles`. Из-за ограничения Kubernetes на размер ConfigMap (~1 MiB) при росте количества правил возникает необходимость их дробления, что приводит к пересозданию Pod'а `vmalert` с сохранением состояния алертов.
 
-1. **Kubernetes накладывает жёсткий лимит на размер одного ConfigMap — ~1 MB**.
-2. Operator **собирает ВСЕ VMRule** в один reconcile-цикл.
-3. Когда суммарный размер правил превышает лимит:
+#### **Детали процесса:**
 
-   * Operator **разбивает правила на несколько ConfigMap**:
+1.  **Лимит Kubernetes:** Один ConfigMap не может превышать ~1 MiB.
+2.  **Логика Operator'a:** В рамках одного цикла согласования (`reconcile`) Operator собирает **все** существующие `VMRule` и пытается упаковать их в ConfigMap `rulefiles-0`.
+3.  **При превышении лимита:** Operator разбивает правила на несколько ConfigMap'ов:
+    ```
+    vm-<release>-rulefiles-0
+    vm-<release>-rulefiles-1
+    vm-<release>-rulefiles-2
+    ...
+    ```
+4.  **Последствие для Pod:** Каждый новый ConfigMap требует добавления нового `volume` и `volumeMount` в спецификацию Pod'а `vmalert`. Любое изменение списка томов **принудительно вызывает пересоздание Pod'а**.
+5.  **Результат:** При добавлении правила, которое "не влезает" в существующие ConfigMap'ы, создается `rulefiles-N`, Pod удаляется и создается заново с обновленным списком томов.
 
-     ```
-     vm-<release>-rulefiles-0
-     vm-<release>-rulefiles-1
-     vm-<release>-rulefiles-2
-     ...
-     ```
-4. **Каждый новый ConfigMap = новый volume + volumeMount** в Pod `vmalert`.
-5. **Любое изменение volume/volumeMount → Kubernetes ОБЯЗАН пересоздать Pod**.
-6. В момент reconcile:
+Operator всегда работает с полным набором правил. Он не обновляет ConfigMap'ы "по месту", а пересобирает их заново и при необходимости меняет их количество.
 
-   * старый Pod удаляется
-   * новый Pod создаётся с обновлённым списком ConfigMap’ов
+**Сохранение состояния (State Persistence):**
 
-## Важный момент
+Чтобы предотвратить потерю состояния vmalert по умолчанию настрен на запись и чтение состояния во внешнее хранилище (VictoriaMetrics) через флаги:
 
-Alerts state on restarts
-vmalert holds alerts state in the memory. Restart of the vmalert process will reset the state of all active alerts in the memory. To prevent vmalert from losing the state on restarts configure it to persist the state to the remote database via the following flags:
+*   **`-remoteWrite.url`** (URL до VictoriaMetrics или `vminsert`): `vmalert` будет **сохранять** состояние алертов при каждой оценке в виде временных рядов `ALERTS` и `ALERTS_FOR_STATE`, используя протокол remote-write.
+*   **`-remoteRead.url`** (URL до VictoriaMetrics или `vmselect`): При **старте** процесс `vmalert` попытается **восстановить** состояние, запросив ряды `ALERTS_FOR_STATE`.
 
--remoteWrite.url - URL to VictoriaMetrics (Single) or vminsert (Cluster). vmalert will persist alerts state to the configured address in the form of time series ALERTS and ALERTS_FOR_STATE via remote-write protocol. These time series can be queried from VictoriaMetrics just as any other time series. The state will be persisted to the configured address on each evaluation.
--remoteRead.url - URL to VictoriaMetrics (Single) or vmselect (Cluster). vmalert will try to restore alerts state from the configured address by querying time series with name ALERTS_FOR_STATE. The restore happens only once when vmalert process starts, and only for the configured rules. Config hot reload doesn’t trigger state restore.
-Both flags are required for proper state restoration. Restore process may fail if time series are missing in configured -remoteRead.url, weren’t updated in the last 1h (controlled by -remoteRead.lookback) or received state doesn’t match current vmalert rules configuration. vmalert marks successfully restored rules with restored label in web UI .
+**Оба флага обязательны для корректного восстановления.** Восстановление происходит только один раз при запуске процесса. Горячая перезагрузка конфигурации правил (`SIGHUP`) не триггерит восстановление состояния.
 
+#### **Как отслеживать текущее состояние ConfigMap'ов**
 
-
-Он:
-
-* всегда получает **полный набор правил**
-* просто **оператор делит их на несколько ConfigMap**
-* и **пересоздаёт Pod**, чтобы примонтировать их
-
-## Почему перезапуск происходит примерно на 1200–1400 алертах
-
-* Средний размер одного alert-правила ≈ **700–900 байт**
-* 200 alerts ≈ **140–180 KB**
-* ~5–6 файлов → ≈ 1 MB
-* при добавлении следующего VMRule:
-
-  * создаётся **новый `rulefiles-N`**
-  * Pod **пересоздаётся**
-
-## Как увидеть configmaps и сколько они занимают
-
-Используй этот скрипт — он покажет **размер каждого ConfigMap с rulefiles**:
+Используйте скрипт ниже, чтобы увидеть размер ConfigMap'ов.
 
 ```bash
-kubectl get configmaps -n vmks -o json | \
-jq -r '.items[] | {
-  name: .metadata.name,
-  size: (.data | to_entries | map(.value | length) | add // 0)
-} | "\(.name)\t\(.size)"' | \
-awk '{
-  size = $2;
-  if (size >= 1024*1024) {
-    human = sprintf("%.2f MB", size/1024/1024);
-  } else if (size >= 1024) {
-    human = sprintf("%.2f KB", size/1024);
-  } else {
-    human = size " bytes";
-  }
-  printf "%-60s %-15s\n", $1, human
-}' | sort -k2 -hr | grep rulefiles
+kubectl get configmaps -n <your-namespace> -o json | \
+  jq -r '.items[] | select(.metadata.name | contains("rulefiles")) | {
+    name: .metadata.name,
+    size: (.data | to_entries | map(.value | length) | add // 0)
+  } | "\(.name)\t\(.size)"' | \
+  awk '{
+    size = $2;
+    if (size >= 1024*1024) {
+      human = sprintf("%.2f MB", size/1024/1024);
+    } else if (size >= 1024) {
+      human = sprintf("%.2f KB", size/1024);
+    } else {
+      human = size " bytes";
+    }
+    printf "%-60s %-15s\n", $1, human
+  }' | sort -k2 -hr
 ```
 
-Пример вывода:
-
+**Пример вывода и его интерпретация:**
 ```
-vm-vmks-victoria-metrics-k8s-stack-rulefiles-3   511.65 KB
-vm-vmks-victoria-metrics-k8s-stack-rulefiles-2   471.31 KB
-vm-vmks-victoria-metrics-k8s-stack-rulefiles-0   470.02 KB
-vm-vmks-victoria-metrics-k8s-stack-rulefiles-1   469.89 KB
-vm-vmks-victoria-metrics-k8s-stack-rulefiles-4    99.29 KB
+vm-vmks-victoria-metrics-k8s-stack-rulefiles-0   980.45 KB
+vm-vmks-victoria-metrics-k8s-stack-rulefiles-1   850.10 KB
+vm-vmks-victoria-metrics-k8s-stack-rulefiles-2   120.50 KB
 ```
-
-Как только появляется `rulefiles-4`, Pod **гарантированно будет пересоздан**.
