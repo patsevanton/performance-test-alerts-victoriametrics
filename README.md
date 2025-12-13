@@ -64,6 +64,8 @@ Operator всегда работает с полным набором прави
 *   **`-remoteWrite.url`** (URL до VictoriaMetrics или `vminsert`): `vmalert` будет **сохранять** состояние алертов при каждой оценке в виде временных рядов `ALERTS` и `ALERTS_FOR_STATE`, используя протокол remote-write.
 *   **`-remoteRead.url`** (URL до VictoriaMetrics или `vmselect`): При **старте** процесс `vmalert` попытается **восстановить** состояние, запросив ряды `ALERTS_FOR_STATE`.
 
+Подробнее здесь: https://docs.victoriametrics.com/victoriametrics/vmalert/#alerts-state-on-restarts
+
 **Оба флага обязательны для корректного восстановления.** Восстановление происходит только один раз при запуске процесса. Горячая перезагрузка конфигурации правил (`SIGHUP`) не триггерит восстановление состояния.
 
 #### **Как отслеживать текущее состояние ConfigMap'ов**
