@@ -77,7 +77,7 @@ ALERTS полезен для мониторинга и анализа тренд
 Используйте скрипт ниже, чтобы увидеть размер ConfigMap'ов.
 
 ```bash
-kubectl get configmaps -n <your-namespace> -o json | \
+kubectl get configmaps -n vmks -o json | \
   jq -r '.items[] | select(.metadata.name | contains("rulefiles")) | {
     name: .metadata.name,
     size: (.data | to_entries | map(.value | length) | add // 0)
