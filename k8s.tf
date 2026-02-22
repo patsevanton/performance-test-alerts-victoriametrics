@@ -52,7 +52,7 @@ resource "yandex_kubernetes_node_group" "k8s-node-group" {
   description = "Node group for the Managed Service for Kubernetes cluster"
   name        = "k8s-node-group"
   cluster_id  = yandex_kubernetes_cluster.vmalert.id
-  version     = "1.30"  # Версия Kubernetes на нодах
+  version     = "1.32"  # Версия Kubernetes на нодах
 
   scale_policy {
     fixed_scale {
