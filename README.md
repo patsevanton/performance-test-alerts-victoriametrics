@@ -72,20 +72,12 @@ cd alerts
 
 ### Применение VMRule в Kubernetes
 
-Скрипт `alerts/apply-yaml.sh` последовательно применяет VMRule с интервалом **30 секунд** между каждым и отправляет аннотации в Grafana для визуализации моментов деплоя:
+Скрипт `alerts/apply-yaml.sh` последовательно применяет VMRule с интервалом **5 секунд** между каждым:
 
 ```bash
 cd alerts
 ./apply-yaml.sh
 ```
-
-Для работы скрипта требуется API-токен Grafana от сервис-аккаунта с правами Editor:
-
-1. Administration → Users and access → Service accounts
-2. "Add service account" → `deploy_vmrule`
-3. Добавьте permissions Editor
-4. "Add service account token" → "No expiration"
-5. Скопируйте токен
 
 ## Результаты тестирования
 
