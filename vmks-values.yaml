@@ -6,7 +6,7 @@ grafana:
       - grafana.apatsev.org.ru
 
 # SLA 99.9 для хранилища метрик: уходим от SPOF `vmsingle` к реплицируемому `VMCluster`.
-# Это “настоящая” HA: потеря pod/ноды не равна потере сервиса и данных.
+# Это "настоящая" HA: потеря pod/ноды не равна потере сервиса и данных.
 vmsingle:
   enabled: false # было true по умолчанию
 
@@ -35,6 +35,15 @@ alertmanager:
     podDisruptionBudget:
       minAvailable: 1
 
+    resources:
+      limits:
+        # Дефолтные 100m вызывают 100%-й throttling и рестарты при ≥260 правилах.
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 200m
+        memory: 256Mi
+
 vmalert:
   spec:
     # HA для оценки правил: 2 реплики, чтобы падение pod/ноды не останавливал оценку.
@@ -46,11 +55,21 @@ vmalert:
 
     resources:
       limits:
-        # Увеличиваем лимиты, чтобы vmalert не отставал от evaluationInterval под нагрузкой
-        # (иначе растет vmalert_iteration_missed_total и “RPO алертов” становится хуже).
-        cpu: "1" # было 500m
-        memory: 2Gi # было 800Mi
+        # 1 CPU вызывал 100%-й throttling при 260 правилах (999m/1000m).
+        # Удваиваем, чтобы оставить запас для роста числа правил.
+        cpu: "2"
+        memory: 2Gi
       requests:
-        # Поднимаем requests, чтобы снизить throttling и стабилизировать длительность итераций.
-        cpu: 600m # было 200m
-        memory: 2Gi # было 400Mi
+        cpu: 1200m
+        memory: 2Gi
+
+# VM Operator: при 39 VMRule-объектах потребляет 236m CPU без каких-либо limits.
+# Задаём явные ресурсы, чтобы избежать неконтролируемого роста.
+victoria-metrics-operator:
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
