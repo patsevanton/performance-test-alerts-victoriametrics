@@ -5,6 +5,33 @@ grafana:
     hosts:
       - grafana.apatsev.org.ru
 
+# SLA 99.9 для хранилища метрик: уходим от SPOF `vmsingle` к реплицируемому `VMCluster`.
+# Это “настоящая” HA: потеря pod/ноды не равна потере сервиса и данных.
+vmsingle:
+  enabled: false # было true по умолчанию
+
+vmcluster:
+  enabled: true # было false по умолчанию
+  spec:
+    # Храним каждую точку минимум в 2 копиях на vmstorage.
+    replicationFactor: 2
+
+    vmstorage:
+      # Минимум 2 реплики, чтобы replicationFactor=2 имел смысл.
+      replicaCount: 2
+      storage:
+        volumeClaimTemplate:
+          spec:
+            resources:
+              requests:
+                storage: 20Gi # было 10Gi в дефолтных примерах чарта; подстройте под нагрузку/retention
+
+    # VMSelect и VMInsert тоже без SPOF: по 2 реплики.
+    vmselect:
+      replicaCount: 2
+    vminsert:
+      replicaCount: 2
+
 # HA для доставки уведомлений: Alertmanager в кластерном режиме.
 # Важно для SLA alerting pipeline: падение 1 pod/ноды не должно останавливать прием алертов.
 alertmanager:

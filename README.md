@@ -11,7 +11,7 @@
 
 ## Цели Disaster Recovery и SRE
 
-- **HA**: RTO ≤ 15 мин, RPO метрик ≤ 5 мин, RPO алертов ≤ 30 сек, SLA 99.9% для vmalert/vmsingle
+- **HA**: RTO ≤ 15 мин, RPO метрик ≤ 5 мин, RPO алертов ≤ 30 сек, SLA 99.9% для vmalert/VMCluster
 - **DR**: Ежедневные бэкапы в S3, автоматизированное восстановление, cross-region репликация
 - **SRE**: Самомониторинг pipeline, incident response runbooks, capacity planning, post-mortem анализ
 - **Масштабирование**: Baseline метрики, нагрузочное тестирование, auto-scaling, оптимизация ресурсов
@@ -31,7 +31,7 @@
 
 | Компонент | Deployment | Роль | HA/DR особенности |
 |-----------|------------|------|-------------------|
-| **VMSingle** | `vmsingle` | Хранение метрик (single-node) | **Single Point of Failure** - требует миграции на кластер VMCluster для HA |
+| **VMCluster** | `vmcluster` | Хранение метрик (cluster) | Репликация данных и компонентов (vmstorage/vmselect/vminsert) для HA |
 | **VMAlert** | `vmalert` | Оценка правил и отправка алертов | Stateful через remoteWrite/Read, поддерживает replicas |
 | **VMAgent** | `vmagent` | Сбор метрик (scrape) | Stateless, легко масштабируется |
 | **VMAlertmanager** | `vmalertmanager` | Маршрутизация уведомлений | Stateful, поддерживает кластерный режим |
@@ -39,7 +39,7 @@
 | **Grafana** | `grafana` | Визуализация | Stateful (PV), поддерживает replicas |
 
 ### High Availability Considerations
-- **Data Persistence:** Persistent Volumes для stateful компонентов (VMSingle, VMAlertmanager, Grafana)
+- **Data Persistence:** Persistent Volumes для stateful компонентов (vmstorage, VMAlertmanager, Grafana)
 - **State Management:** VMAlert использует VictoriaMetrics для хранения состояния алертов
 - **Health Checks:** Readiness/Liveness probes для всех компонентов
 
@@ -102,10 +102,11 @@ cd alerts
 $ kubectl get vmrules -A --no-headers | wc -l
 71
 
-$ curl -s 'http://vmsingle:8428/api/v1/query?query=count(ALERTS)' | jq '.data.result[0].value[1]'
+$ # Для VMCluster используем vmselect (Prometheus API проксируется через /select/0/prometheus)
+$ curl -s 'http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometheus/api/v1/query?query=count(ALERTS)' | jq '.data.result[0].value[1]'
 "6411"
 
-$ curl -s 'http://vmsingle:8428/api/v1/query?query=count(ALERTS_FOR_STATE)' | jq '.data.result[0].value[1]'
+$ curl -s 'http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometheus/api/v1/query?query=count(ALERTS_FOR_STATE)' | jq '.data.result[0].value[1]'
 "6411"
 ```
 
@@ -188,7 +189,8 @@ vmalert_execution_errors_total:       0
 ### Общее количество временных рядов
 
 ```
-$ curl -s 'http://vmsingle:8428/api/v1/status/tsdb' | jq '.data.totalSeries'
+$ # Для VMCluster статистика TSDB доступна через Prometheus API на vmselect.
+$ curl -s 'http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometheus/api/v1/status/tsdb' | jq '.data.totalSeries'
 225146
 ```
 
@@ -237,8 +239,8 @@ vmalert настроен на запись и чтение состояния и
 
 В нашем стенде:
 ```
--remoteWrite.url=http://vmsingle-vmks-...:8428/api/v1/write
--remoteRead.url=http://vmsingle-vmks-...:8428
+-remoteWrite.url=http://vminsert-vmks-victoria-metrics-k8s-stack:8480/insert/0/prometheus/api/v1/write
+-remoteRead.url=http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometheus
 ```
 
 **`ALERTS_FOR_STATE`** содержит полную информацию о состоянии каждого алерта (`ActiveAt`, `for` duration и т.д.), необходимую для восстановления после рестарта. При запуске vmalert однократно читает этот ряд для восстановления.
@@ -292,7 +294,7 @@ selected vmrule count=71, invalid rules count=0
 | **Alert Delivery Success Rate** | `1 - (send_errors / sent_total)` | **100.0%** — 0 ошибок из 436 935 отправок | OK |
 | **Alert Rule Evaluation Success Rate** | `1 - (execution_errors / execution_total)` | **100.0%** — 0 ошибок из 467 384 выполнений | OK |
 | **Config Reload Success Rate** | `1 - (reload_errors / reload_total)` | **100.0%** — 0 ошибок из 12 перезагрузок | OK |
-| **VMSingle Availability** | `up{job="vmsingle"}` | **1** (доступен) | OK |
+| **VMCluster Availability** | `min(up{job=~"vmselect|vminsert|vmstorage"})` | **1** (доступен) | OK |
 | **Missed Iterations** | `vmalert_iteration_missed_total` | **181** пропущенная итерация суммарно | ПРОБЛЕМА |
 
 ### Детализация Alert Evaluation Freshness
@@ -346,7 +348,7 @@ Loadtest-группы (evaluationInterval=30s):
 | Компонент | RTO (время восстановления) | RPO (допустимая потеря данных) | Комментарий |
 |--||-|-|
 | **vmalert** | ≤ 60 сек | 0 (при настроенном remoteRead) | Pod пересоздаётся K8s, состояние алертов восстанавливается из `ALERTS_FOR_STATE` |
-| **VMSingle** | ≤ 5 мин | ≤ evaluationInterval (30s) | Зависит от PVC; при потере PV — RPO = время последнего бэкапа |
+| **VMCluster** | ≤ 5 мин | 0 при потере 1 vmstorage (replicationFactor=2) | При потере ≥ replicationFactor vmstorage/PVC — RPO зависит от последнего бэкапа |
 | **Alertmanager** | ≤ 60 сек | silences/inhibitions из PVC | StatefulSet с persistent storage |
 | **VM Operator** | ≤ 2 мин | 0 (stateless, читает CRD) | Reconcile восстанавливает желаемое состояние |
 | **Весь стек** | ≤ 10 мин | ≤ 30 сек (метрики), 0 (конфиг) | При условии здорового кластера K8s и сохранных PVC |
@@ -368,11 +370,11 @@ Loadtest-группы (evaluationInterval=30s):
 
 **Проверено в тесте:** 4 перезапуска, 0 потерянных алертов, все `ALERTS_FOR_STATE` восстановлены.
 
-#### Сценарий 2: Недоступность VMSingle
+#### Сценарий 2: Частичная/полная недоступность VMCluster
 
 **Что происходит:**
-- vmalert не может выполнить запросы правил (`-datasource.url`)
-- vmalert не может записать результаты (`-remoteWrite.url`)
+- vmalert не может выполнить запросы правил (`-datasource.url` → vmselect)
+- vmalert не может записать результаты и состояние (`-remoteWrite.url` → vminsert)
 - Метрика `vmalert_execution_errors_total` начинает расти
 - Уже firing-алерты продолжают отправляться в Alertmanager (они кэшируются в памяти vmalert)
 
@@ -382,14 +384,15 @@ Loadtest-группы (evaluationInterval=30s):
 - Dashboards в Grafana не обновляются
 
 **Восстановление:**
-- При восстановлении VMSingle vmalert автоматически продолжает работу
+- При восстановлении VMCluster vmalert автоматически продолжает работу
 - Данные за время недоступности теряются (gap в метриках)
 
-#### Сценарий 3: Потеря PersistentVolume VMSingle
+#### Сценарий 3: Потеря PersistentVolume у vmstorage (VMCluster)
 
 **Что происходит:**
-- Потеря всех исторических метрик
-- Потеря `ALERTS_FOR_STATE` → vmalert не сможет восстановить состояние алертов при рестарте
+- При потере 1 PVC у vmstorage при `replicationFactor=2` — сервис продолжает работать, потери данных обычно нет
+- При потере PVC у ≥ `replicationFactor` vmstorage — возможна потеря исторических метрик
+- Потеря `ALERTS_FOR_STATE` возможна только если потеря затронула все копии данных
 - Все алерты с `for > 0` начнут отсчёт заново
 
 **Восстановление:**
@@ -399,8 +402,8 @@ Loadtest-группы (evaluationInterval=30s):
 4. Алерты с `for: N` потребуют N секунд для повторного срабатывания
 
 **Смягчение:**
-- Регулярные бэкапы VMSingle через `vmbackup` / snapshot API
-- Репликация (VMCluster вместо VMSingle для production)
+- Регулярные бэкапы vmstorage через `vmbackup` / snapshot API
+- Репликация на уровне VMCluster (replicationFactor + несколько vmstorage)
 
 #### Сценарий 4: Потеря namespace / CRD
 
@@ -421,9 +424,9 @@ Loadtest-группы (evaluationInterval=30s):
 #### Сценарий 5: Сетевая изоляция между компонентами
 
 **Что происходит:**
-- vmalert ↔ VMSingle: ошибки оценки правил, потеря записи состояний
+- vmalert ↔ VMCluster: ошибки оценки правил, потеря записи состояний
 - vmalert ↔ Alertmanager: алерты оцениваются, но не доставляются
-- vmagent ↔ VMSingle: новые метрики не записываются
+- vmagent ↔ VMCluster: новые метрики не записываются
 
 **Воздействие:** зависит от того, какой канал нарушен. Наиболее критичен vmalert → Alertmanager (silent failure).
 
@@ -442,7 +445,7 @@ Loadtest-группы (evaluationInterval=30s):
 | State persistence при перезапуске | 4 перезапуска, 0 потерь состояния | `remoteRead` надёжно восстанавливает `ALERTS_FOR_STATE` |
 | Горячая перезагрузка конфигурации | 10 reload'ов, 0 ошибок | SIGHUP работает стабильно |
 | Доставка алертов | 309 110 отправок, 0 ошибок | Pipeline vmalert → Alertmanager надёжен |
-| Оценка правил | 333 868 выполнений, 0 ошибок | Запросы к VMSingle стабильны |
+| Оценка правил | 333 868 выполнений, 0 ошибок | Запросы к VMCluster (vmselect) стабильны |
 | Автоматическое масштабирование ConfigMap | 5 ConfigMap'ов создано автоматически | Operator корректно дробит правила |
 
 ### Выявленные риски
@@ -451,9 +454,9 @@ Loadtest-группы (evaluationInterval=30s):
 |||-|-|
 | CPU throttling vmalert | 85% от limit | Высокая | Увеличить до 600m+ |
 | Iteration lag | max 32.3s > interval 30s | Высокая | Увеличить CPU, или увеличить interval, или шардировать |
-| Single point of failure (VMSingle) | Нет реплик | Высокая | VMCluster для production |
+| Single point of failure (storage) | Устранён (VMCluster) | Средняя | Мониторинг up/latency vmselect/vminsert/vmstorage |
 | Отсутствие бэкапов | Не настроено | Высокая | Настроить vmbackup |
-| vmalert — один экземпляр | Нет HA | Средняя | Шардирование через `-rule.partition` (если поддерживается) |
+| vmalert — один экземпляр | Устранён (replicaCount=2) | Средняя | Шардирование через `-rule.partition` (если поддерживается) при росте нагрузки |
 
 
 
@@ -493,12 +496,17 @@ Loadtest-группы (evaluationInterval=30s):
 ```bash
 kubectl logs -n vmks -l app.kubernetes.io/name=vmalert --tail=50
 kubectl get pods -n vmks -l app.kubernetes.io/name=vmalert
-curl -s 'http://vmsingle:8428/api/v1/query?query=vmalert_execution_errors_total'
+curl -s 'http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometheus/api/v1/query?query=vmalert_execution_errors_total'
 ```
 
 **Действия:**
-1. Проверить доступность VMSingle: `kubectl get pods -n vmks -l app.kubernetes.io/name=vmsingle`
-2. Проверить сетевую связность: `kubectl exec -n vmks <vmalert-pod> -- wget -qO- http://vmsingle:8428/health`
+1. Проверить доступность VMCluster:
+   - `kubectl get pods -n vmks -l app.kubernetes.io/name=vmstorage`
+   - `kubectl get pods -n vmks -l app.kubernetes.io/name=vmselect`
+   - `kubectl get pods -n vmks -l app.kubernetes.io/name=vminsert`
+2. Проверить сетевую связность:
+   - read path: `kubectl exec -n vmks <vmalert-pod> -- wget -qO- http://vmselect-vmks-victoria-metrics-k8s-stack:8481/health`
+   - write path: `kubectl exec -n vmks <vmalert-pod> -- wget -qO- http://vminsert-vmks-victoria-metrics-k8s-stack:8480/health`
 3. Проверить CPU/memory: `kubectl top pod -n vmks <vmalert-pod>`
 4. Если CPU limit достигнут — увеличить ресурсы и перезапустить
 
@@ -509,7 +517,7 @@ curl -s 'http://vmsingle:8428/api/v1/query?query=vmalert_execution_errors_total'
 **Диагностика:**
 ```bash
 kubectl logs -n vmks -l app.kubernetes.io/name=alertmanager --tail=50
-curl -s 'http://vmalertmanager:9093/api/v2/alerts' | jq '. | length'
+curl -s 'http://vmalertmanager-vmks-victoria-metrics-k8s-stack:9093/api/v2/alerts' | jq '. | length'
 ```
 
 **Действия:**
@@ -517,20 +525,21 @@ curl -s 'http://vmalertmanager:9093/api/v2/alerts' | jq '. | length'
 2. Проверить endpoint в vmalert: `kubectl get pod -n vmks <vmalert-pod> -o yaml | grep notifier`
 3. Перезапустить Alertmanager при необходимости: `kubectl delete pod -n vmks <alertmanager-pod>`
 
-### IR-3: VMSingle недоступен
+### IR-3: VMCluster недоступен
 
-**Симптомы:** Grafana dashboards не загружаются, `up{job="vmsingle"} == 0`.
+**Симптомы:** Grafana dashboards не загружаются, `up{job=~"vmselect|vminsert|vmstorage"} == 0`.
 
 **Диагностика:**
 ```bash
-kubectl get pods -n vmks -l app.kubernetes.io/name=vmsingle
-kubectl describe pod -n vmks <vmsingle-pod>
+kubectl get pods -n vmks -l app.kubernetes.io/name=vmstorage
+kubectl get pods -n vmks -l app.kubernetes.io/name=vmselect
+kubectl get pods -n vmks -l app.kubernetes.io/name=vminsert
 kubectl get pvc -n vmks
 ```
 
 **Действия:**
 1. Проверить PVC: `kubectl get pvc -n vmks` — статус `Bound`?
-2. Проверить events: `kubectl describe pod -n vmks <vmsingle-pod>` — OOMKilled? CrashLoopBackOff?
+2. Проверить events: `kubectl describe pod -n vmks <pod>` — OOMKilled? CrashLoopBackOff?
 3. При OOM — увеличить memory limit
 4. При потере PVC — восстановить из бэкапа или создать новый PV
 
@@ -557,9 +566,9 @@ kubectl get configmaps -n vmks | grep rulefiles
 ### Краткосрочные (Quick Wins)
 
 - [ ] Увеличить CPU limit vmalert до 600m+
-- [ ] Настроить PodDisruptionBudget для vmalert и VMSingle
+- [ ] Настроить PodDisruptionBudget для vmalert и компонентов VMCluster (vmstorage/vmselect/vminsert)
 - [ ] Добавить SRE-алерты из раздела выше (самомониторинг alerting pipeline)
-- [ ] Настроить `vmbackup` для периодического бэкапа VMSingle
+- [ ] Настроить `vmbackup` для периодического бэкапа VMCluster (vmstorage)
 
 ### Как не получить двойные нотификации (HA vmalert)
 
@@ -590,9 +599,9 @@ kubectl get configmaps -n vmks | grep rulefiles
 
 Цель: **RPO метрик ≤ 5 минут**.
 
-- **Частота**: запускать `vmbackup` не реже, чем раз в 5 минут (иначе при потере PV у `vmsingle` RPO станет хуже 5 минут).
+- **Частота**: запускать `vmbackup` не реже, чем раз в 5 минут (иначе при потере PVC у `vmstorage` RPO станет хуже 5 минут).
 - **Хранилище**: S3/объектное хранилище (bucket + префикс), либо snapshot на уровне cloud-disk (если поддерживается) + репликация.
-- **Восстановление**: `vmrestore` в новый PVC/volume + переключение `vmsingle` на восстановленный volume (или восстановление `vmstorage`, если перейти на `VMCluster`).
+- **Восстановление**: `vmrestore` в новые PVC для `vmstorage` + развёртывание VMCluster на восстановленных volume'ах.
 - **Валидация DR**: периодически выполнять test-restore в отдельный namespace и сравнивать контрольные запросы (например, наличие `ALERTS_FOR_STATE` и ключевых series).
 
 ### Долгосрочные
@@ -630,13 +639,13 @@ kubectl get configmaps -n vmks -o json | \
 ### Количество активных алертов
 
 ```bash
-curl -s 'http://vmsingle:8428/api/v1/query?query=count(ALERTS)' | jq '.data.result[0].value[1]'
+curl -s 'http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometheus/api/v1/query?query=count(ALERTS)' | jq '.data.result[0].value[1]'
 ```
 
 ### Длительность итераций vmalert
 
 ```bash
-curl -s 'http://vmsingle:8428/api/v1/query?query=max(vmalert_iteration_duration_seconds)' | jq '.data.result[0].value[1]'
+curl -s 'http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometheus/api/v1/query?query=max(vmalert_iteration_duration_seconds)' | jq '.data.result[0].value[1]'
 ```
 
 ### История перезапусков vmalert
