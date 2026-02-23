@@ -9,10 +9,9 @@
 - проверить механизм сохранения и восстановления состояния алертов через `remoteWrite`/`remoteRead`;
 - определить практические пороги масштабируемости и дать рекомендации по эксплуатации.
 
-## Цели Disaster Recovery и SRE
+## Цели устойчивости и SRE
 
 - **HA**: RTO ≤ 15 мин, RPO метрик ≤ 5 мин, RPO алертов ≤ 30 сек, SLA 99.9% для vmalert/VMCluster
-- **DR**: Ежедневные бэкапы в S3, автоматизированное восстановление, cross-region репликация
 - **SRE**: Самомониторинг pipeline, incident response runbooks, capacity planning, post-mortem анализ
 - **Масштабирование**: Baseline метрики, нагрузочное тестирование, auto-scaling, оптимизация ресурсов
 
@@ -24,9 +23,9 @@
 ### VictoriaMetrics Stack
 **Версия:** `victoria-metrics-k8s-stack` v0.71.1 (VictoriaMetrics v1.136.0), namespace `vmks`.
 
-#### Компоненты и их роли в HA/DR
+#### Компоненты и их роли в HA
 
-| Компонент | Deployment | Роль | HA/DR особенности |
+| Компонент | Deployment | Роль | HA особенности |
 |-----------|------------|------|-------------------|
 | **VMCluster** | `vmcluster` | Хранение метрик (cluster) | Репликация данных и компонентов (vmstorage/vmselect/vminsert) для HA |
 | **VMAlert** | `vmalert` | Оценка правил и отправка алертов | Stateful через remoteWrite/Read, поддерживает replicas |
@@ -62,18 +61,18 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 
 ### Генерация нагрузочных VMRule
 
-Скрипт `alerts/generate_alerts.py` генерирует YAML-файлы VMRule. Каждый VMRule содержит одну группу с 200 алертами, использующими выражение `vector(1)` (всегда срабатывает):
+Скрипт `alerts/generate_alerts.py` генерирует YAML-файлы `VMRule` в директорию `alerts/vmrules/`. По умолчанию создаётся **10 000** файлов; каждый `VMRule` содержит **4–6 групп** (с `interval` 30s/1m/2m) и **20 алертов** суммарно.
 
 ```bash
 cd alerts
 ./generate_alerts.py
 ```
 
-Скрипт создаёт до 1000 файлов в директории `alerts/vmrules/`. Каждый алерт имеет случайную severity (`info`/`warning`/`critical`) и период `for` (0–30s).
+Правила «псевдо-реалистичные»: разные шаблоны (k8s/node/http/db/…), `expr` построены на `vector(...)`, `severity` задаётся шаблоном (в основном `warning`/`critical`), `for` — от `0s` до `1h`. Генерация детерминирована (seed=42); объём можно изменить в `main()` через `num_vmrules` и `alerts_per_vmrule`.
 
 ### Применение VMRule в Kubernetes
 
-Скрипт `alerts/apply-yaml.sh` последовательно применяет VMRule с интервалом **5 минут** между каждым и отправляет аннотации в Grafana для визуализации моментов деплоя:
+Скрипт `alerts/apply-yaml.sh` последовательно применяет VMRule с интервалом **30 секунд** между каждым и отправляет аннотации в Grafana для визуализации моментов деплоя:
 
 ```bash
 cd alerts
@@ -92,7 +91,7 @@ cd alerts
 
 ### Текущее состояние
 
-На момент тестирования было применено **32 нагрузочных VMRule** (по 200 алертов в каждом) = **6 400 тестовых алертов**. Вместе со стандартными правилами стека — **71 VMRule** и **6 411 активных алертов**.
+На момент тестирования было применено **32 нагрузочных VMRule** (по 20 алертов в каждом) = **640 тестовых алертов**. Вместе со стандартными правилами стека — **71 VMRule** и **651 активных алертов**.
 
 ```
 $ kubectl get vmrules -A --no-headers | wc -l
@@ -100,10 +99,10 @@ $ kubectl get vmrules -A --no-headers | wc -l
 
 $ # Для VMCluster используем vmselect (Prometheus API проксируется через /select/0/prometheus)
 $ curl -s 'http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometheus/api/v1/query?query=count(ALERTS)' | jq '.data.result[0].value[1]'
-"6411"
+"651"
 
 $ curl -s 'http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometheus/api/v1/query?query=count(ALERTS_FOR_STATE)' | jq '.data.result[0].value[1]'
-"6411"
+"651"
 ```
 
 ### Распределение правил по ConfigMap'ам
@@ -138,7 +137,7 @@ vmalert-vmks-...-7f86f4f4b6   2026-02-23T07:34:38Z   (+35 мин, 5 ConfigMap'о
 
 Каждый перезапуск происходил при добавлении нового ConfigMap (нового `volume` + `volumeMount`), что требует пересоздания Pod'а. Интервал ~35 мин соответствует применению ~7 VMRule по 5 мин между каждым, что заполняет очередной ConfigMap до ~470 KB.
 
-### Потребление ресурсов при 6 400 алертах
+### Потребление ресурсов при 640 алертах
 
 ```
 $ kubectl top pods -n vmks
@@ -190,7 +189,7 @@ $ curl -s 'http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometh
 225146
 ```
 
-Из них значительная часть — ряды `ALERTS` и `ALERTS_FOR_STATE`, генерируемые vmalert (по 2 ряда на каждый алерт ≈ 12 800 рядов).
+Из них значительная часть — ряды `ALERTS` и `ALERTS_FOR_STATE`, генерируемые vmalert (по 2 ряда на каждый алерт ≈ 1 300 рядов).
 
 ## Механизм распределения алертов и перезапуски vmalert
 
@@ -251,7 +250,7 @@ vmalert настроен на запись и чтение состояния и
 
 ### 1. CPU vmalert
 
-При 6 400 алертах vmalert потребляет **170m из 200m CPU limit** (85%). Это приводит к тому, что итерации оценки затягиваются (до 32s при интервале 30s). При дальнейшем росте числа правил vmalert начнёт стабильно отставать от интервала оценки, и метрика `vmalert_iteration_missed_total` начнёт расти.
+При 640 алертах vmalert потребляет **170m из 200m CPU limit** (85%). Это приводит к тому, что итерации оценки затягиваются (до 32s при интервале 30s). При дальнейшем росте числа правил vmalert начнёт стабильно отставать от интервала оценки, и метрика `vmalert_iteration_missed_total` начнёт расти.
 
 **Рекомендация:** увеличить CPU limit для vmalert. В `vmks-values.yaml` уже подготовлен (но закомментирован) блок с увеличенными ресурсами:
 ```yaml
@@ -282,7 +281,7 @@ selected vmrule count=71, invalid rules count=0
 
 ### SLI (Service Level Indicators) — измеренные значения
 
-Все значения получены из VictoriaMetrics при нагрузке **8 048 активных алертов** (40 loadtest VMRule × 200 алертов + системные правила стека), **79 VMRule**, **6 ConfigMap'ов**.
+Все значения получены из VictoriaMetrics при нагрузке **800 активных алертов** (40 loadtest VMRule × 20 алертов + системные правила стека), **79 VMRule**, **6 ConfigMap'ов**.
 
 | SLI | Метрика | Измеренное значение | Статус |
 |--|--|--|--|
@@ -337,14 +336,14 @@ Loadtest-группы (evaluationInterval=30s):
 
 
 
-## Disaster Recovery
+## Отказоустойчивость и восстановление
 
 ### RTO / RPO
 
 | Компонент | RTO (время восстановления) | RPO (допустимая потеря данных) | Комментарий |
 |--||-|-|
 | **vmalert** | ≤ 60 сек | 0 (при настроенном remoteRead) | Pod пересоздаётся K8s, состояние алертов восстанавливается из `ALERTS_FOR_STATE` |
-| **VMCluster** | ≤ 5 мин | 0 при потере 1 vmstorage (replicationFactor=2) | При потере ≥ replicationFactor vmstorage/PVC — RPO зависит от последнего бэкапа |
+| **VMCluster** | ≤ 5 мин | 0 при потере 1 vmstorage (replicationFactor=2) | При потере ≥ replicationFactor vmstorage/PVC — возможна потеря исторических метрик и состояния алертов |
 | **Alertmanager** | ≤ 60 сек | silences/inhibitions из PVC | StatefulSet с persistent storage |
 | **VM Operator** | ≤ 2 мин | 0 (stateless, читает CRD) | Reconcile восстанавливает желаемое состояние |
 | **Весь стек** | ≤ 10 мин | ≤ 30 сек (метрики), 0 (конфиг) | При условии здорового кластера K8s и сохранных PVC |
@@ -392,13 +391,11 @@ Loadtest-группы (evaluationInterval=30s):
 - Все алерты с `for > 0` начнут отсчёт заново
 
 **Восстановление:**
-1. Восстановить PV из бэкапа (если есть)
-2. Или создать новый PV — vmalert начнёт работу с чистого состояния
-3. Алерты с `for: 0` (instant) сработают на первой итерации
-4. Алерты с `for: N` потребуют N секунд для повторного срабатывания
+1. Создать новый PV — vmalert начнёт работу с чистого состояния
+2. Алерты с `for: 0` (instant) сработают на первой итерации
+3. Алерты с `for: N` потребуют N секунд для повторного срабатывания
 
 **Смягчение:**
-- Регулярные бэкапы vmstorage через `vmbackup` / snapshot API
 - Репликация на уровне VMCluster (replicationFactor + несколько vmstorage)
 
 #### Сценарий 4: Потеря namespace / CRD
@@ -408,14 +405,12 @@ Loadtest-группы (evaluationInterval=30s):
 - Полная потеря alerting pipeline
 
 **Восстановление:**
-1. Восстановить namespace из бэкапа (Velero / etcd backup)
-2. Или повторно применить Helm chart + VMRule из Git
-3. Время восстановления зависит от автоматизации (GitOps: ~5 мин, ручное: ~30 мин)
+1. Повторно применить Helm chart + VMRule из Git
+2. Время восстановления зависит от автоматизации (GitOps: ~5 мин, ручное: ~30 мин)
 
 **Смягчение:**
 - Хранение всех VMRule в Git (Infrastructure as Code)
 - GitOps (ArgoCD/Flux) для автоматического reconcile
-- Регулярные бэкапы etcd кластера Kubernetes
 
 #### Сценарий 5: Сетевая изоляция между компонентами
 
@@ -451,7 +446,6 @@ Loadtest-группы (evaluationInterval=30s):
 | CPU throttling vmalert | 85% от limit | Высокая | Увеличить до 600m+ |
 | Iteration lag | max 32.3s > interval 30s | Высокая | Увеличить CPU, или увеличить interval, или шардировать |
 | Single point of failure (storage) | Устранён (VMCluster) | Средняя | Мониторинг up/latency vmselect/vminsert/vmstorage |
-| Отсутствие бэкапов | Не настроено | Высокая | Настроить vmbackup |
 | vmalert — один экземпляр | Устранён (replicaCount=2) | Средняя | Шардирование через `-rule.partition` (если поддерживается) при росте нагрузки |
 
 
@@ -460,9 +454,9 @@ Loadtest-группы (evaluationInterval=30s):
 
 ### Экстраполяция ресурсов
 
-На основании тестовых данных (6 400 алертов):
+На основании тестовых данных (640 алертов):
 
-| Метрика | Значение на 6 400 алертов | Прогноз на 20 000 | Прогноз на 50 000 |
+| Метрика | Значение на 640 алертов | Прогноз на 20 000 | Прогноз на 50 000 |
 |||--|--|
 | CPU vmalert | 170m | ~530m | ~1.3 |
 | Memory vmalert | 289Mi | ~900Mi | ~2.2Gi |
@@ -537,7 +531,7 @@ kubectl get pvc -n vmks
 1. Проверить PVC: `kubectl get pvc -n vmks` — статус `Bound`?
 2. Проверить events: `kubectl describe pod -n vmks <pod>` — OOMKilled? CrashLoopBackOff?
 3. При OOM — увеличить memory limit
-4. При потере PVC — восстановить из бэкапа или создать новый PV
+4. При потере PVC — создать новый PV
 
 ### IR-4: Operator не reconcile'ит VMRule
 
@@ -564,7 +558,6 @@ kubectl get configmaps -n vmks | grep rulefiles
 - [ ] Увеличить CPU limit vmalert до 600m+
 - [ ] Настроить PodDisruptionBudget для vmalert и компонентов VMCluster (vmstorage/vmselect/vminsert)
 - [ ] Добавить SRE-алерты из раздела выше (самомониторинг alerting pipeline)
-- [ ] Настроить `vmbackup` для периодического бэкапа VMCluster (vmstorage)
 
 ### Как не получить двойные нотификации (HA vmalert)
 
@@ -591,21 +584,12 @@ kubectl get configmaps -n vmks | grep rulefiles
 - [ ] Настроить Alertmanager cluster (3 реплики) для HA уведомлений
 - [ ] Добавить Network Policies для изоляции и защиты трафика между компонентами
 
-### План бэкапов (описание, без внедрения)
-
-Цель: **RPO метрик ≤ 5 минут**.
-
-- **Частота**: запускать `vmbackup` не реже, чем раз в 5 минут (иначе при потере PVC у `vmstorage` RPO станет хуже 5 минут).
-- **Хранилище**: S3/объектное хранилище (bucket + префикс), либо snapshot на уровне cloud-disk (если поддерживается) + репликация.
-- **Восстановление**: `vmrestore` в новые PVC для `vmstorage` + развёртывание VMCluster на восстановленных volume'ах.
-- **Валидация DR**: периодически выполнять test-restore в отдельный namespace и сравнивать контрольные запросы (например, наличие `ALERTS_FOR_STATE` и ключевых series).
-
 ### Долгосрочные
 
 - [ ] Шардирование vmalert для масштабирования на 10 000+ алертов
-- [ ] Cross-region replication для DR на уровне кластера
-- [ ] Регулярные Chaos Engineering эксперименты (Litmus/Chaos Mesh) для валидации DR-процедур
-- [ ] Автоматизация DR-runbook'ов через Kubernetes Operators или workflow engine (Argo Workflows)
+- [ ] Cross-region replication на уровне кластера
+- [ ] Регулярные Chaos Engineering эксперименты (Litmus/Chaos Mesh) для валидации процедур восстановления
+- [ ] Автоматизация runbook'ов восстановления через Kubernetes Operators или workflow engine (Argo Workflows)
 
 
 
