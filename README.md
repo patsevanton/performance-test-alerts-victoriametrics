@@ -17,14 +17,14 @@
 
 Компоненты стека:
 
-| Компонент | Pod | Роль |
-|-----------|-----|------|
-| VMSingle | `vmsingle-vmks-...-p675c` | Хранение метрик (single-node) |
-| VMAlert | `vmalert-vmks-...-5zc72` | Оценка правил и отправка алертов |
-| VMAgent | `vmagent-vmks-...-88prr` | Сбор метрик (scrape) |
-| VMAlertmanager | `vmalertmanager-vmks-...-0` | Маршрутизация уведомлений |
-| VM Operator | `vmks-victoria-metrics-operator-...-cgkvk` | Управление CRD-ресурсами |
-| Grafana | `vmks-grafana-...-dhtf7` | Визуализация |
+| Компонент | Deployment | Роль |
+|-----------|------------|------|
+| VMSingle | `vmsingle` | Хранение метрик (single-node) |
+| VMAlert | `vmalert` | Оценка правил и отправка алертов |
+| VMAgent | `vmagent` | Сбор метрик (scrape) |
+| VMAlertmanager | `vmalertmanager` | Маршрутизация уведомлений |
+| VM Operator | `victoria-metrics-operator` | Управление CRD-ресурсами |
+| Grafana | `grafana` | Визуализация |
 
 ## Установка
 
@@ -130,13 +130,17 @@ vmalert-vmks-...-7f86f4f4b6   2026-02-23T07:34:38Z   (+35 мин, 5 ConfigMap'о
 
 ```
 $ kubectl top pods -n vmks
-NAME                                CPU     MEMORY
-vmalert-vmks-...-5zc72              170m    281Mi
-vmsingle-vmks-...-p675c             88m     394Mi
-vmagent-vmks-...-88prr              29m     88Mi
-vmalertmanager-vmks-...-0           85m     52Mi
-vmks-victoria-metrics-operator-...  22m     68Mi
-vmks-grafana-...                    9m      278Mi
+NAME                                                        CPU(cores)   MEMORY(bytes)   
+vmagent-vmks-victoria-metrics-k8s-stack-57dcfc4f56-88prr    33m          96Mi            
+vmalert-vmks-victoria-metrics-k8s-stack-65df8c6d79-s47gk    173m         289Mi           
+vmalertmanager-vmks-victoria-metrics-k8s-stack-0            94m          64Mi            
+vmks-grafana-7c6c5c69d6-zwlcg                               9m           276Mi           
+vmks-kube-state-metrics-699cd7ddf-29fz2                     3m           19Mi            
+vmks-prometheus-node-exporter-6wbl8                         2m           9Mi             
+vmks-prometheus-node-exporter-plv65                         2m           9Mi             
+vmks-prometheus-node-exporter-qpxdk                         1m           10Mi            
+vmks-victoria-metrics-operator-6fcd46d94-cgkvk              14m          81Mi            
+vmsingle-vmks-victoria-metrics-k8s-stack-6db8cbdbbf-p675c   83m          406Mi  
 ```
 
 **vmalert** потребляет 170m CPU из лимита 200m (**85%**) и 281Mi памяти из 500Mi (56%). CPU — узкое место.
