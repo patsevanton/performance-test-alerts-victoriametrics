@@ -52,7 +52,6 @@ KAFKA_TOPICS = [
     "price-changes", "email-queue", "sms-queue", "push-notifications",
 ]
 
-RUNBOOK_BASE = "https://wiki.internal/runbooks"
 DASHBOARD_BASE = "https://grafana.internal/d"
 
 
@@ -90,7 +89,6 @@ def node_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"High CPU usage on {{{{ $labels.instance }}}} ({svc})",
             "description": f"CPU usage is above {cpu_t}%. Current value: {{{{ $value }}}}%",
-            "runbook_url": f"{RUNBOOK_BASE}/node-high-cpu",
         },
     })
 
@@ -103,7 +101,6 @@ def node_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"Critical CPU on {{{{ $labels.instance }}}} ({svc})",
             "description": "CPU usage exceeded 95%. Immediate action required.",
-            "runbook_url": f"{RUNBOOK_BASE}/node-critical-cpu",
         },
     })
 
@@ -117,7 +114,6 @@ def node_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"High memory usage on {{{{ $labels.instance }}}} ({svc})",
             "description": f"Memory usage above {mem_t}%. Current: {{{{ $value }}}}%",
-            "runbook_url": f"{RUNBOOK_BASE}/node-high-memory",
         },
     })
 
@@ -131,7 +127,6 @@ def node_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"Disk space low on {{{{ $labels.instance }}}}",
             "description": f"Disk usage exceeds {disk_t}% on {{{{ $labels.mountpoint }}}}",
-            "runbook_url": f"{RUNBOOK_BASE}/disk-space-low",
             "dashboard_url": f"{DASHBOARD_BASE}/node-disk",
         },
     })
@@ -145,7 +140,6 @@ def node_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": "Disk predicted to fill within 24h on {{ $labels.instance }}",
             "description": "Based on growth rate, disk will be full in {{ $value }} hours",
-            "runbook_url": f"{RUNBOOK_BASE}/disk-fill-prediction",
         },
     })
 
@@ -158,7 +152,6 @@ def node_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": "Network errors on {{ $labels.instance }}:{{ $labels.device }}",
             "description": "Network interface error rate {{ $value }}/s",
-            "runbook_url": f"{RUNBOOK_BASE}/network-errors",
         },
     })
 
@@ -183,7 +176,6 @@ def node_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": "Clock skew detected on {{ $labels.instance }}",
             "description": "Clock offset is {{ $value }}s. NTP may be failing.",
-            "runbook_url": f"{RUNBOOK_BASE}/clock-skew",
         },
     })
 
@@ -208,7 +200,6 @@ def node_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": "Conntrack table nearly full on {{ $labels.instance }}",
             "description": "Conntrack table usage is at {{ $value }}%",
-            "runbook_url": f"{RUNBOOK_BASE}/conntrack-full",
         },
     })
 
@@ -228,7 +219,6 @@ def kubernetes_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"Pod crash looping in {ns}/{{{{ $labels.pod }}}}",
             "description": f"Pod {{{{ $labels.pod }}}} in {ns} is restarting {{{{ $value }}}} times/10min",
-            "runbook_url": f"{RUNBOOK_BASE}/pod-crashloop",
         },
     })
 
@@ -241,7 +231,6 @@ def kubernetes_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"Pod not ready: {ns}/{{{{ $labels.pod }}}}",
             "description": "Pod {{ $labels.pod }} has been non-ready for extended time",
-            "runbook_url": f"{RUNBOOK_BASE}/pod-not-ready",
         },
     })
 
@@ -254,7 +243,6 @@ def kubernetes_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"OOM killed: {{{{ $labels.container }}}} in {ns}",
             "description": "Container {{ $labels.container }} OOM killed {{ $value }} times",
-            "runbook_url": f"{RUNBOOK_BASE}/oom-killed",
         },
     })
 
@@ -279,7 +267,6 @@ def kubernetes_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"HPA at max replicas: {{{{ $labels.horizontalpodautoscaler }}}} in {ns}",
             "description": "HPA at max capacity for extended period. Consider increasing limits.",
-            "runbook_url": f"{RUNBOOK_BASE}/hpa-maxed",
         },
     })
 
@@ -293,7 +280,6 @@ def kubernetes_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"PVC {{{{ $labels.persistentvolumeclaim }}}} in {ns} nearly full",
             "description": f"PVC is {{{{ $value }}}}% full (threshold: {pvc_t}%)",
-            "runbook_url": f"{RUNBOOK_BASE}/pvc-full",
         },
     })
 
@@ -330,7 +316,6 @@ def kubernetes_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"Job failed: {{{{ $labels.job_name }}}} in {ns}",
             "description": "Kubernetes job {{ $labels.job_name }} has failed",
-            "runbook_url": f"{RUNBOOK_BASE}/job-failed",
         },
     })
 
@@ -343,7 +328,6 @@ def kubernetes_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": "Node {{ $labels.node }} is not ready",
             "description": "Node has been unready for extended period",
-            "runbook_url": f"{RUNBOOK_BASE}/node-not-ready",
         },
     })
 
@@ -364,7 +348,6 @@ def http_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"High 5xx error rate for {svc}",
             "description": f"{svc} has {{{{ $value }}}}% 5xx error rate (threshold: {err_t}%)",
-            "runbook_url": f"{RUNBOOK_BASE}/{svc}/high-error-rate",
             "dashboard_url": f"{DASHBOARD_BASE}/{svc}-overview",
         },
     })
@@ -391,7 +374,6 @@ def http_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"High p99 latency for {svc}",
             "description": f"{svc} p99 latency is {{{{ $value }}}}ms (threshold: {lat_t}ms)",
-            "runbook_url": f"{RUNBOOK_BASE}/{svc}/high-latency",
             "dashboard_url": f"{DASHBOARD_BASE}/{svc}-latency",
         },
     })
@@ -417,7 +399,6 @@ def http_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"Abnormally low request rate for {svc}",
             "description": f"{svc} receiving only {{{{ $value }}}} req/s (expected >10)",
-            "runbook_url": f"{RUNBOOK_BASE}/{svc}/low-traffic",
         },
     })
 
@@ -430,7 +411,6 @@ def http_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"Connection pool near exhaustion for {svc}",
             "description": f"{svc} connection pool is {{{{ $value }}}}% utilized",
-            "runbook_url": f"{RUNBOOK_BASE}/{svc}/connection-pool",
         },
     })
 
@@ -476,7 +456,6 @@ def database_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"High connection usage on {db}",
             "description": f"Database {db} connection pool is {{{{ $value }}}}% utilized",
-            "runbook_url": f"{RUNBOOK_BASE}/db-high-connections",
         },
     })
 
@@ -490,7 +469,6 @@ def database_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"Replication lag on {db}",
             "description": f"Replication lag is {{{{ $value }}}}s on {db} (threshold: {lag_t}s)",
-            "runbook_url": f"{RUNBOOK_BASE}/db-replication-lag",
         },
     })
 
@@ -503,7 +481,6 @@ def database_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"Slow queries on {db}",
             "description": f"{{{{ $value }}}} slow queries/min on {db}",
-            "runbook_url": f"{RUNBOOK_BASE}/db-slow-queries",
         },
     })
 
@@ -516,7 +493,6 @@ def database_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"Deadlocks detected on {db}",
             "description": f"{{{{ $value }}}} deadlocks on {db}",
-            "runbook_url": f"{RUNBOOK_BASE}/db-deadlocks",
         },
     })
 
@@ -541,7 +517,6 @@ def database_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"Long-running transaction on {db}",
             "description": f"Transaction running for {{{{ $value }}}}s on {db}",
-            "runbook_url": f"{RUNBOOK_BASE}/db-long-tx",
         },
     })
 
@@ -587,7 +562,6 @@ def queue_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"Kafka consumer lag high for {topic}",
             "description": f"Consumer group {{{{ $labels.consumergroup }}}} has lag {{{{ $value }}}} on {topic}",
-            "runbook_url": f"{RUNBOOK_BASE}/kafka-consumer-lag",
         },
     })
 
@@ -600,7 +574,6 @@ def queue_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": "Kafka under-replicated partitions detected",
             "description": "{{ $value }} partitions are under-replicated",
-            "runbook_url": f"{RUNBOOK_BASE}/kafka-under-replicated",
         },
     })
 
@@ -637,7 +610,6 @@ def queue_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": "Kafka broker {{ $labels.broker_id }} is offline",
             "description": "Kafka broker has been unreachable",
-            "runbook_url": f"{RUNBOOK_BASE}/kafka-broker-offline",
         },
     })
 
@@ -658,7 +630,6 @@ def slo_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"SLO availability breach for {svc}",
             "description": f"{svc} availability is {{{{ $value }}}}% (SLO: {slo_t}%)",
-            "runbook_url": f"{RUNBOOK_BASE}/{svc}/slo-availability",
             "dashboard_url": f"{DASHBOARD_BASE}/slo-{svc}",
         },
     })
@@ -673,7 +644,6 @@ def slo_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"SLO latency breach for {svc}",
             "description": f"{svc} p99 latency is {{{{ $value }}}}ms (SLO: {lat_slo}ms)",
-            "runbook_url": f"{RUNBOOK_BASE}/{svc}/slo-latency",
         },
     })
 
@@ -686,7 +656,6 @@ def slo_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"Error budget burn rate high for {svc}",
             "description": f"{svc} burning error budget at {{{{ $value }}}}x sustainable rate",
-            "runbook_url": f"{RUNBOOK_BASE}/{svc}/error-budget",
         },
     })
 
@@ -718,7 +687,6 @@ def security_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": "TLS certificate expiring soon for {{ $labels.host }}",
             "description": "Certificate for {{ $labels.host }} expires in {{ $value }} days",
-            "runbook_url": f"{RUNBOOK_BASE}/cert-expiry",
         },
     })
 
@@ -731,7 +699,6 @@ def security_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": "TLS certificate expiring very soon for {{ $labels.host }}",
             "description": "Certificate expires in {{ $value }} days. Immediate renewal required!",
-            "runbook_url": f"{RUNBOOK_BASE}/cert-expiry-critical",
         },
     })
 
@@ -744,7 +711,6 @@ def security_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"High failed authentication rate for {svc}",
             "description": f"{{{{ $value }}}} failed auth attempts/min for {svc}",
-            "runbook_url": f"{RUNBOOK_BASE}/failed-auth",
         },
     })
 
@@ -757,7 +723,6 @@ def security_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"Suspicious network activity for {svc}",
             "description": "{{ $value }} suspicious connections/min detected",
-            "runbook_url": f"{RUNBOOK_BASE}/suspicious-activity",
         },
     })
 
@@ -789,7 +754,6 @@ def application_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"Circuit breaker open for {svc}",
             "description": f"Circuit breaker to {{{{ $labels.upstream }}}} is open in {svc}",
-            "runbook_url": f"{RUNBOOK_BASE}/{svc}/circuit-breaker",
         },
     })
 
@@ -838,7 +802,6 @@ def application_alerts(svc, ns, team, uid):
         "annotations": {
             "summary": f"Panic/crash detected in {svc}",
             "description": f"{{{{ $value }}}} panics detected in {svc}",
-            "runbook_url": f"{RUNBOOK_BASE}/{svc}/panic",
         },
     })
 

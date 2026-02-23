@@ -12,7 +12,7 @@
 ## Цели устойчивости и SRE
 
 - **HA**: RPO метрик ≤ 5 мин, RPO алертов ≤ 30 сек, SLA 99.9% для vmalert/VMCluster
-- **SRE**: Самомониторинг alerting pipeline (vmalert → Alertmanager), incident response runbooks, capacity planning, post-mortem анализ
+- **SRE**: Самомониторинг alerting pipeline (vmalert → Alertmanager), capacity planning, post-mortem анализ
 - **Масштабирование**: Baseline метрики, нагрузочное тестирование, auto-scaling, оптимизация ресурсов
 
 ## Архитектура и Стенд
@@ -468,81 +468,6 @@ Loadtest-группы (evaluationInterval=30s):
 
 
 
-## Incident Response Runbook
-
-### IR-1: vmalert не оценивает правила
-
-**Симптомы:** `vmalert_execution_errors_total` растёт, алерты не обновляются.
-
-**Диагностика:**
-```bash
-kubectl logs -n vmks -l app.kubernetes.io/name=vmalert --tail=50
-kubectl get pods -n vmks -l app.kubernetes.io/name=vmalert
-curl -s 'http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometheus/api/v1/query?query=vmalert_execution_errors_total'
-```
-
-**Действия:**
-1. Проверить доступность VMCluster:
-   - `kubectl get pods -n vmks -l app.kubernetes.io/name=vmstorage`
-   - `kubectl get pods -n vmks -l app.kubernetes.io/name=vmselect`
-   - `kubectl get pods -n vmks -l app.kubernetes.io/name=vminsert`
-2. Проверить сетевую связность:
-   - read path: `kubectl exec -n vmks <vmalert-pod> -- wget -qO- http://vmselect-vmks-victoria-metrics-k8s-stack:8481/health`
-   - write path: `kubectl exec -n vmks <vmalert-pod> -- wget -qO- http://vminsert-vmks-victoria-metrics-k8s-stack:8480/health`
-3. Проверить CPU/memory: `kubectl top pod -n vmks <vmalert-pod>`
-4. Если CPU limit достигнут — увеличить ресурсы и перезапустить
-
-### IR-2: Alertmanager не получает алерты
-
-**Симптомы:** `vmalert_alerts_send_errors_total` растёт, notification'ы не приходят.
-
-**Диагностика:**
-```bash
-kubectl logs -n vmks -l app.kubernetes.io/name=alertmanager --tail=50
-curl -s 'http://vmalertmanager-vmks-victoria-metrics-k8s-stack:9093/api/v2/alerts' | jq '. | length'
-```
-
-**Действия:**
-1. Проверить Pod Alertmanager: `kubectl get pods -n vmks -l app.kubernetes.io/name=alertmanager`
-2. Проверить endpoint в vmalert: `kubectl get pod -n vmks <vmalert-pod> -o yaml | grep notifier`
-3. Перезапустить Alertmanager при необходимости: `kubectl delete pod -n vmks <alertmanager-pod>`
-
-### IR-3: VMCluster недоступен
-
-**Симптомы:** Grafana dashboards не загружаются, `up{job=~"vmselect|vminsert|vmstorage"} == 0`.
-
-**Диагностика:**
-```bash
-kubectl get pods -n vmks -l app.kubernetes.io/name=vmstorage
-kubectl get pods -n vmks -l app.kubernetes.io/name=vmselect
-kubectl get pods -n vmks -l app.kubernetes.io/name=vminsert
-kubectl get pvc -n vmks
-```
-
-**Действия:**
-1. Проверить PVC: `kubectl get pvc -n vmks` — статус `Bound`?
-2. Проверить events: `kubectl describe pod -n vmks <pod>` — OOMKilled? CrashLoopBackOff?
-3. При OOM — увеличить memory limit
-4. При потере PVC — создать новый PV
-
-### IR-4: Operator не reconcile'ит VMRule
-
-**Симптомы:** новые VMRule применены, но не появляются в ConfigMap, правила не загружаются в vmalert.
-
-**Диагностика:**
-```bash
-kubectl logs -n vmks -l app.kubernetes.io/name=victoria-metrics-operator --tail=100
-kubectl get vmrules -A --no-headers | wc -l
-kubectl get configmaps -n vmks | grep rulefiles
-```
-
-**Действия:**
-1. Проверить логи Operator на ошибки валидации VMRule
-2. Проверить, не исчерпал ли Operator ресурсы: `kubectl top pod -n vmks <operator-pod>`
-3. Перезапустить Operator: `kubectl rollout restart deployment -n vmks vmks-victoria-metrics-operator`
-
-
-
 ## Рекомендации по повышению устойчивости (Hardening)
 
 ### Краткосрочные (Quick Wins)
@@ -581,7 +506,7 @@ kubectl get configmaps -n vmks | grep rulefiles
 - [ ] Шардирование vmalert для масштабирования на 10 000+ алертов
 - [ ] Cross-region replication на уровне кластера
 - [ ] Регулярные Chaos Engineering эксперименты (Litmus/Chaos Mesh) для валидации процедур восстановления
-- [ ] Автоматизация runbook'ов восстановления через Kubernetes Operators или workflow engine (Argo Workflows)
+- [ ] Автоматизация процедур восстановления через Kubernetes Operators или workflow engine (Argo Workflows)
 
 
 
