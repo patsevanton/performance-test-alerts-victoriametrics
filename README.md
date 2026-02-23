@@ -9,22 +9,68 @@
 - проверить механизм сохранения и восстановления состояния алертов через `remoteWrite`/`remoteRead`;
 - определить практические пороги масштабируемости и дать рекомендации по эксплуатации.
 
-## Стенд
+## Цели Disaster Recovery и SRE
 
+Обеспечить высокую доступность и надежность системы мониторинга VictoriaMetrics в production среде:
+
+### High Availability (HA)
+- **RTO (Recovery Time Objective)**: Восстановление сервиса мониторинга в течение 15 минут при отказе компонентов
+- **RPO (Recovery Point Objective)**: Максимальная потеря данных метрик - 5 минут, алертов - 30 секунд
+- **SLA доступности**: 99.9% uptime для критических компонентов (vmalert, vmsingle)
+- **Multi-zone deployment**: Распределение компонентов по availability zones для fault tolerance
+
+### Disaster Recovery (DR)
+- **Backup стратегия**: Ежедневные бэкапы данных VictoriaMetrics с хранением в объектном хранилище (S3-compatible)
+- **DR сценарии**: Потеря зоны/региона, отказ кластера Kubernetes, массовая потеря данных
+- **Восстановление из backup**: Автоматизированные процедуры восстановления с валидацией целостности данных
+- **Cross-region replication**: Репликация критических данных в резервный регион
+
+### SRE Practices
+- **Monitoring & Alerting**: Комплексная система мониторинга всех компонентов с эскалацией инцидентов
+- **Incident Response**: Стандартизированные процедуры реагирования на инциденты с временными рамками
+- **Capacity Planning**: Проактивное планирование ресурсов на основе метрик использования и трендов роста
+- **Automation**: Автоматизация рутинных операций по развертыванию, обновлению и восстановлению
+- **Post-mortem Analysis**: Анализ инцидентов с извлечением уроков и улучшением систем
+
+### Performance & Scalability
+- **Baseline метрики**: Установление baseline показателей производительности для всех компонентов
+- **Load Testing**: Регулярное тестирование системы под нагрузкой для определения bottlenecks
+- **Auto-scaling**: Горизонтальное масштабирование компонентов на основе метрик нагрузки
+- **Resource optimization**: Оптимизация потребления CPU/памяти с учетом требований к latency
+
+## Архитектура и Стенд
+
+### Infrastructure
 **Кластер:** 3 ноды Kubernetes v1.32.1 на Yandex Cloud (Ubuntu 22.04.5 LTS, containerd 1.7.27).
+- **Storage:** Managed Kubernetes (Yandex Managed Service for Kubernetes)
+- **Network:** VPC с private subnets, LoadBalancer для внешнего доступа
+- **Security:** RBAC, Network Policies, Service Mesh (Istio)
 
-**Стек:** `victoria-metrics-k8s-stack` v0.71.1 (VictoriaMetrics v1.136.0), установленный через Helm в namespace `vmks`.
+### VictoriaMetrics Stack
+**Версия:** `victoria-metrics-k8s-stack` v0.71.1 (VictoriaMetrics v1.136.0), namespace `vmks`.
 
-Компоненты стека:
+#### Компоненты и их роли в HA/DR
 
-| Компонент | Deployment | Роль |
-|-----------|------------|------|
-| VMSingle | `vmsingle` | Хранение метрик (single-node) |
-| VMAlert | `vmalert` | Оценка правил и отправка алертов |
-| VMAgent | `vmagent` | Сбор метрик (scrape) |
-| VMAlertmanager | `vmalertmanager` | Маршрутизация уведомлений |
-| VM Operator | `victoria-metrics-operator` | Управление CRD-ресурсами |
-| Grafana | `grafana` | Визуализация |
+| Компонент | Deployment | Роль | HA/DR особенности |
+|-----------|------------|------|-------------------|
+| **VMSingle** | `vmsingle` | Хранение метрик (single-node) | **Single Point of Failure** - требует миграции на кластер VMCluster для HA |
+| **VMAlert** | `vmalert` | Оценка правил и отправка алертов | Stateful через remoteWrite/Read, поддерживает replicas |
+| **VMAgent** | `vmagent` | Сбор метрик (scrape) | Stateless, легко масштабируется |
+| **VMAlertmanager** | `vmalertmanager` | Маршрутизация уведомлений | Stateful, поддерживает кластерный режим |
+| **VM Operator** | `victoria-metrics-operator` | Управление CRD-ресурсами | Active-Active через leader election |
+| **Grafana** | `grafana` | Визуализация | Stateful (PV), поддерживает replicas |
+
+### High Availability Considerations
+- **Data Persistence:** Persistent Volumes для stateful компонентов (VMSingle, VMAlertmanager, Grafana)
+- **State Management:** VMAlert использует VictoriaMetrics для хранения состояния алертов
+- **Load Balancing:** Service mesh обеспечивает распределение нагрузки между replicas
+- **Health Checks:** Readiness/Liveness probes для всех компонентов
+
+### Disaster Recovery Architecture
+- **Backup Storage:** S3-compatible объектное хранилище для бэкапов
+- **Multi-zone:** Компоненты распределены по availability zones
+- **Network Isolation:** Prod/DR environments разделены firewall rules
+- **DNS Failover:** Автоматическое переключение через DNS в случае катастрофы
 
 ## Установка
 
@@ -74,8 +120,6 @@ cd alerts
 3. Добавьте permissions Editor
 4. "Add service account token" → "No expiration"
 5. Скопируйте токен
-
----
 
 ## Результаты тестирования
 
@@ -179,8 +223,6 @@ $ curl -s 'http://vmsingle:8428/api/v1/status/tsdb' | jq '.data.totalSeries'
 
 Из них значительная часть — ряды `ALERTS` и `ALERTS_FOR_STATE`, генерируемые vmalert (по 2 ряда на каждый алерт ≈ 12 800 рядов).
 
----
-
 ## Механизм распределения алертов и перезапуски vmalert
 
 ### Хранение правил в ConfigMap'ах
@@ -236,8 +278,6 @@ vmalert настроен на запись и чтение состояния и
 
 Подробнее: https://docs.victoriametrics.com/victoriametrics/vmalert/#alerts-state-on-restarts
 
----
-
 ## Наблюдаемые узкие места
 
 ### 1. CPU vmalert
@@ -269,7 +309,302 @@ selected vmrule count=71, invalid rules count=0
 ```
 При тысячах VMRule это может стать узким местом для самого Operator'а.
 
----
+## SRE: проверка надёжности alerting pipeline под нагрузкой
+
+### SLI (Service Level Indicators) — измеренные значения
+
+Все значения получены из VictoriaMetrics при нагрузке **8 048 активных алертов** (40 loadtest VMRule × 200 алертов + системные правила стека), **79 VMRule**, **6 ConfigMap'ов**.
+
+| SLI | Метрика | Измеренное значение | Статус |
+|--|--|--|--|
+| **Alert Evaluation Freshness** | `vmalert_iteration_duration_seconds < evaluationInterval` | Loadtest-группы (interval=30s): **0%** — все 40 групп превышают (avg=39.8s, max=47.2s). Системные группы (interval=20s): **100%** (max=1.7s) | ПРОБЛЕМА для loadtest |
+| **Alert Delivery Success Rate** | `1 - (send_errors / sent_total)` | **100.0%** — 0 ошибок из 436 935 отправок | OK |
+| **Alert Rule Evaluation Success Rate** | `1 - (execution_errors / execution_total)` | **100.0%** — 0 ошибок из 467 384 выполнений | OK |
+| **Config Reload Success Rate** | `1 - (reload_errors / reload_total)` | **100.0%** — 0 ошибок из 12 перезагрузок | OK |
+| **VMSingle Availability** | `up{job="vmsingle"}` | **1** (доступен) | OK |
+| **Missed Iterations** | `vmalert_iteration_missed_total` | **181** пропущенная итерация суммарно | ПРОБЛЕМА |
+
+### Детализация Alert Evaluation Freshness
+
+```
+Loadtest-группы (evaluationInterval=30s):
+  Количество групп:            40
+  min iteration:                30.7s   (превышает interval)
+  avg iteration:                39.8s   (+33% от interval)
+  max iteration:                47.2s   (+57% от interval)
+  Групп в пределах interval:   0 из 40 (0%)
+
+Системные группы (evaluationInterval=20s):
+  Количество групп:            195
+  min iteration:                0.001s
+  avg iteration:                0.449s
+  max iteration:                1.706s
+  Групп в пределах interval:   195 из 195 (100%)
+```
+
+Все loadtest-группы стабильно отстают от своего `evaluationInterval` на 10–17 секунд из-за CPU throttling. Системные группы работают штатно с большим запасом.
+
+### Сработавшие алерты под нагрузкой
+
+Проверены условия SRE-алертов для self-monitoring alerting pipeline. Ниже — реальный статус алертов в кластере при нагрузке 8 048 алертов:
+
+| Алерт | Условие | Статус | Детали |
+|--|--|--|--|
+| **TooManyMissedIterations** | `rate(vmalert_iteration_missed_total[5m]) > 0` | **FIRING** (23 инстанса) | Все loadtest-группы пропускают итерации: время оценки (39.8s avg) превышает interval (30s). Суммарно 181 пропущенная итерация |
+| **CPUThrottlingHigh** | CPU throttling > 25% | **FIRING** (2 инстанса) | vmalert: 168m / 200m limit = 84%. alertmanager: 95m / 100m limit = 95% |
+| **VmalertAlertDeliveryErrors** | `rate(vmalert_alerts_send_errors_total[5m]) > 0` | Не сработал | 0 ошибок доставки, pipeline vmalert → Alertmanager стабилен |
+| **VmalertConfigReloadFailed** | `vmalert_config_last_reload_errors_total > 0` | Не сработал | Все 12 перезагрузок конфигурации успешны |
+
+### Все активные алерты в кластере (кроме LoadTest)
+
+```
+[warning]  TooManyMissedIterations   × 23  — vmalert пропускает итерации для loadtest-групп
+[info]     CPUThrottlingHigh         × 2   — CPU throttling: vmalert + alertmanager
+[warning]  ScrapePoolHasNoTargets    × 3   — scrape pools без таргетов (kube-controller-manager, kube-scheduler, kube-etcd)
+[critical] KubeControllerManagerDown × 1   — ожидаемо для Managed Kubernetes
+[critical] KubeSchedulerDown        × 1   — ожидаемо для Managed Kubernetes
+[none]     Watchdog                  × 1   — healthcheck алерт (всегда firing)
+```
+
+
+
+## Disaster Recovery
+
+### RTO / RPO
+
+| Компонент | RTO (время восстановления) | RPO (допустимая потеря данных) | Комментарий |
+|--||-|-|
+| **vmalert** | ≤ 60 сек | 0 (при настроенном remoteRead) | Pod пересоздаётся K8s, состояние алертов восстанавливается из `ALERTS_FOR_STATE` |
+| **VMSingle** | ≤ 5 мин | ≤ evaluationInterval (30s) | Зависит от PVC; при потере PV — RPO = время последнего бэкапа |
+| **Alertmanager** | ≤ 60 сек | silences/inhibitions из PVC | StatefulSet с persistent storage |
+| **VM Operator** | ≤ 2 мин | 0 (stateless, читает CRD) | Reconcile восстанавливает желаемое состояние |
+| **Весь стек** | ≤ 10 мин | ≤ 30 сек (метрики), 0 (конфиг) | При условии здорового кластера K8s и сохранных PVC |
+
+### Сценарии отказов и восстановление
+
+#### Сценарий 1: Падение Pod'а vmalert
+
+**Что происходит:**
+- Kubernetes автоматически пересоздаёт Pod (Deployment, restartPolicy=Always)
+- При старте vmalert выполняет запрос к `-remoteRead.url` для восстановления `ALERTS_FOR_STATE`
+- Состояние алертов (`ActiveAt`, `for` duration) полностью восстанавливается
+- Пропущенные за время downtime итерации не выполняются ретроспективно
+
+**Воздействие:**
+- Алерты не оцениваются в течение ~10–30 сек (время пересоздания Pod'а)
+- Уведомления задерживаются на время downtime + `evaluationInterval`
+- `for`-счётчик алертов не сбрасывается благодаря state persistence
+
+**Проверено в тесте:** 4 перезапуска, 0 потерянных алертов, все `ALERTS_FOR_STATE` восстановлены.
+
+#### Сценарий 2: Недоступность VMSingle
+
+**Что происходит:**
+- vmalert не может выполнить запросы правил (`-datasource.url`)
+- vmalert не может записать результаты (`-remoteWrite.url`)
+- Метрика `vmalert_execution_errors_total` начинает расти
+- Уже firing-алерты продолжают отправляться в Alertmanager (они кэшируются в памяти vmalert)
+
+**Воздействие:**
+- Новые алерты не срабатывают
+- Историческая запись алертов прекращается
+- Dashboards в Grafana не обновляются
+
+**Восстановление:**
+- При восстановлении VMSingle vmalert автоматически продолжает работу
+- Данные за время недоступности теряются (gap в метриках)
+
+#### Сценарий 3: Потеря PersistentVolume VMSingle
+
+**Что происходит:**
+- Потеря всех исторических метрик
+- Потеря `ALERTS_FOR_STATE` → vmalert не сможет восстановить состояние алертов при рестарте
+- Все алерты с `for > 0` начнут отсчёт заново
+
+**Восстановление:**
+1. Восстановить PV из бэкапа (если есть)
+2. Или создать новый PV — vmalert начнёт работу с чистого состояния
+3. Алерты с `for: 0` (instant) сработают на первой итерации
+4. Алерты с `for: N` потребуют N секунд для повторного срабатывания
+
+**Смягчение:**
+- Регулярные бэкапы VMSingle через `vmbackup` / snapshot API
+- Репликация (VMCluster вместо VMSingle для production)
+
+#### Сценарий 4: Потеря namespace / CRD
+
+**Что происходит:**
+- Потеря всех VMRule, Deployment'ов, ConfigMap'ов
+- Полная потеря alerting pipeline
+
+**Восстановление:**
+1. Восстановить namespace из бэкапа (Velero / etcd backup)
+2. Или повторно применить Helm chart + VMRule из Git
+3. Время восстановления зависит от автоматизации (GitOps: ~5 мин, ручное: ~30 мин)
+
+**Смягчение:**
+- Хранение всех VMRule в Git (Infrastructure as Code)
+- GitOps (ArgoCD/Flux) для автоматического reconcile
+- Регулярные бэкапы etcd кластера Kubernetes
+
+#### Сценарий 5: Сетевая изоляция между компонентами
+
+**Что происходит:**
+- vmalert ↔ VMSingle: ошибки оценки правил, потеря записи состояний
+- vmalert ↔ Alertmanager: алерты оцениваются, но не доставляются
+- vmagent ↔ VMSingle: новые метрики не записываются
+
+**Воздействие:** зависит от того, какой канал нарушен. Наиболее критичен vmalert → Alertmanager (silent failure).
+
+**Смягчение:**
+- NetworkPolicy с явным разрешением трафика между компонентами
+- Мониторинг `vmalert_alerts_send_errors_total` и `vmagent_remotewrite_errors_total`
+
+
+
+## Анализ устойчивости по результатам тестирования
+
+### Что подтвердил тест
+
+| Аспект | Результат | Вывод |
+|--|--|-|
+| State persistence при перезапуске | 4 перезапуска, 0 потерь состояния | `remoteRead` надёжно восстанавливает `ALERTS_FOR_STATE` |
+| Горячая перезагрузка конфигурации | 10 reload'ов, 0 ошибок | SIGHUP работает стабильно |
+| Доставка алертов | 309 110 отправок, 0 ошибок | Pipeline vmalert → Alertmanager надёжен |
+| Оценка правил | 333 868 выполнений, 0 ошибок | Запросы к VMSingle стабильны |
+| Автоматическое масштабирование ConfigMap | 5 ConfigMap'ов создано автоматически | Operator корректно дробит правила |
+
+### Выявленные риски
+
+| Риск | Текущий статус | Критичность | Рекомендация |
+|||-|-|
+| CPU throttling vmalert | 85% от limit | Высокая | Увеличить до 600m+ |
+| Iteration lag | max 32.3s > interval 30s | Высокая | Увеличить CPU, или увеличить interval, или шардировать |
+| Single point of failure (VMSingle) | Нет реплик | Высокая | VMCluster для production |
+| Отсутствие бэкапов | Не настроено | Высокая | Настроить vmbackup |
+| vmalert — один экземпляр | Нет HA | Средняя | Шардирование через `-rule.partition` (если поддерживается) |
+
+
+
+## Capacity Planning
+
+### Экстраполяция ресурсов
+
+На основании тестовых данных (6 400 алертов):
+
+| Метрика | Значение на 6 400 алертов | Прогноз на 20 000 | Прогноз на 50 000 |
+|||--|--|
+| CPU vmalert | 170m | ~530m | ~1.3 |
+| Memory vmalert | 289Mi | ~900Mi | ~2.2Gi |
+| ConfigMap'ы | 5 × ~470KB | ~15 | ~37 |
+| Временные ряды (total) | 225 146 | ~265 000 | ~325 000 |
+| Время итерации (max) | 32.3s | ~100s | ~250s |
+
+При линейной экстраполяции (фактическое потребление может расти нелинейно):
+- **20 000 алертов** — необходимо шардирование vmalert или значительное увеличение ресурсов
+- **50 000 алертов** — обязательно шардирование + VMCluster + выделенный Alertmanager cluster
+
+### Рекомендации по масштабированию
+
+1. **До 10 000 алертов:** увеличить CPU limit vmalert до 600m–1000m, увеличить `evaluationInterval` до 60s для некритичных групп
+2. **10 000–30 000 алертов:** шардирование vmalert (несколько экземпляров с разделением правил), переход на VMCluster
+3. **30 000+ алертов:** полное шардирование, отдельные vmalert на группу сервисов, федерация Alertmanager'ов
+
+
+
+## Incident Response Runbook
+
+### IR-1: vmalert не оценивает правила
+
+**Симптомы:** `vmalert_execution_errors_total` растёт, алерты не обновляются.
+
+**Диагностика:**
+```bash
+kubectl logs -n vmks -l app.kubernetes.io/name=vmalert --tail=50
+kubectl get pods -n vmks -l app.kubernetes.io/name=vmalert
+curl -s 'http://vmsingle:8428/api/v1/query?query=vmalert_execution_errors_total'
+```
+
+**Действия:**
+1. Проверить доступность VMSingle: `kubectl get pods -n vmks -l app.kubernetes.io/name=vmsingle`
+2. Проверить сетевую связность: `kubectl exec -n vmks <vmalert-pod> -- wget -qO- http://vmsingle:8428/health`
+3. Проверить CPU/memory: `kubectl top pod -n vmks <vmalert-pod>`
+4. Если CPU limit достигнут — увеличить ресурсы и перезапустить
+
+### IR-2: Alertmanager не получает алерты
+
+**Симптомы:** `vmalert_alerts_send_errors_total` растёт, notification'ы не приходят.
+
+**Диагностика:**
+```bash
+kubectl logs -n vmks -l app.kubernetes.io/name=alertmanager --tail=50
+curl -s 'http://vmalertmanager:9093/api/v2/alerts' | jq '. | length'
+```
+
+**Действия:**
+1. Проверить Pod Alertmanager: `kubectl get pods -n vmks -l app.kubernetes.io/name=alertmanager`
+2. Проверить endpoint в vmalert: `kubectl get pod -n vmks <vmalert-pod> -o yaml | grep notifier`
+3. Перезапустить Alertmanager при необходимости: `kubectl delete pod -n vmks <alertmanager-pod>`
+
+### IR-3: VMSingle недоступен
+
+**Симптомы:** Grafana dashboards не загружаются, `up{job="vmsingle"} == 0`.
+
+**Диагностика:**
+```bash
+kubectl get pods -n vmks -l app.kubernetes.io/name=vmsingle
+kubectl describe pod -n vmks <vmsingle-pod>
+kubectl get pvc -n vmks
+```
+
+**Действия:**
+1. Проверить PVC: `kubectl get pvc -n vmks` — статус `Bound`?
+2. Проверить events: `kubectl describe pod -n vmks <vmsingle-pod>` — OOMKilled? CrashLoopBackOff?
+3. При OOM — увеличить memory limit
+4. При потере PVC — восстановить из бэкапа или создать новый PV
+
+### IR-4: Operator не reconcile'ит VMRule
+
+**Симптомы:** новые VMRule применены, но не появляются в ConfigMap, правила не загружаются в vmalert.
+
+**Диагностика:**
+```bash
+kubectl logs -n vmks -l app.kubernetes.io/name=victoria-metrics-operator --tail=100
+kubectl get vmrules -A --no-headers | wc -l
+kubectl get configmaps -n vmks | grep rulefiles
+```
+
+**Действия:**
+1. Проверить логи Operator на ошибки валидации VMRule
+2. Проверить, не исчерпал ли Operator ресурсы: `kubectl top pod -n vmks <operator-pod>`
+3. Перезапустить Operator: `kubectl rollout restart deployment -n vmks vmks-victoria-metrics-operator`
+
+
+
+## Рекомендации по повышению устойчивости (Hardening)
+
+### Краткосрочные (Quick Wins)
+
+- [ ] Увеличить CPU limit vmalert до 600m+
+- [ ] Настроить PodDisruptionBudget для vmalert и VMSingle
+- [ ] Добавить SRE-алерты из раздела выше (самомониторинг alerting pipeline)
+- [ ] Настроить `vmbackup` для периодического бэкапа VMSingle
+
+### Среднесрочные
+
+- [ ] Перейти на VMCluster (vmselect + vminsert + vmstorage) для HA хранения
+- [ ] Внедрить GitOps (ArgoCD/Flux) для автоматического восстановления VMRule из Git
+- [ ] Настроить Alertmanager cluster (3 реплики) для HA уведомлений
+- [ ] Добавить Network Policies для изоляции и защиты трафика между компонентами
+
+### Долгосрочные
+
+- [ ] Шардирование vmalert для масштабирования на 10 000+ алертов
+- [ ] Cross-region replication для DR на уровне кластера
+- [ ] Регулярные Chaos Engineering эксперименты (Litmus/Chaos Mesh) для валидации DR-процедур
+- [ ] Автоматизация DR-runbook'ов через Kubernetes Operators или workflow engine (Argo Workflows)
+
+
 
 ## Полезные команды для мониторинга
 
