@@ -38,7 +38,6 @@
 ### Соображения по отказоустойчивости (HA)
 - **Сохранность данных:** PersistentVolume'ы для stateful компонентов (vmstorage, VMAlertmanager, Grafana)
 - **Состояние алертов:** VMAlert использует VictoriaMetrics для хранения состояния алертов
-- **Проверки живости:** Readiness/Liveness probes для всех компонентов
 
 ## Установка
 
