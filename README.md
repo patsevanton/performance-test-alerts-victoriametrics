@@ -11,7 +11,7 @@
 
 ## Цели устойчивости и SRE
 
-- **HA**: RTO ≤ 15 мин, RPO метрик ≤ 5 мин, RPO алертов ≤ 30 сек, SLA 99.9% для vmalert/VMCluster
+- **HA**: RPO метрик ≤ 5 мин, RPO алертов ≤ 30 сек, SLA 99.9% для vmalert/VMCluster
 - **SRE**: Самомониторинг pipeline, incident response runbooks, capacity planning, post-mortem анализ
 - **Масштабирование**: Baseline метрики, нагрузочное тестирование, auto-scaling, оптимизация ресурсов
 
