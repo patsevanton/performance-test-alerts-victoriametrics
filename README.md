@@ -20,9 +20,6 @@
 
 ### Infrastructure
 **Кластер:** 3 ноды Kubernetes v1.32.1 на Yandex Cloud (Ubuntu 22.04.5 LTS, containerd 1.7.27).
-- **Storage:** Managed Kubernetes (Yandex Managed Service for Kubernetes)
-- **Network:** VPC с private subnets, LoadBalancer для внешнего доступа
-- **Security:** RBAC, Network Policies, Service Mesh (Istio)
 
 ### VictoriaMetrics Stack
 **Версия:** `victoria-metrics-k8s-stack` v0.71.1 (VictoriaMetrics v1.136.0), namespace `vmks`.
