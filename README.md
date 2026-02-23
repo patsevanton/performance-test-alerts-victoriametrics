@@ -33,7 +33,9 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 Из директории alerts запустите скрипт `./generate_alerts.py` который будет генерировать vmrule.
 
 
-Из директории alerts запустите скрипт `apply-yaml.sh`, который будет применять vmrule в kubernetes и делать аннотации в grafana.
+Из директории alerts запустите скрипт `./apply-yaml.sh`, который будет применять vmrule в kubernetes и делать аннотации в grafana.
+
+Для работы скрипта требуется токен от сервис аккаунта `deploy_vmrule` в Grafana.
 
 # Создание Service Account через UI:
 1. Administration → Users and access → Service accounts
