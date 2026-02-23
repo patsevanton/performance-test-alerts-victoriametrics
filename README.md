@@ -41,14 +41,7 @@
 ### High Availability Considerations
 - **Data Persistence:** Persistent Volumes для stateful компонентов (VMSingle, VMAlertmanager, Grafana)
 - **State Management:** VMAlert использует VictoriaMetrics для хранения состояния алертов
-- **Load Balancing:** Service mesh обеспечивает распределение нагрузки между replicas
 - **Health Checks:** Readiness/Liveness probes для всех компонентов
-
-### Disaster Recovery Architecture
-- **Backup Storage:** S3-compatible объектное хранилище для бэкапов
-- **Multi-zone:** Компоненты распределены по availability zones
-- **Network Isolation:** Prod/DR environments разделены firewall rules
-- **DNS Failover:** Автоматическое переключение через DNS в случае катастрофы
 
 ## Установка
 
