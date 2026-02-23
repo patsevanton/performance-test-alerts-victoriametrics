@@ -35,10 +35,10 @@
 | **VM Operator** | `victoria-metrics-operator` | Управление CRD-ресурсами | Active-Active через leader election |
 | **Grafana** | `grafana` | Визуализация | Stateful (PV), поддерживает replicas |
 
-### High Availability Considerations
-- **Data Persistence:** Persistent Volumes для stateful компонентов (vmstorage, VMAlertmanager, Grafana)
-- **State Management:** VMAlert использует VictoriaMetrics для хранения состояния алертов
-- **Health Checks:** Readiness/Liveness probes для всех компонентов
+### Соображения по отказоустойчивости (HA)
+- **Сохранность данных:** PersistentVolume'ы для stateful компонентов (vmstorage, VMAlertmanager, Grafana)
+- **Состояние алертов:** VMAlert использует VictoriaMetrics для хранения состояния алертов
+- **Проверки живости:** Readiness/Liveness probes для всех компонентов
 
 ## Установка
 
