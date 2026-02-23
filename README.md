@@ -57,7 +57,7 @@ helm upgrade --install vmks vm/victoria-metrics-k8s-stack \
   --wait --values vmks-values.yaml
 ```
 
-Файл `vmks-values.yaml` включает Grafana с ingress на `grafana.apatsev.org.ru` и плагин `victoriametrics-logs-datasource`.
+Файл `vmks-values.yaml` включает Grafana с ingress на `grafana.apatsev.org.ru`.
 
 Получение пароля Grafana:
 ```bash
