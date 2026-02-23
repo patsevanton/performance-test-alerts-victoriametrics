@@ -19,12 +19,6 @@ vmcluster:
     vmstorage:
       # Минимум 2 реплики, чтобы replicationFactor=2 имел смысл.
       replicaCount: 2
-      storage:
-        volumeClaimTemplate:
-          spec:
-            resources:
-              requests:
-                storage: 20Gi # было 10Gi в дефолтных примерах чарта; подстройте под нагрузку/retention
 
     # VMSelect и VMInsert тоже без SPOF: по 2 реплики.
     vmselect:
@@ -36,8 +30,8 @@ vmcluster:
 # Важно для SLA alerting pipeline: падение 1 pod/ноды не должно останавливать прием алертов.
 alertmanager:
   spec:
-    replicaCount: 3 # было по умолчанию 1
-    # Защищаемся от добровольных disruption'ов (drain/upgrade) так, чтобы хотя бы 1 pod оставался.
+    replicaCount: 2
+    # Защищаемся от добровольных disruption'ов (drain/upgrade) так, чтобы 2 pod оставалось.
     podDisruptionBudget:
       minAvailable: 1
 
@@ -45,7 +39,7 @@ vmalert:
   spec:
     # HA для оценки правил: 2 реплики, чтобы падение pod/ноды не останавливал оценку.
     # Чтобы НЕ получить двойные нотификации, см. раздел в README: у реплик должны быть одинаковые labels алертов.
-    replicaCount: 2 # было по умолчанию 1
+    replicaCount: 2
     # Защита от disruption'ов (drain/upgrade): минимум 1 pod должен оставаться.
     podDisruptionBudget:
       minAvailable: 1
