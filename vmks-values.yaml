@@ -4,12 +4,32 @@ grafana:
     enabled: true
     hosts:
       - grafana.apatsev.org.ru
+
+# HA для доставки уведомлений: Alertmanager в кластерном режиме.
+# Важно для SLA alerting pipeline: падение 1 pod/ноды не должно останавливать прием алертов.
+alertmanager:
+  spec:
+    replicaCount: 3 # было по умолчанию 1
+    # Защищаемся от добровольных disruption'ов (drain/upgrade) так, чтобы хотя бы 1 pod оставался.
+    podDisruptionBudget:
+      minAvailable: 1
+
 vmalert:
   spec:
+    # HA для оценки правил: 2 реплики, чтобы падение pod/ноды не останавливал оценку.
+    # Чтобы НЕ получить двойные нотификации, см. раздел в README: у реплик должны быть одинаковые labels алертов.
+    replicaCount: 2 # было по умолчанию 1
+    # Защита от disruption'ов (drain/upgrade): минимум 1 pod должен оставаться.
+    podDisruptionBudget:
+      minAvailable: 1
+
     resources:
       limits:
-        cpu: 500m
-        memory: 800Mi
+        # Увеличиваем лимиты, чтобы vmalert не отставал от evaluationInterval под нагрузкой
+        # (иначе растет vmalert_iteration_missed_total и “RPO алертов” становится хуже).
+        cpu: "1" # было 500m
+        memory: 2Gi # было 800Mi
       requests:
-        cpu: 200m
-        memory: 400Mi
+        # Поднимаем requests, чтобы снизить throttling и стабилизировать длительность итераций.
+        cpu: 600m # было 200m
+        memory: 2Gi # было 400Mi
