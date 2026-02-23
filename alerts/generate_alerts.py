@@ -941,8 +941,8 @@ def generate_vmrule(vmrule_idx, num_alerts):
 
 
 def main():
-    num_vmrules = 1000
-    alerts_per_vmrule = 200
+    num_vmrules = 10000
+    alerts_per_vmrule = 20
 
     output_dir = "vmrules"
     os.makedirs(output_dir, exist_ok=True)

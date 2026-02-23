@@ -70,8 +70,8 @@ for ((i=0; i<total; i++)); do
     fi
 
     if [ "$index" -lt "$total" ]; then
-        echo "Ждём 5 минут перед следующим применением..."
-        sleep 300
+        echo "Ждём 30 секунд перед следующим применением..."
+        sleep 30
     fi
 done
 
