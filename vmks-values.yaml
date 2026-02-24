@@ -63,6 +63,14 @@ vmalert:
         cpu: 1200m
         memory: 2Gi
 
+# VMAgent: при ~1100+ VMRule (31 000+ алертов) эндпоинт /metrics vmalert превышает
+# дефолтный maxScrapeSize (16 МБ), и vmagent перестаёт скрейпить vmalert целиком.
+# Увеличиваем до 128 МБ с запасом на дальнейший рост числа правил.
+vmagent:
+  spec:
+    extraArgs:
+      promscrape.maxScrapeSize: "134217728"
+
 # VM Operator: при 39 VMRule-объектах потребляет 236m CPU без каких-либо limits.
 # Задаём явные ресурсы, чтобы избежать неконтролируемого роста.
 victoria-metrics-operator:
