@@ -31,8 +31,8 @@ for ((i=0; i<total; i++)); do
     fi
 
     if [ "$index" -lt "$total" ]; then
-        echo "Ждём 3 секунды перед следующим применением..."
-        sleep 3
+        echo "Ждём 2 секунды перед следующим применением..."
+        sleep 2
     fi
 done
 
