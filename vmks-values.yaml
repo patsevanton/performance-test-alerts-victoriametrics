@@ -71,13 +71,13 @@ vmagent:
     extraArgs:
       promscrape.maxScrapeSize: "134217728"
 
-# VM Operator: при 39 VMRule-объектах потребляет 236m CPU без каких-либо limits.
-# Задаём явные ресурсы, чтобы избежать неконтролируемого роста.
+# VM Operator: при 39 VMRule потребляет 236m CPU; при 1200+ VMRule
+# потребление растёт пропорционально и 512Mi памяти вызывает OOM → CrashLoopBackOff.
 victoria-metrics-operator:
   resources:
     limits:
-      cpu: 500m
-      memory: 512Mi
+      cpu: "2"
+      memory: 4Gi
     requests:
-      cpu: 250m
-      memory: 256Mi
+      cpu: 500m
+      memory: 1Gi
