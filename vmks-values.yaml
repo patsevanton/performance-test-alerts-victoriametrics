@@ -28,6 +28,14 @@ vmcluster:
       extraArgs:
         search.maxConcurrentRequests: "16"
         search.maxQueueDuration: "60s"
+      # Увеличиваем ресурсы: без лимита памяти vmselect при ~1.3k+ VMRule получает десятки тысяч
+      # одновременных запросов (vmalert restore ALERTS_FOR_STATE + eval), потребление памяти растёт
+      # и под падает с OOMKilled (Exit Code 137). Лимит 1Gi предотвращает OOM при пиках нагрузки.
+      resources:
+        limits:
+          memory: 1Gi
+        requests:
+          memory: 256Mi
     vminsert:
       replicaCount: 2
 
