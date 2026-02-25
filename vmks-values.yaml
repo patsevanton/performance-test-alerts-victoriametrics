@@ -23,6 +23,11 @@ vmcluster:
     # VMSelect и VMInsert тоже без SPOF: по 2 реплики.
     vmselect:
       replicaCount: 2
+      # При большом числе VMRule vmalert шлёт много запросов (restore ALERTS_FOR_STATE + eval).
+      # Дефолт maxConcurrentRequests=2 даёт 429 и "couldn't start executing in 10s".
+      extraArgs:
+        search.maxConcurrentRequests: "16"
+        search.maxQueueDuration: "60s"
     vminsert:
       replicaCount: 2
 

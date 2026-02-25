@@ -69,7 +69,7 @@ cd alerts
 
 ### Применение VMRule в Kubernetes
 
-Скрипт `alerts/apply-yaml.sh` последовательно применяет VMRule с интервалом **5 секунд** между каждым:
+Скрипт `alerts/apply-yaml.sh` последовательно применяет VMRule с интервалом **5 секунд** между каждым (чтобы снизить пиковую нагрузку на vmselect и частоту перезапусков vmalert):
 
 ```bash
 cd alerts
