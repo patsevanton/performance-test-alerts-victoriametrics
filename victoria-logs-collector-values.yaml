@@ -1,0 +1,21 @@
+# Victoria-logs-collector — сбор логов со всех контейнеров в кластере.
+# Адаптировано из https://github.com/patsevanton/strimzi-kafka-chaos-testing
+# Требование: VictoriaLogs cluster развёрнут (vlinsert доступен).
+
+remoteWrite:
+  - url: http://victoria-logs-cluster-vlinsert.victoria-logs-cluster:9481
+    headers:
+      # Поля, которые не сохраняются в VictoriaLogs
+      VL-Ignore-Fields:
+        - kubernetes.container_id
+        - kubernetes.pod_ip
+        - kubernetes.pod_labels.pod-template-hash
+
+collector:
+  msgField:
+    - message
+    - msg
+
+podMonitor:
+  enabled: true
+  vm: true

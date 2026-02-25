@@ -1,0 +1,49 @@
+# VMServiceScrape для Chaos Mesh (VictoriaMetrics K8s Stack).
+# Применить после установки Chaos Mesh и vmks (release: vmks).
+# Адаптировано из https://github.com/patsevanton/strimzi-kafka-chaos-testing
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: chaos-mesh-controller-manager
+  namespace: chaos-mesh
+  labels:
+    app.kubernetes.io/component: controller-manager
+    app.kubernetes.io/name: chaos-mesh
+    release: vmks
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: controller-manager
+      app.kubernetes.io/name: chaos-mesh
+  namespaceSelector:
+    matchNames:
+      - chaos-mesh
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: chaos-daemon
+  namespace: chaos-mesh
+  labels:
+    app.kubernetes.io/component: chaos-daemon
+    app.kubernetes.io/name: chaos-mesh
+    release: vmks
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: chaos-daemon
+      app.kubernetes.io/name: chaos-mesh
+  namespaceSelector:
+    matchNames:
+      - chaos-mesh
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s

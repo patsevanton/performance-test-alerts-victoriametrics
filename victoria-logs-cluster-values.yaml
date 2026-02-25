@@ -1,0 +1,26 @@
+# VictoriaLogs cluster — хранилище логов (LogsQL).
+# Адаптировано из https://github.com/patsevanton/strimzi-kafka-chaos-testing
+# Требование: VictoriaMetrics K8s Stack установлен первым (CRD VMServiceScrape).
+
+vlselect:
+  vmServiceScrape:
+    enabled: true
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - name: victorialogs.apatsev.org.ru
+        path:
+          - /
+        port: http
+
+vlinsert:
+  vmServiceScrape:
+    enabled: true
+
+vlstorage:
+  vmServiceScrape:
+    enabled: true
+  retentionPeriod: 1d
+  persistentVolume:
+    size: 20Gi

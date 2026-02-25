@@ -56,6 +56,77 @@ helm upgrade --install vmks vm/victoria-metrics-k8s-stack \
 kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | base64 --decode; echo
 ```
 
+### VictoriaLogs (опционально)
+
+[VictoriaLogs](https://docs.victoriametrics.com/victorialogs/) — хранилище логов с поддержкой LogsQL. Конфиги адаптированы из [strimzi-kafka-chaos-testing](https://github.com/patsevanton/strimzi-kafka-chaos-testing).
+
+**Требование:** VictoriaMetrics K8s Stack установлен первым (CRD VMServiceScrape).
+
+**1. VictoriaLogs cluster (vlselect, vlinsert, vlstorage):**
+
+```bash
+helm repo add vm https://victoriametrics.github.io/helm-charts/
+helm repo update
+
+helm upgrade --install victoria-logs-cluster vm/victoria-logs-cluster \
+  --namespace victoria-logs-cluster \
+  --create-namespace \
+  --wait \
+  --timeout 15m \
+  -f victoria-logs-cluster-values.yaml
+```
+
+Проверка: `kubectl get pods -n victoria-logs-cluster`. Ingress для vlselect: `victorialogs.apatsev.org.ru` (из values).
+
+**2. Victoria-logs-collector (сбор логов с подов кластера):**
+
+```bash
+helm upgrade --install victoria-logs-collector vm/victoria-logs-collector \
+  --namespace victoria-logs-collector \
+  --create-namespace \
+  --wait \
+  --timeout 15m \
+  -f victoria-logs-collector-values.yaml
+```
+
+Проверка: `kubectl get pods -n victoria-logs-collector`. Логи стека (vmks, vmalert, vmagent и др.) можно запрашивать в Grafana через datasource VictoriaLogs или в UI VictoriaLogs.
+
+### Chaos Mesh (опционально)
+
+[Chaos Mesh](https://chaos-mesh.org/) — платформа для chaos engineering в Kubernetes. Конфиги адаптированы из [strimzi-kafka-chaos-testing](https://github.com/patsevanton/strimzi-kafka-chaos-testing); можно использовать для проверки отказоустойчивости стенда (pod-kill, network partition, stress и т.д.).
+
+**Установка:**
+
+```bash
+helm repo add chaos-mesh https://charts.chaos-mesh.org
+helm repo update
+
+helm upgrade --install chaos-mesh chaos-mesh/chaos-mesh \
+  --namespace chaos-mesh \
+  --create-namespace \
+  -f chaos-mesh/chaos-mesh-values.yaml \
+  --version 2.8.1 \
+  --wait
+```
+
+Проверка: `kubectl get pods -n chaos-mesh`.
+
+**Сбор метрик Chaos Mesh в VictoriaMetrics K8s Stack:**
+
+```bash
+kubectl apply -f chaos-mesh/chaos-mesh-vmservicescrape.yaml
+```
+
+**Доступ к Dashboard (RBAC + токен):**
+
+```bash
+kubectl apply -f chaos-mesh/chaos-mesh-rbac.yaml
+sleep 3
+kubectl get secret chaos-mesh-admin-token -n chaos-mesh -o jsonpath='{.data.token}' | base64 -d; echo
+```
+
+Токен вставить в Chaos Mesh Dashboard. Ingress: `chaos-dashboard.apatsev.org.ru` (из `chaos-mesh/chaos-mesh-values.yaml`).
+
 ### Генерация нагрузочных VMRule
 
 Скрипт [`alerts/generate_alerts.py`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/generate_alerts.py) генерирует YAML-файлы `VMRule` в директорию `alerts/vmrules/`. По умолчанию создаётся **10 000** файлов; каждый `VMRule` содержит **4–6 групп** (с `interval` 30s/1m/2m) и **20 алертов** суммарно.
@@ -308,9 +379,11 @@ vmalert настроен на запись и чтение состояния и
 ### Долгосрочные
 
 - [ ] Cross-region replication на уровне кластера
-- [ ] Chaos Engineering эксперименты для валидации процедур восстановления
+- [ ] Chaos Engineering: использовать [Chaos Mesh](https://github.com/patsevanton/performance-test-alerts-victoriametrics#chaos-mesh-опционально) для валидации процедур восстановления (pod-kill vmalert/vmstorage, network partition и т.д.)
 
 ## Полезные команды для мониторинга
+
+**Топ метрик при росте нагрузки:** см. [Метрики, выросшие при нагрузке](#метрики-выросшие-при-нагрузке-victoriametrics-stack) ниже — vmalert, vmselect, vmstorage, vminsert, vmagent, Operator, ресурсы подов и примеры запросов ко всем ключевым метрикам.
 
 ### Размер ConfigMap'ов с правилами
 
@@ -362,3 +435,89 @@ kubectl get replicasets -n vmks -l app.kubernetes.io/name=vmalert \
 ```bash
 kubectl top pods -n vmks
 ```
+
+---
+
+# Метрики, выросшие при нагрузке (VictoriaMetrics stack)
+
+Оценки даны для роста от малой нагрузки до **~660 VMRule** (~15 600 алертов, ~2,1 млн рядов). Базовый URL запросов: `http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometheus`.
+
+---
+
+## 1. VMAlert (vmalert)
+
+- **vmalert_iteration_duration_seconds** — выросла в **десятки раз** (оценка всех групп за одну итерацию занимает существенную долю interval).
+- **vmalert_iteration_missed_total** — при перегрузке растёт; при 660 VMRule может оставаться 0, при дальнейшем росте — рост в **разы**.
+- **vmalert_execution_errors_total** — при сбоях vmselect/vminsert рост от 0 до **единиц–десятков** в час.
+- **vmalert_alerts_firing** / **vmalert_alerts_pending** — растут **пропорционально числу правил** (~15 600 при 660 VMRule).
+- **vmalert_remotewrite_requests_total** — рост примерно **в 2–3 раза** от числа групп (запись ALERTS и ALERTS_FOR_STATE при каждой итерации).
+- **vmalert_remoteread_requests_total** — скачок при каждом рестарте vmalert (один большой запрос при старте).
+- **container_cpu_usage_seconds_total** (vmalert) — при 660 VMRule **~93% лимита (1 CPU)**; относительно пустого старта рост в **10+ раз**.
+- **container_memory_working_set_bytes** (vmalert) — **~2–4 раза** (с ~200–300 Mi до ~570 Mi).
+
+---
+
+## 2. VMSelect
+
+- **vm_concurrent_select_current** — среднее значение выросло в **2–5 раз** (много запросов от vmalert на eval и от remoteRead при рестартах).
+- **vm_concurrent_select_limit_reached_total** — при приближении к лимиту рост от 0 до **единиц–сотен** в час.
+- **vm_concurrent_select_limit_timeout_total** — при перегрузке рост от 0; в норме 0.
+- **vm_select_request_duration_seconds** — p99 вырос в **2–4 раза** (тяжёлые запросы по ALERTS_FOR_STATE и правилам).
+- **vm_http_requests_total** (job=vmselect) — запросы к select выросли **пропорционально числу групп и интервалам** (в **десятки раз**).
+
+---
+
+## 3. VMStorage
+
+- **vm_rows** / **vm_rows_inserted_total** — рост **пропорционально числу рядов** (~2,1 млн при 660 VMRule; от нуля — в **тысячи раз**).
+- **vm_storage_blocks** — рост в **разы** с ростом объёма данных.
+- **vm_cache_*_requests_total** / **vm_cache_*_misses_total** — объём запросов вырос в **разы**; miss rate может вырасти в **1,5–2 раза** при нехватке кэша.
+- **vm_http_requests_total** (job=vmstorage) — запросы от vmselect выросли в **десятки раз**.
+
+---
+
+## 4. VMInsert
+
+- **vm_http_requests_total** (job=vminsert, path insert) — рост в **2–3 раза** от числа групп vmalert (remote write при каждой итерации).
+- **vm_insert_request_duration_seconds** — при росте объёма записи p99 может вырасти в **1,5–3 раза**.
+- **vm_insert_requests_total** — рост **пропорционально** записи (в **десятки раз** относительно малой нагрузки).
+
+---
+
+## 5. VMAgent
+
+- **scrape_series_added** (target=vmalert) — выросло в **десятки раз** (размер /metrics vmalert растёт с числом правил и алертов).
+- **scrape_body_size_bytes** (target=vmalert) — рост в **10–20+ раз** (при 660 VMRule уже сотни KB – единицы MB; при 1100+ VMRule может превысить maxScrapeSize 16 MB).
+- **scrape_samples_scraped** (job=vmalert) — рост **пропорционально** числу метрик vmalert (в **десятки раз**).
+
+---
+
+## 6. Victoria Metrics Operator
+
+- **process_cpu_seconds_total** (job=operator) — при 660 VMRule **~198m**; относительно малого числа VMRule рост в **5–15 раз** (reconcile по всем VMRule и сборке ConfigMap).
+- **process_resident_memory_bytes** (job=operator) — рост в **2–4 раза** с ростом числа VMRule.
+
+---
+
+## 7. Kubernetes / ресурсы подов
+
+- **container_cpu_usage_seconds_total** (vmalert) — см. раздел 1; **container_cpu** для vmselect, vmstorage, vminsert — рост в **2–4 раза** при той же нагрузке.
+- **container_memory_working_set_bytes** (vmstorage) — при 660 VMRule **~800–870 Mi** на реплику; рост в **2–3 раза** от старта.
+- **container_memory_working_set_bytes** (vmselect) — рост в **1,5–2 раза**.
+
+---
+
+## 8. Алерты и объём данных
+
+- **count(ALERTS)** — при 660 VMRule **~15 600**; рост от 0 до этого значения (фактически **на порядки**).
+- **count(ALERTS_FOR_STATE)** — того же порядка, что и ALERTS; рост **пропорционально** числу алертов.
+- **totalSeries** (через API/tsdb) — при 660 VMRule **~2,1 млн** рядов; рост от нуля в **тысячи раз**.
+
+---
+
+## Как считать прирост
+
+- Для счётчиков: `increase(metric_name[1h])` или сравнение с периодом до нагрузки.
+- Для gauge (CPU, память, длительность): сравнение средних/перцентилей «до» и «после» по тому же окну.
+- Список имён метрик: `GET /api/v1/label/__name__/values`, затем фильтр по префиксу (`vmalert_*`, `vm_concurrent_select_*` и т.д.).
+- Ресурсы подов: `kubectl top pods -n vmks`.
