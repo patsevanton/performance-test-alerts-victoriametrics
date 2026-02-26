@@ -30,7 +30,7 @@
 | **VM Operator** | victoria-metrics-operator | 1 | Управление CRD-ресурсами |
 | **Grafana** | grafana | 1 | Визуализация |
 
-Ключевые настройки HA (файл `[vmks-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/vmks-values.yaml)`):
+Ключевые настройки HA (файл [vmks-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/vmks-values.yaml)):
 - `vmsingle` **отключен**, вместо него — `vmcluster` с `replicationFactor: 2`
 - vmalert: 2 реплики, CPU limit 1, memory 2Gi, PDB `minAvailable: 1`
 - alertmanager: 2 реплики, PDB `minAvailable: 1`
