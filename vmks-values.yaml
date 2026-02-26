@@ -39,6 +39,13 @@ vmcluster:
     vminsert:
       replicaCount: 2
 
+  ingress:
+    select:
+      enabled: true
+      ingressClassName: nginx
+      hosts:
+        - vmselect.apatsev.org.ru
+
 # HA для доставки уведомлений: Alertmanager в кластерном режиме.
 # Важно для SLA alerting pipeline: падение 1 pod/ноды не должно останавливать прием алертов.
 alertmanager:
