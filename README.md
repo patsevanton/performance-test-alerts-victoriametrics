@@ -56,7 +56,7 @@ helm upgrade --install vmks vm/victoria-metrics-k8s-stack \
 kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | base64 --decode; echo
 ```
 
-### VictoriaLogs (опционально)
+### VictoriaLogs
 
 [VictoriaLogs](https://docs.victoriametrics.com/victorialogs/) — хранилище логов с поддержкой LogsQL. Конфиги адаптированы из [strimzi-kafka-chaos-testing](https://github.com/patsevanton/strimzi-kafka-chaos-testing).
 
@@ -91,7 +91,7 @@ helm upgrade --install victoria-logs-collector vm/victoria-logs-collector \
 
 Проверка: `kubectl get pods -n victoria-logs-collector`. Логи стека (vmks, vmalert, vmagent и др.) можно запрашивать в Grafana через datasource VictoriaLogs или в UI VictoriaLogs.
 
-### Chaos Mesh (опционально)
+### Chaos Mesh
 
 [Chaos Mesh](https://chaos-mesh.org/) — платформа для chaos engineering в Kubernetes. Конфиги адаптированы из [strimzi-kafka-chaos-testing](https://github.com/patsevanton/strimzi-kafka-chaos-testing); можно использовать для проверки отказоустойчивости стенда (pod-kill, network partition, stress и т.д.).
 
