@@ -148,9 +148,6 @@ cd alerts
 | Средний | `apply-yaml-stage2.sh` | 401–1222 | 30 с |
 | Завершающий | `apply-yaml-stage3.sh` | 1223–10000 | 90 с |
 
-**Запуск (из каталога `alerts`):**
-
-
 #### Создание токена Grafana
 
 Чтобы скрипты этапов могли писать аннотации в Grafana, нужен API-токен с правами редактора.
@@ -166,15 +163,16 @@ cd alerts
 
 ```bash
 export GRAFANA_URL="http://grafana.apatsev.org.ru"
-export GRAFANA_TOKEN="glsa_xxxxxxxx..."
+export GRAFANA_TOKEN="glsa_xxxxxxxx"
 ```
 
-Затем запустите скрипты по порядку, как описано в разделе [Применение VMRule в Kubernetes](#применение-vmrule-в-kubernetes) выше.
+Затем запустите скрипты по порядку (см. блок команд ниже).
 
 Если `GRAFANA_URL` или `GRAFANA_TOKEN` не заданы, скрипты работают как раньше, но аннотации не создаются.
 
 Аннотации создаются с тегами `apply-yaml-stage1`, `apply-yaml-stage2`, `apply-yaml-stage3`. Чтобы видеть их на графиках: в дашборде **Dashboard settings** (шестерёнка) → **Annotations** → **New annotation** → в запросе укажите соответствующий тег (или оставьте пустым, чтобы показывать все).
 
+**Запуск (из каталога `alerts`):**
 
 ```bash
 cd alerts
