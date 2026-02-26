@@ -76,6 +76,8 @@ helm upgrade --install victoria-logs-cluster vm/victoria-logs-cluster \
   -f victoria-logs-cluster-values.yaml
 ```
 
+Исходный код файла [victoria-logs-cluster-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/victoria-logs-cluster-values.yaml)
+
 Проверка: `kubectl get pods -n victoria-logs-cluster`. Ingress для vlselect: `victorialogs.apatsev.org.ru` (из values).
 
 **2. Victoria-logs-collector (сбор логов с подов кластера):**
@@ -88,6 +90,8 @@ helm upgrade --install victoria-logs-collector vm/victoria-logs-collector \
   --timeout 15m \
   -f victoria-logs-collector-values.yaml
 ```
+
+Исходный код файла [victoria-logs-collector-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/victoria-logs-collector-values.yaml)
 
 Проверка: `kubectl get pods -n victoria-logs-collector`. Логи стека (vmks, vmalert, vmagent и др.) можно запрашивать в Grafana через datasource VictoriaLogs или в UI VictoriaLogs.
 
