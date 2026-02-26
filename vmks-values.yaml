@@ -1,3 +1,11 @@
+# Шкала нагрузки (ориентир при выборе ресурсов):
+#   ~260 VMRule (~5k алертов)     — порог: дефолтные alertmanager/vmalert дают throttling/OOM.
+#   ~660 VMRule (~15k алертов)    — vmstorage ~800–870Mi, vmalert ~930m CPU / ~570Mi, operator ~198m CPU.
+#   ~1k+ VMRule (~20k+ алертов)   — vmstorage ~1140–1150Mi; vmselect при 1Gi — риск OOM.
+#   ~1.2k+ VMRule (~26k+ алертов) — vmselect OOM при лимите 1Gi; operator при 512Mi — OOM.
+#   ~1.1k+ VMRule (31k+ алертов)  — /metrics vmalert превышает 16 MiB, нужен promscrape.maxScrapeSize.
+# Ниже значения подобраны с запасом до ~2k VMRule (~40k алертов); выше — см. README (шардирование).
+
 grafana:
   ingress:
     ingressClassName: nginx
@@ -19,6 +27,13 @@ vmcluster:
     vmstorage:
       # Минимум 2 реплики, чтобы replicationFactor=2 имел смысл.
       replicaCount: 2
+      # При ~1k+ VMRule (~20k+ алертов) потребление ~1140–1150Mi; лимит 1500Mi (дефолт) — мало запаса.
+      # 2Gi — запас до ~2k VMRule; при дальнейшем росте — смотреть container_memory_working_set_bytes.
+      resources:
+        limits:
+          memory: 2Gi
+        requests:
+          memory: 512Mi
 
     # VMSelect и VMInsert тоже без SPOF: по 2 реплики.
     vmselect:
@@ -28,12 +43,11 @@ vmcluster:
       extraArgs:
         search.maxConcurrentRequests: "16"
         search.maxQueueDuration: "60s"
-      # Увеличиваем ресурсы: без лимита памяти vmselect при ~1.3k+ VMRule получает десятки тысяч
-      # одновременных запросов (vmalert restore ALERTS_FOR_STATE + eval), потребление памяти растёт
-      # и под падает с OOMKilled (Exit Code 137). Лимит 1Gi предотвращает OOM при пиках нагрузки.
+      # При ~1.3k+ VMRule (~26k+ алертов) vmselect получает десятки тысяч запросов (restore + eval),
+      # лимит 1Gi даёт OOMKilled (Exit Code 137). 2Gi — запас до ~2k VMRule и при slow queries.
       resources:
         limits:
-          memory: 1Gi
+          memory: 2Gi
         requests:
           memory: 256Mi
     vminsert:
@@ -57,7 +71,8 @@ alertmanager:
 
     resources:
       limits:
-        # Дефолтные 100m вызывают 100%-й throttling и рестарты при ≥260 правилах.
+        # Дефолтные 100m CPU вызывают 100%-й throttling и рестарты при ≥260 VMRule (~5k алертов).
+        # 500m/512Mi — запас до ~1k+ правил.
         cpu: 500m
         memory: 512Mi
       requests:
@@ -75,8 +90,8 @@ vmalert:
 
     resources:
       limits:
-        # 1 CPU вызывал 100%-й throttling при 260 правилах (999m/1000m).
-        # Удваиваем, чтобы оставить запас для роста числа правил.
+        # 1 CPU — 100%-й throttling при ~260 VMRule (~5k алертов). При ~660 VMRule — ~930m CPU, ~570Mi.
+        # 2 CPU / 2Gi — запас до ~2k VMRule (~40k алертов); выше — шардирование (см. README).
         cpu: "2"
         memory: 2Gi
       requests:
@@ -84,15 +99,14 @@ vmalert:
         memory: 2Gi
 
 # VMAgent: при ~1100+ VMRule (31 000+ алертов) эндпоинт /metrics vmalert превышает
-# дефолтный maxScrapeSize (16 МБ), и vmagent перестаёт скрейпить vmalert целиком.
-# Увеличиваем до 128 МБ с запасом на дальнейший рост числа правил.
+# дефолтный maxScrapeSize (16 МБ) — vmagent перестаёт скрейпить vmalert. 128 МБ — до ~2k+ VMRule.
 vmagent:
   spec:
     extraArgs:
       promscrape.maxScrapeSize: "134217728"
 
-# VM Operator: при 39 VMRule потребляет 236m CPU; при 1200+ VMRule
-# потребление растёт пропорционально и 512Mi памяти вызывает OOM → CrashLoopBackOff.
+# VM Operator: при 39 VMRule — ~236m CPU; при ~1.2k+ VMRule растёт пропорционально,
+# 512Mi памяти даёт OOM → CrashLoopBackOff. 4Gi — запас до 2k+ VMRule.
 victoria-metrics-operator:
   resources:
     limits:
