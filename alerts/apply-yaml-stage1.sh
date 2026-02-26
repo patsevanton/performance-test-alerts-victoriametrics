@@ -1,5 +1,5 @@
 #!/bin/bash
-# Этап 1: файлы 1–400, интервал 5 с.
+# Этап 1: все vmrule, интервал 5 с. (stage2/stage3 временно отключены)
 # При заданных GRAFANA_URL и GRAFANA_TOKEN создаёт аннотации в Grafana (старт/финиш).
 
 STAGE=1
@@ -15,7 +15,7 @@ grafana_annotation() {
   [ "$code" = "200" ]
 }
 
-list=$(find vmrules -type f \( -name "*.yaml" -o -name "*.yml" \) | sort -V | sed -n '1,400p')
+list=$(find vmrules -type f \( -name "*.yaml" -o -name "*.yml" \) | sort -V)
 grafana_annotation "apply-yaml-stage${STAGE} started" && echo "Аннотация Grafana: старт этапа ${STAGE}."
 
 echo "$list" | while read -r f; do
