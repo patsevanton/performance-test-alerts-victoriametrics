@@ -58,7 +58,7 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 
 ### VictoriaLogs
 
-[VictoriaLogs](https://docs.victoriametrics.com/victorialogs/) — хранилище логов с поддержкой LogsQL. Конфиги адаптированы из [strimzi-kafka-chaos-testing](https://github.com/patsevanton/strimzi-kafka-chaos-testing).
+[VictoriaLogs](https://docs.victoriametrics.com/victorialogs/) — хранилище логов с поддержкой LogsQL.
 
 **Требование:** VictoriaMetrics K8s Stack установлен первым (CRD VMServiceScrape).
 
