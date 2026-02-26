@@ -49,7 +49,7 @@ helm upgrade --install vmks vm/victoria-metrics-k8s-stack \
   --wait --values vmks-values.yaml
 ```
 
-Файл [vmks-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/vmks-values.yaml) включает Grafana с ingress на [grafana.apatsev.org.ru](http://grafana.apatsev.org.ru).
+Исходный код файла [vmks-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/vmks-values.yaml). Включает Grafana с ingress на [grafana.apatsev.org.ru](http://grafana.apatsev.org.ru).
 
 Получение пароля Grafana:
 ```bash
@@ -113,6 +113,8 @@ helm upgrade --install chaos-mesh chaos-mesh/chaos-mesh \
   --wait
 ```
 
+Исходный код файла [chaos-mesh/chaos-mesh-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chaos-mesh/chaos-mesh-values.yaml).
+
 Проверка: `kubectl get pods -n chaos-mesh`.
 
 **Сбор метрик Chaos Mesh в VictoriaMetrics K8s Stack:**
@@ -120,6 +122,8 @@ helm upgrade --install chaos-mesh chaos-mesh/chaos-mesh \
 ```bash
 kubectl apply -f chaos-mesh/chaos-mesh-vmservicescrape.yaml
 ```
+
+Исходный код файла [chaos-mesh/chaos-mesh-vmservicescrape.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chaos-mesh/chaos-mesh-vmservicescrape.yaml).
 
 **Доступ к Dashboard (RBAC + токен):**
 
@@ -129,11 +133,15 @@ sleep 3
 kubectl get secret chaos-mesh-admin-token -n chaos-mesh -o jsonpath='{.data.token}' | base64 -d; echo
 ```
 
+Исходный код файла [chaos-mesh/chaos-mesh-rbac.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chaos-mesh/chaos-mesh-rbac.yaml).
+
 Токен вставить в Chaos Mesh Dashboard. Ingress: `chaos-dashboard.apatsev.org.ru` (из [chaos-mesh/chaos-mesh-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chaos-mesh/chaos-mesh-values.yaml)).
 
 ### Генерация нагрузочных VMRule
 
 Скрипт [`alerts/generate_alerts.py`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/generate_alerts.py) генерирует YAML-файлы `VMRule` в директорию `alerts/vmrules/`. По умолчанию создаётся **10 000** файлов; каждый `VMRule` содержит **4–6 групп** (с `interval` 30s/1m/2m) и **20 алертов** суммарно.
+
+Исходный код файла [alerts/generate_alerts.py](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/generate_alerts.py).
 
 ```bash
 cd alerts
@@ -202,11 +210,17 @@ cd alerts
 ./apply-yaml-stage3.sh
 ```
 
+Исходный код файлов: [alerts/apply-yaml-stage1.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-stage1.sh), [alerts/apply-yaml-stage2.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-stage2.sh), [alerts/apply-yaml-stage3.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-stage3.sh).
+
 Скрипты при старте и по завершении создают **аннотации в Grafana** (время начала и окончания этапа), чтобы на графиках было видно, когда какой этап выполнялся. Для этого задайте переменные окружения (см. [Создание токена Grafana](#создание-токена-grafana)).
 
 **Мониторинг появления ошибок во время этапа 1:** в отдельном терминале запустите `./monitor-stage1.sh`. Скрипт каждые 30 с опрашивает VictoriaLogs (victorialogs.apatsev.org.ru) и vmselect (vmselect.apatsev.org.ru) — логи с «error» и метрики `vmalert_execution_errors_total`, `vm_concurrent_select_limit_reached_total`, 5xx на vmselect. При первом обнаружении ошибок момент записывается в `alerts/first-error-stage1.txt`. Интервал задаётся переменной `INTERVAL` (по умолчанию 30), для самоподписанных сертификатов: `CURL_OPTS="-k"`.
 
+Исходный код файла [alerts/monitor-stage1.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/monitor-stage1.sh).
+
 **Этап 2:** аналогично запустите `./monitor-stage2.sh` — момент первой ошибки записывается в `alerts/first-error-stage2.txt`.
+
+Исходный код файла [alerts/monitor-stage2.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/monitor-stage2.sh).
 
 После каждого этапа можно анализировать графики нагрузки на vmalert, vmselect, operator.
 
