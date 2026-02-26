@@ -150,6 +150,32 @@ cd alerts
 
 **Запуск (из каталога `alerts`):**
 
+
+#### Создание токена Grafana
+
+Чтобы скрипты этапов могли писать аннотации в Grafana, нужен API-токен с правами редактора.
+
+**Ручное создание токена:**
+
+1. Откройте Grafana в браузере (например, [grafana.apatsev.org.ru](http://grafana.apatsev.org.ru)).
+2. Войдите под учётной записью с правами администратора (логин `admin`, пароль — из секрета `vmks-grafana`, см. раздел [victoria-metrics-k8s-stack](#victoria-metrics-k8s-stack)).
+3. В левом меню: **Administration** (иконка шестерёнки) → **Service accounts** (или **Configuration** → **API Keys** в старых версиях).
+4. **Вариант A (Service accounts, Grafana 9+):** нажмите **Add service account**, задайте имя (например, `apply-yaml-annotations`), роль **Editor** → **Create**. Откройте созданный аккаунт → вкладка **Tokens** → **Add service account token**, имя токена (например, `annotations`) → **Generate token**. Скопируйте токен — он показывается один раз.
+5. **Вариант B (API Keys, старые версии):** **Configuration** → **API Keys** → **New API Key**. Key name: `apply-yaml-annotations`, Role: **Editor** → **Add**. Скопируйте сгенерированный ключ.
+6. Экспортируйте переменные перед запуском скриптов этапов (подставьте свой URL и токен):
+
+```bash
+export GRAFANA_URL="http://grafana.apatsev.org.ru"
+export GRAFANA_TOKEN="glsa_xxxxxxxx..."
+```
+
+Затем запустите скрипты по порядку, как описано в разделе [Применение VMRule в Kubernetes](#применение-vmrule-в-kubernetes) выше.
+
+Если `GRAFANA_URL` или `GRAFANA_TOKEN` не заданы, скрипты работают как раньше, но аннотации не создаются.
+
+Аннотации создаются с тегами `apply-yaml-stage1`, `apply-yaml-stage2`, `apply-yaml-stage3`. Чтобы видеть их на графиках: в дашборде **Dashboard settings** (шестерёнка) → **Annotations** → **New annotation** → в запросе укажите соответствующий тег (или оставьте пустым, чтобы показывать все).
+
+
 ```bash
 cd alerts
 ./apply-yaml-stage1.sh
@@ -166,30 +192,6 @@ cd alerts
 **Этап 2:** аналогично запустите `./monitor-stage2.sh` — момент первой ошибки записывается в `alerts/first-error-stage2.txt`.
 
 После каждого этапа можно анализировать графики нагрузки на vmalert, vmselect, operator.
-
-#### Создание токена Grafana
-
-Чтобы скрипты этапов могли писать аннотации в Grafana, нужен API-токен с правами редактора.
-
-**Ручное создание токена:**
-
-1. Откройте Grafana в браузере (например, [grafana.apatsev.org.ru](http://grafana.apatsev.org.ru)).
-2. Войдите под учётной записью с правами администратора (логин `admin`, пароль — из секрета `vmks-grafana`, см. раздел [victoria-metrics-k8s-stack](#victoria-metrics-k8s-stack)).
-3. В левом меню: **Administration** (иконка шестерёнки) → **Service accounts** (или **Configuration** → **API Keys** в старых версиях).
-4. **Вариант A (Service accounts, Grafana 9+):** нажмите **Add service account**, задайте имя (например, `apply-yaml-annotations`), роль **Editor** → **Create**. Откройте созданный аккаунт → вкладка **Tokens** → **Add service account token**, имя токена (например, `annotations`) → **Generate token**. Скопируйте токен — он показывается один раз.
-5. **Вариант B (API Keys, старые версии):** **Configuration** → **API Keys** → **New API Key**. Key name: `apply-yaml-annotations`, Role: **Editor** → **Add**. Скопируйте сгенерированный ключ.
-6. Экспортируйте переменные перед запуском скриптов (подставьте свой URL и токен):
-
-```bash
-export GRAFANA_URL="http://grafana.apatsev.org.ru"
-export GRAFANA_TOKEN="glsa_xxxxxxxx..."
-cd alerts
-./apply-yaml-stage1.sh
-```
-
-Если `GRAFANA_URL` или `GRAFANA_TOKEN` не заданы, скрипты работают как раньше, но аннотации не создаются.
-
-Аннотации создаются с тегами `apply-yaml-stage1`, `apply-yaml-stage2`, `apply-yaml-stage3`. Чтобы видеть их на графиках: в дашборде **Dashboard settings** (шестерёнка) → **Annotations** → **New annotation** → в запросе укажите соответствующий тег (или оставьте пустым, чтобы показывать все).
 
 ## Текущее состояние (тест в процессе)
 
