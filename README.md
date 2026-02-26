@@ -156,10 +156,9 @@ cd alerts
 
 1. Откройте Grafana в браузере (например, [grafana.apatsev.org.ru](http://grafana.apatsev.org.ru)).
 2. Войдите под учётной записью с правами администратора (логин `admin`, пароль — из секрета `vmks-grafana`, см. раздел [victoria-metrics-k8s-stack](#victoria-metrics-k8s-stack)).
-3. В левом меню: **Administration** (иконка шестерёнки) → **Service accounts** (или **Configuration** → **API Keys** в старых версиях).
-4. **Вариант A (Service accounts, Grafana 9+):** нажмите **Add service account**, задайте имя (например, `apply-yaml-annotations`), роль **Editor** → **Create**. Откройте созданный аккаунт → вкладка **Tokens** → **Add service account token**, имя токена (например, `annotations`) → **Generate token**. Скопируйте токен — он показывается один раз.
-5. **Вариант B (API Keys, старые версии):** **Configuration** → **API Keys** → **New API Key**. Key name: `apply-yaml-annotations`, Role: **Editor** → **Add**. Скопируйте сгенерированный ключ.
-6. Экспортируйте переменные перед запуском скриптов этапов (подставьте свой URL и токен):
+3. В левом меню: **Administration** (иконка шестерёнки) → **Service accounts**.
+4. Нажмите **Add service account**, задайте имя (например, `apply-yaml-annotations`), роль **Editor** → **Create**. Откройте созданный аккаунт → вкладка **Tokens** → **Add service account token**, имя токена (например, `annotations`) → **Generate token**. Скопируйте токен — он показывается один раз.
+5. Экспортируйте переменные перед запуском скриптов этапов (подставьте свой URL и токен):
 
 ```bash
 export GRAFANA_URL="http://grafana.apatsev.org.ru"
