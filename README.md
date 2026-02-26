@@ -49,7 +49,7 @@ helm upgrade --install vmks vm/victoria-metrics-k8s-stack \
   --wait --values vmks-values.yaml
 ```
 
-Файл `vmks-values.yaml` включает Grafana с ingress на [grafana.apatsev.org.ru](http://grafana.apatsev.org.ru).
+Файл [vmks-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/vmks-values.yaml) включает Grafana с ingress на [grafana.apatsev.org.ru](http://grafana.apatsev.org.ru).
 
 Получение пароля Grafana:
 ```bash
@@ -93,7 +93,7 @@ helm upgrade --install victoria-logs-collector vm/victoria-logs-collector \
 
 ### Chaos Mesh
 
-[Chaos Mesh](https://chaos-mesh.org/) — платформа для chaos engineering в Kubernetes. Конфиги адаптированы из [strimzi-kafka-chaos-testing](https://github.com/patsevanton/strimzi-kafka-chaos-testing); можно использовать для проверки отказоустойчивости стенда (pod-kill, network partition, stress и т.д.).
+[Chaos Mesh](https://chaos-mesh.org/) — платформа для chaos engineering в Kubernetes. Можно использовать для проверки отказоустойчивости стенда (pod-kill, network partition, stress и т.д.).
 
 **Установка:**
 
@@ -125,7 +125,7 @@ sleep 3
 kubectl get secret chaos-mesh-admin-token -n chaos-mesh -o jsonpath='{.data.token}' | base64 -d; echo
 ```
 
-Токен вставить в Chaos Mesh Dashboard. Ingress: `chaos-dashboard.apatsev.org.ru` (из `chaos-mesh/chaos-mesh-values.yaml`).
+Токен вставить в Chaos Mesh Dashboard. Ingress: `chaos-dashboard.apatsev.org.ru` (из [chaos-mesh/chaos-mesh-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chaos-mesh/chaos-mesh-values.yaml)).
 
 ### Генерация нагрузочных VMRule
 
@@ -438,7 +438,7 @@ vmalert настроен на запись и чтение состояния и
 
 ### Рекомендации по масштабированию
 
-Ориентиры «при каком количестве алертов выставлять те или иные ресурсы» — в начале [vmks-values.yaml](vmks-values.yaml) (блок **Шкала нагрузки**).
+Ориентиры «при каком количестве алертов выставлять те или иные ресурсы» — в начале [vmks-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/vmks-values.yaml) (блок **Шкала нагрузки**).
 
 1. **До 2 000 VMRule (~40 000 алертов):** увеличить CPU limit vmalert до 2–4 CPU
 2. **2 000–5 000 VMRule:** шардирование vmalert (несколько инстансов с разделением правил через `-rule.partition` или разные `ruleSelector`)
