@@ -6,8 +6,20 @@ VL_URL="${VL_URL:-https://victorialogs.apatsev.org.ru}"
 VM_URL="${VM_URL:-https://vmselect.apatsev.org.ru}"
 RESULT_FILE="$(dirname "$0")/first-error-stage1.txt"
 INTERVAL="${INTERVAL:-30}"
+VMALERT_NAMESPACE="${VMALERT_NAMESPACE:-vmks}"
 # Для самоподписанных сертификатов: CURL_OPTS="-k"
 CURL_OPTS="${CURL_OPTS:--s --max-time 15}"
+
+# Возвращает 0, если у любого vmalert-пода контейнер завершился с OOMKilled
+check_oom_vmalert() {
+  local out
+  out=$(kubectl get pods -n "$VMALERT_NAMESPACE" -l app.kubernetes.io/name=vmalert -o json 2>/dev/null) || return 1
+  echo "$out" | jq -e '
+    .items[]?.status.containerStatuses[]? |
+    select(.lastState.terminated.reason == "OOMKilled") |
+    .lastState.terminated.reason
+  ' &>/dev/null
+}
 
 # Время старта этапа (для отчёта)
 START_TS=$(date -Iseconds)
@@ -79,16 +91,29 @@ has_errors() {
   return 1
 }
 
-echo "Мониторинг этапа 1: VL=$VL_URL VM=$VM_URL интервал ${INTERVAL}s. Старт: $START_TS"
-echo "Первый момент появления ошибок будет записан в: $RESULT_FILE"
+echo "Мониторинг этапа 1: VL=$VL_URL VM=$VM_URL интервал ${INTERVAL}s, проверка OOMKilled (vmalert). Старт: $START_TS"
+echo "Первый момент появления ошибок (в т.ч. OOMKilled) будет записан в: $RESULT_FILE"
 echo ""
 
 while true; do
   when=$(date -Iseconds)
+  if check_oom_vmalert; then
+    echo "[$when] Обнаружен OOMKilled (vmalert). Записываю момент."
+    {
+      echo "# Первое появление ошибок во время apply-yaml-stage1"
+      echo "first_error_reason=OOMKilled"
+      echo "first_error_utc=$when"
+      echo "stage_start_utc=$START_TS"
+      echo "victorialogs=$VL_URL"
+      echo "vmselect=$VM_URL"
+    } >> "$RESULT_FILE"
+    exit 0
+  fi
   if has_errors; then
     echo "[$when] Обнаружены ошибки (логи/метрики). Записываю момент."
     {
       echo "# Первое появление ошибок во время apply-yaml-stage1"
+      echo "first_error_reason=metrics_or_logs"
       echo "first_error_utc=$when"
       echo "stage_start_utc=$START_TS"
       echo "victorialogs=$VL_URL"

@@ -2,10 +2,13 @@
 # Этап 1: все vmrule, интервал 5 с. (stage2/stage3 временно отключены)
 # При заданных GRAFANA_URL и GRAFANA_TOKEN создаёт аннотации в Grafana (старт/финиш).
 
+GRAFANA_URL="${GRAFANA_URL:-http://grafana.apatsev.org.ru}"
+[ -z "${GRAFANA_TOKEN}" ] && read -r -p "GRAFANA_TOKEN: " GRAFANA_TOKEN
+
 STAGE=1
 grafana_annotation() {
   local text="$1"
-  [ -z "${GRAFANA_URL}" ] || [ -z "${GRAFANA_TOKEN}" ] && return 0
+  [ -z "${GRAFANA_TOKEN}" ] && return 0
   local ms=$(($(date +%s) * 1000))
   local code
   code=$(curl ${CURL_OPTS} -s -o /dev/null -w "%{http_code}" -X POST \
