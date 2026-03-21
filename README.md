@@ -15,16 +15,6 @@
 
 **Кластер:** 3 ноды Kubernetes v1.32.1 на Yandex Cloud (Ubuntu 22.04.5 LTS, containerd 1.7.27, 8 vCPU / 24 GB RAM на ноду).
 
-### Установленные Helm-чарты
-
-| Чарт | Версия | App Version | Namespace |
-|------|--------|-------------|-----------|
-| victoria-metrics-k8s-stack | 0.72.5 | v1.138.0 | vmks |
-| victoria-logs-cluster | 0.0.31 | v1.48.0 | victoria-logs-cluster |
-| victoria-logs-collector | 0.2.13 | v1.48.0 | victoria-logs-collector |
-| goldpinger | 1.0.2 | 3.10.3 | goldpinger |
-| ingress-nginx | 4.15.1 | 1.15.1 | ingress-nginx |
-
 ### VictoriaMetrics Stack
 
 **Версия:** `victoria-metrics-k8s-stack` v0.72.5 (VictoriaMetrics v1.138.0), namespace `vmks`.
@@ -41,15 +31,6 @@
 | **VMAlertmanager** | vmalertmanager | 2 | minAvailable: 1 | Маршрутизация уведомлений; кластерный режим, автодедупликация |
 | **VM Operator** | victoria-metrics-operator | 1 | — | Управление CRD-ресурсами |
 | **Grafana** | grafana | 1 | — | Визуализация |
-
-### Инфраструктура (Terraform)
-
-Кластер Kubernetes и сопутствующие ресурсы создаются через Terraform на Yandex Cloud:
-
-- **k8s.tf** — кластер `vmalert` (K8s v1.32, node-group 3 ноды × 8 vCPU / 24 GB RAM, мультизональный), ingress-nginx через Helm.
-- **net.tf** — VPC-сеть и подсети в зонах `ru-central1-a/b/d`.
-- **ip-dns.tf** — статический IP, DNS-зона `apatsev.org.ru`, A-записи для `grafana`, `goldpinger`, `victorialogs`, `vmselect`.
-- **versions.tf** — версии Terraform и провайдера Yandex Cloud.
 
 ## Установка
 
