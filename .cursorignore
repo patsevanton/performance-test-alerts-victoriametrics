@@ -5,8 +5,6 @@
 .terraform.lock.hcl
 LICENSE
 image.png
-ip-dns.tf
-k8s.tf
 net.tf
 terraform.tfstate
 terraform.tfstate.backup
