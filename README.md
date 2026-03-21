@@ -215,15 +215,6 @@ Operator по-прежнему упаковывает большинство Con
 
 Это согласуется с документацией VictoriaMetrics (`vmalert`: state restore выполняется один раз при старте процесса; hot reload не триггерит restore).
 
-### Потребление ресурсов (срез `kubectl top pods -n vmks`)
-
-Ключевые потребители на текущем этапе:
-
-- `vmalert` (каждая реплика): **~1384–1407m CPU**, **~1218–1307Mi RAM**
-- `vmstorage` (каждая реплика): **~195–205m CPU**, **~2.1–2.2Gi RAM**
-- `vmselect` (каждая реплика): **~272–359m CPU**, **~215–244Mi RAM**
-- `victoria-metrics-operator`: **~113m CPU / ~283Mi RAM**
-
 ### Как переобновлять этот срез
 
 ```bash
@@ -359,6 +350,13 @@ vmalert настроен на запись и чтение состояния и
 | Снимок ~42 000 алертов | **389**        | **~42 214**              | **28**       | **~1250–1464m**       | **~867–1020Mi**          | **96m**      | **~13.1 RPS**                      |  |
 
 
+Ключевые потребители по срезу `kubectl top pods -n vmks`:
+
+- `vmalert` (каждая реплика): **~1384–1407m CPU**, **~1218–1307Mi RAM**
+- `vmstorage` (каждая реплика): **~195–205m CPU**, **~2.1–2.2Gi RAM**
+- `vmselect` (каждая реплика): **~272–359m CPU**, **~215–244Mi RAM**
+- `victoria-metrics-operator`: **~113m CPU / ~283Mi RAM**
+
 Используемые ресурсы (пример для одного среза): `kubectl top pods -n vmks`; метрики — `count(ALERTS)`, `count(ALERTS_FOR_STATE)`, `vmalert_alerts_firing`, размер ConfigMap'ов (см. [Полезные команды](#полезные-команды-для-мониторинга)).
 
 Данные трёх точек (~13 500, ~17 000 и ~23 000 алертов) подтверждают линейный рост: CPU vmalert вырос с ~409m → ~545m → ~723m, память — с ~373Mi → ~508Mi → ~676Mi. Прирост пропорционален числу алертов; max iteration duration выросла с 1.57 до 3.84 сек.
@@ -468,12 +466,6 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query
 kubectl get replicasets -n vmks -l app.kubernetes.io/name=vmalert \
   -o custom-columns='NAME:.metadata.name,DESIRED:.spec.replicas,CREATED:.metadata.creationTimestamp' \
   --sort-by=.metadata.creationTimestamp
-```
-
-### Потребление ресурсов
-
-```bash
-kubectl top pods -n vmks
 ```
 
 ### Kubernetes / System / API Server (ключевые метрики)
