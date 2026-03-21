@@ -27,6 +27,14 @@ resource "yandex_dns_recordset" "grafana" {
   data    = [yandex_vpc_address.addr.external_ipv4_address[0].address]
 }
 
+resource "yandex_dns_recordset" "goldpinger" {
+  zone_id = yandex_dns_zone.apatsev-org-ru.id
+  name    = "goldpinger.apatsev.org.ru."
+  type    = "A"
+  ttl     = 200
+  data    = [yandex_vpc_address.addr.external_ipv4_address[0].address]
+}
+
 resource "yandex_dns_recordset" "victorialogs" {
   zone_id = yandex_dns_zone.apatsev-org-ru.id
   name    = "victorialogs.apatsev.org.ru."

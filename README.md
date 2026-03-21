@@ -120,6 +120,19 @@ kubectl apply -f goldpinger-vmscrape.yaml
 
 Проверка: `kubectl get pods -n goldpinger`. Ingress (из values): `goldpinger.apatsev.org.ru`. Метрики снимает `VMServiceScrape` в namespace `vmks`; при необходимости поправьте labels `app.kubernetes.io/instance`, если релиз Helm назван иначе, чем `goldpinger`.
 
+#### Дашборд в Grafana
+
+В репозитории Goldpinger лежит готовый JSON: [extras/goldpinger-dashboard.json](https://github.com/bloomberg/goldpinger/blob/master/extras/goldpinger-dashboard.json) (описание в [разделе Grafana](https://github.com/bloomberg/goldpinger?tab=readme-ov-file#grafana) upstream).
+
+**Импорт:**
+
+1. Убедитесь, что метрики `goldpinger_*` уже попадают в хранилище (после `kubectl apply -f goldpinger-vmscrape.yaml` подождите один–два интервала сбора).
+2. Откройте Grafana ([grafana.apatsev.org.ru](http://grafana.apatsev.org.ru)), войдите (пароль — см. [victoria-metrics-k8s-stack](#victoria-metrics-k8s-stack)).
+3. Слева: **Dashboards** → **New** → **Import**.
+4. В поле **Import via grafana.com** можно не заполнять; нажмите **Upload dashboard JSON file** и выберите скачанный `goldpinger-dashboard.json`, либо вставьте содержимое файла в поле **Import via dashboard json model** (удобно взять [raw JSON](https://raw.githubusercontent.com/bloomberg/goldpinger/master/extras/goldpinger-dashboard.json)).
+5. На шаге импорта в выпадающем списке **Prometheus** (или аналогичном) укажите datasource с VictoriaMetrics — обычно он называется **VictoriaMetrics** или **default** в установке `victoria-metrics-k8s-stack`.
+6. Нажмите **Import**. При пустых панелях проверьте в **Explore**, что есть серии с префиксом `goldpinger_`, и что в дашборде выбран тот же datasource.
+
 ### Генерация нагрузочных VMRule
 
 Скрипт [`alerts/generate_alerts.py`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/generate_alerts.py) генерирует YAML-файлы `VMRule` в директорию `alerts/vmrules/`. По умолчанию создаётся **2 000** файлов; каждый `VMRule` содержит **4–6 групп** (с `interval` 30s/1m/2m) и **100 алертов** суммарно.
