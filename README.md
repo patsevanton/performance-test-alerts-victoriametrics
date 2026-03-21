@@ -56,7 +56,7 @@ helm upgrade --install vmks vm/victoria-metrics-k8s-stack \
 kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | base64 --decode; echo
 ```
 
-**Таймауты Grafana ↔ vmselect:** при большой кардинальности и тяжёлых запросах (например `count(ALERTS)`, переменные дашбордов через `/api/v1/label/.../values`) дефолтные **30 с** у Grafana и у `vmselect` (`search.maxQueryDuration`) приводят к ошибке `context deadline exceeded` на `query_range`. В [vmks-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/vmks-values.yaml) заданы `queryTimeout: 300s` для datasource **VictoriaMetrics** и `search.maxQueryDuration` / `search.maxLabelsAPIDuration` для **vmselect**. После правок выполните `helm upgrade` с тем же чартом и values.
+**Таймауты Grafana ↔ vmselect:** при большой кардинальности и тяжёлых запросах (например `count(ALERTS)`, переменные дашбордов через `/api/v1/label/.../values`) дефолтные **30 с** у Grafana и у `vmselect` (`search.maxQueryDuration`) приводят к ошибке `context deadline exceeded` на `query_range`. В [vmks-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/vmks-values.yaml) заданы `queryTimeout: 300s` для datasource **VictoriaMetrics** и `search.maxQueryDuration` / `search.maxLabelsAPIDuration` для **vmselect**. **Параллельные поисковые запросы** выполняются на **vmstorage**; дефолт `search.maxConcurrentRequests=2` там даёт 503 `couldn't start executing the request in 10 seconds` — в том же файле для **vmstorage** и **vmselect** заданы `search.maxConcurrentRequests` и `search.maxQueueDuration`. После правок выполните `helm upgrade` с тем же чартом и values.
 
 ### VictoriaLogs
 

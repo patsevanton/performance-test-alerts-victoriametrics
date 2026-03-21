@@ -46,6 +46,11 @@ vmcluster:
     vmstorage:
       # Минимум 2 реплики, чтобы replicationFactor=2 имел смысл.
       replicaCount: 2
+      # Поиск выполняется на vmstorage; дефолт maxConcurrentRequests=2 даёт 503 «couldn't start executing in 10s»
+      # при параллельных запросах от vmselect/vmalert (см. также vmselect.extraArgs).
+      extraArgs:
+        search.maxConcurrentRequests: "16"
+        search.maxQueueDuration: "60s"
       # Запас по памяти выше прежних 2Gi под длительную нагрузку и пики записи.
       resources:
         limits:
