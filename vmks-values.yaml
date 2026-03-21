@@ -8,10 +8,6 @@
 # Ниже значения с увеличенным запасом (нагрузка + ноутбук/длительные apply); выше — см. README (шардирование).
 
 grafana:
-  # Нужен для datasource type victoriametrics-metrics-datasource (см. defaultDatasources ниже).
-  # Без плагина Grafana логирует «Could not find plugin definition for data source».
-  plugins:
-    - victoriametrics-metrics-datasource
   ingress:
     ingressClassName: nginx
     enabled: true
@@ -24,10 +20,11 @@ defaultDatasources:
   victoriametrics:
     datasources:
       - name: VictoriaMetrics
-        isDefault: true
+        type: prometheus
         access: proxy
-        type: victoriametrics-metrics-datasource
+        isDefault: true
         jsonData:
+          httpMethod: POST
           queryTimeout: 300s
 
 # SLA 99.9 для хранилища метрик: уходим от SPOF `vmsingle` к реплицируемому `VMCluster`.

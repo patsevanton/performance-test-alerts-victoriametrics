@@ -52,21 +52,6 @@ helm upgrade --install vmks vm/victoria-metrics-k8s-stack \
 
 Исходный код файла [vmks-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/vmks-values.yaml). Включает Grafana с ingress на [grafana.apatsev.org.ru](http://grafana.apatsev.org.ru).
 
-#### Grafana: datasource метрик
-
-По умолчанию используется плагин **[victoriametrics-metrics-datasource](https://grafana.com/grafana/plugins/victoriametrics-metrics-datasource/)** (см. [интеграцию в документации VictoriaMetrics](https://docs.victoriametrics.com/victoriametrics/integrations/grafana/#victoriametrics-datasource)): в `vmks-values.yaml` он подключается через `grafana.plugins` и задаётся как единственный datasource типа `victoriametrics-metrics-datasource` с именем **VictoriaMetrics**.
-
-**Преимущества по сравнению с встроенным Prometheus datasource:**
-
-- Полноценная работа с **MetricsQL** (расширения относительно PromQL, совместимость с PromQL сохраняется).
-- Удобства для отладки и анализа запросов: **трассировка запросов**, форматирование (prettify), поддержка **WITH**-шаблонов, интеграция с **VMUI** из интерфейса Grafana.
-
-**Недостатки:**
-
-- Плагин **не входит в базовую поставку Grafana** — его нужно явно устанавливать и учитывать при обновлениях Grafana/чарта (совместимость версий плагина и Grafana).
-- Часть готовых дашбордов в JSON жёстко привязана к типу `prometheus`; при импорте может понадобиться **вручную выбрать** наш datasource или подправить манифест.
-- Для простых сценариев «только PromQL и стандартные панели» достаточно Prometheus datasource к совместимому `/prometheus` API VictoriaMetrics — отдельный плагин добавляет **ещё один компонент** в цепочку поддержки.
-
 Получение пароля Grafana:
 ```bash
 kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | base64 --decode; echo
@@ -150,7 +135,7 @@ kubectl apply -f goldpinger-vmscrape.yaml
 2. Откройте Grafana ([grafana.apatsev.org.ru](http://grafana.apatsev.org.ru)), войдите (пароль — см. [victoria-metrics-k8s-stack](#victoria-metrics-k8s-stack)).
 3. Слева: **Dashboards** → **New** → **Import**.
 4. В поле **Import via grafana.com** можно не заполнять; нажмите **Upload dashboard JSON file** и выберите скачанный `goldpinger-dashboard.json`, либо вставьте содержимое файла в поле **Import via dashboard json model** (удобно взять [raw JSON](https://raw.githubusercontent.com/bloomberg/goldpinger/master/extras/goldpinger-dashboard.json)).
-5. На шаге импорта в выпадающем списке источника (часто в JSON указан тип **Prometheus**) выберите datasource **VictoriaMetrics** — в этой установке это плагин `victoriametrics-metrics-datasource` по умолчанию.
+5. На шаге импорта в выпадающем списке **Prometheus** (или аналогичном) укажите datasource с VictoriaMetrics — обычно он называется **VictoriaMetrics** или **default** в установке `victoria-metrics-k8s-stack`.
 6. Нажмите **Import**. При пустых панелях проверьте в **Explore**, что есть серии с префиксом `goldpinger_`, и что в дашборде выбран тот же datasource.
 
 ### Генерация нагрузочных VMRule
