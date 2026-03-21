@@ -21,20 +21,16 @@
 
 #### Компоненты
 
-| Компонент | Deployment | Реплики | Роль |
-|-----------|------------|---------|------|
-| **VMCluster** | vmstorage / vmselect / vminsert | 2 / 2 / 2 | Хранение метрик (replicationFactor=2) |
-| **VMAlert** | vmalert | 2 | Оценка правил и отправка алертов |
-| **VMAgent** | vmagent | 1 | Сбор метрик (scrape) |
-| **VMAlertmanager** | vmalertmanager | 2 | Маршрутизация уведомлений (кластерный режим) |
-| **VM Operator** | victoria-metrics-operator | 1 | Управление CRD-ресурсами |
-| **Grafana** | grafana | 1 | Визуализация |
+`vmsingle` **отключен**, вместо него — `vmcluster` с `replicationFactor: 2`. Полные настройки — в [vmks-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/vmks-values.yaml).
 
-Ключевые настройки HA (файл [vmks-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/vmks-values.yaml)):
-- `vmsingle` **отключен**, вместо него — `vmcluster` с `replicationFactor: 2`
-- vmalert: 2 реплики, лимиты **4 CPU / 4Gi** (requests смотрите в values), PDB `minAvailable: 1`
-- alertmanager: 2 реплики, PDB `minAvailable: 1`
-- victoria-metrics-operator: один pod.
+| Компонент | Deployment | Реплики | PDB | Роль / Механизм HA |
+|-----------|------------|---------|-----|---------------------|
+| **VMCluster** | vmstorage / vmselect / vminsert | 2 / 2 / 2 | — | Хранение метрик (replicationFactor=2, каждая точка в 2 копиях); select/insert — stateless |
+| **VMAlert** | vmalert | 2 | minAvailable: 1 | Оценка правил и отправка алертов; обе реплики оценивают все правила, дедупликация на стороне Alertmanager. Лимиты **4 CPU / 4Gi** |
+| **VMAgent** | vmagent | 1 | — | Сбор метрик (scrape) |
+| **VMAlertmanager** | vmalertmanager | 2 | minAvailable: 1 | Маршрутизация уведомлений; кластерный режим, автодедупликация |
+| **VM Operator** | victoria-metrics-operator | 1 | — | Управление CRD-ресурсами |
+| **Grafana** | grafana | 1 | — | Визуализация |
 
 ## Установка
 
@@ -368,13 +364,7 @@ vmalert настроен на запись и чтение состояния и
 
 ### Текущая конфигурация HA
 
-| Компонент | Реплик | PDB | Механизм HA |
-|-----------|--------|-----|-------------|
-| vmalert | 2 | minAvailable: 1 | Обе реплики оценивают все правила; дедупликация на стороне Alertmanager |
-| VMAlertmanager | 2 | minAvailable: 1 | Кластерный режим, автодедупликация уведомлений |
-| VMCluster (vmstorage) | 2 | — | replicationFactor=2, каждая точка в 2 копиях |
-| VMCluster (vmselect) | 2 | — | Stateless, любая реплика обслуживает запросы |
-| VMCluster (vminsert) | 2 | — | Stateless, любая реплика принимает запись |
+Реплики, PDB и механизмы HA каждого компонента описаны в таблице [Компоненты](#компоненты).
 
 ### RTO / RPO
 
