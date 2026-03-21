@@ -34,7 +34,7 @@
 - `vmsingle` **отключен**, вместо него — `vmcluster` с `replicationFactor: 2`
 - vmalert: 2 реплики, лимиты **4 CPU / 4Gi** (requests смотрите в values), PDB `minAvailable: 1`
 - alertmanager: 2 реплики, PDB `minAvailable: 1`
-- victoria-metrics-operator: один pod; requests памяти не завышать без замеров — при сотнях VMRule факт часто **&lt;500m CPU и &lt;400Mi RAM** (см. комментарии в `vmks-values.yaml` и раздел «Потребление ресурсов» ниже).
+- victoria-metrics-operator: один pod.
 
 ## Установка
 
@@ -483,9 +483,9 @@ vmalert настроен на запись и чтение состояния и
 
 Ориентиры «при каком количестве алертов выставлять те или иные ресурсы» — в начале [vmks-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/vmks-values.yaml) (блок **Шкала нагрузки**).
 
-1. **До ~170 000 алертов (≈2 000 VMRule):** увеличить CPU limit vmalert до 2–4 CPU
-2. **~170 000–420 000 алертов (≈2 000–5 000 VMRule):** шардирование vmalert (несколько инстансов с разделением правил через `-rule.partition` или разные `ruleSelector`)
-3. **420 000+ алертов (≈5 000+ VMRule):** полное шардирование vmalert + масштабирование VMCluster + выделенный Alertmanager cluster + оптимизация reconcile Operator'а
+1. **До ~170 000 алертов:** увеличить CPU limit vmalert до 2–4 CPU
+2. **~170 000–420 000 алертов:** шардирование vmalert (несколько инстансов с разделением правил через `-rule.partition` или разные `ruleSelector`)
+3. **420 000+ алертов:** полное шардирование vmalert + масштабирование VMCluster + выделенный Alertmanager cluster + оптимизация reconcile Operator'а
 
 ## Рекомендации по повышению устойчивости
 

@@ -155,6 +155,6 @@ victoria-metrics-operator:
       cpu: "4"
       memory: 6Gi
     requests:
-      # README: ~198m CPU при ~660 VMRule; факт часто <300m. 2Gi memory request не нужен — см. README про OOM только при ~1.2k+ VMRule при 512Mi.
+      # README: ~198m CPU при ~55k алертов; факт часто <300m. 2Gi memory request не нужен — см. README про OOM только при ~1.2k+ VMRule при 512Mi.
       cpu: 300m
       memory: 1Gi
