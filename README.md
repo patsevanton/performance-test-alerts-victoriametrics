@@ -140,7 +140,7 @@ kubectl apply -f goldpinger-vmscrape.yaml
 
 ### Генерация нагрузочных VMRule
 
-Скрипт [`alerts/generate_alerts.py`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/generate_alerts.py) генерирует YAML-файлы `VMRule` в директорию `alerts/vmrules/`. По умолчанию создаётся **2 000** файлов; каждый `VMRule` содержит **4–6 групп** (с `interval` 30s/1m/2m) и **100 алертов** суммарно.
+Скрипт [`alerts/generate_alerts.py`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/generate_alerts.py) генерирует YAML-файлы `VMRule` в директорию `alerts/vmrules/`. По умолчанию создаётся **500** файлов; каждый `VMRule` содержит **4–6 групп** (с `interval` 30s/1m/2m) и **100 алертов** суммарно.
 
 Исходный код файла [alerts/generate_alerts.py](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/generate_alerts.py).
 
@@ -149,7 +149,7 @@ cd alerts
 ./generate_alerts.py
 ```
 
-Правила «псевдо-реалистичные»: разные шаблоны (k8s/node/http/db/…), `expr` построены на `vector(...)`, `severity` задаётся шаблоном (в основном `warning`/`critical`), `for` — от `0s` до `1h`. Генерация детерминирована (seed=42); объём можно изменить в `main()` через `num_vmrules` и `alerts_per_vmrule`.
+Правила «псевдо-реалистичные»: разные шаблоны (k8s/node/http/db/…), `expr` построены на `vector(...)`, `severity` задаётся шаблоном (в основном `warning`/`critical`), `for` — от `0s` до `1h`. Генерация детерминирована (seed=42); объём можно изменить в `main()` через `num_vmrules` и `alerts_per_vmrule`. Скрипт перезаписывает только файлы `vmrule-00001.yaml` … `vmrule-NNNNN.yaml` в пределах `num_vmrules`; если раньше было больше файлов — удалите лишние в `alerts/vmrules/` и при необходимости снимите лишние `VMRule` из кластера (`kubectl delete`).
 
 ### Применение VMRule в Kubernetes
 
@@ -161,10 +161,9 @@ cd alerts
 
 | Батч | Скрипт | Глобальные индексы (1…N) |
 |------|--------|--------------------------|
-| 01 | `apply-yaml-batch-01.sh` | 1–1000 |
-| 02 | `apply-yaml-batch-02.sh` | 1001–2000 |
+| 01 | `apply-yaml-batch-01.sh` | 1–500 |
 
-Расчёт на **2 000** файлов из `generate_alerts.py`; при другом `num_vmrules` поправьте диапазоны в двух скриптах или добавьте батчи по образцу (в скрипте задаются `APPLY_BATCH_ID`, `APPLY_INDEX_START`, `APPLY_INDEX_END`).
+Расчёт на **500** файлов из `generate_alerts.py`; при другом `num_vmrules` поправьте `APPLY_INDEX_END` в `apply-yaml-batch-01.sh` или добавьте батчи по образцу (в скрипте задаются `APPLY_BATCH_ID`, `APPLY_INDEX_START`, `APPLY_INDEX_END`).
 
 Общая логика: [`alerts/apply-yaml-lib.sh`](alerts/apply-yaml-lib.sh). Быстро применить всё подряд: [`alerts/apply-yaml.sh`](alerts/apply-yaml.sh) (интервал 5 с).
 
@@ -199,23 +198,22 @@ export GRAFANA_TOKEN="glsa_xxxxxxxx"
 4. Заполните:
    - **Name:** например, `apply-yaml-annotations`.
    - **Data source:** выберите **Grafana** (встроенные аннотации). Не выбирайте VictoriaMetrics — наши аннотации создаются через API и лежат в Grafana.
-   - **Filter by tags:** при необходимости укажите теги `apply-yaml-batch01`, `apply-yaml-batch02`. Можно оставить пустым — тогда показываются все аннотации с дашборда.
+   - **Filter by tags:** при необходимости укажите тег `apply-yaml-batch01`. Можно оставить пустым — тогда показываются все аннотации с дашборда.
    - **Enabled** — включено (галочка).
    - **Color** — цвет маркеров (например, красный).
    - **Show in** — **All panels**, чтобы аннотации были видны на всех панелях.
 5. Нажмите **Back to list**, затем **Save dashboard** (синяя кнопка вверху справа).
 
-После этого на графиках появятся вертикальные маркеры в моменты старта и окончания батча (теги `apply-yaml-batch01`, `apply-yaml-batch02`).
+После этого на графиках появятся вертикальные маркеры в моменты старта и окончания батча (тег `apply-yaml-batch01`).
 
-**Запуск (из каталога `alerts`):** выберите батч (например, пока не закончите `batch-01`, к следующему не переходите). Пример:
+**Запуск (из каталога `alerts`):**
 
 ```bash
 cd alerts
 ./apply-yaml-batch-01.sh
-./apply-yaml-batch-02.sh
 ```
 
-Исходный код: [alerts/apply-yaml-lib.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-lib.sh), [alerts/apply-yaml-batch-01.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-batch-01.sh), [alerts/apply-yaml-batch-02.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-batch-02.sh).
+Исходный код: [alerts/apply-yaml-lib.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-lib.sh), [alerts/apply-yaml-batch-01.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-batch-01.sh).
 
 Скрипты батча при старте и по завершении создают **аннотации в Grafana** (начало/конец батча). Для этого задайте переменные окружения (см. [Создание токена Grafana](#создание-токена-grafana)).
 

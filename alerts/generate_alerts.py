@@ -905,7 +905,7 @@ def generate_vmrule(vmrule_idx, num_alerts):
 
 def main():
     # 100 alerts/file → 5× fewer files than 20/file for the same total alert count.
-    num_vmrules = 2000
+    num_vmrules = 500
     alerts_per_vmrule = 100
 
     output_dir = "vmrules"
