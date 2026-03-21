@@ -32,8 +32,9 @@
 
 Ключевые настройки HA (файл [vmks-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/vmks-values.yaml)):
 - `vmsingle` **отключен**, вместо него — `vmcluster` с `replicationFactor: 2`
-- vmalert: 2 реплики, CPU limit 1, memory 2Gi, PDB `minAvailable: 1`
+- vmalert: 2 реплики, лимиты **4 CPU / 4Gi** (requests смотрите в values), PDB `minAvailable: 1`
 - alertmanager: 2 реплики, PDB `minAvailable: 1`
+- victoria-metrics-operator: один pod; requests памяти не завышать без замеров — при сотнях VMRule факт часто **&lt;500m CPU и &lt;400Mi RAM** (см. комментарии в `vmks-values.yaml` и раздел «Потребление ресурсов» ниже).
 
 ## Установка
 

@@ -95,8 +95,9 @@ vmcluster:
           memory: 1Gi
           cpu: "1"
         requests:
-          memory: 256Mi
-          cpu: 100m
+          # Факт RSS ~360–430Mi при нагрузке — выше прежних 256Mi request (иначе «невидимый» оверкоммит).
+          memory: 512Mi
+          cpu: 50m
 
   ingress:
     select:
@@ -119,8 +120,9 @@ alertmanager:
         cpu: "2"
         memory: 1Gi
       requests:
-        cpu: 300m
-        memory: 512Mi
+        # Факт ~150–190m CPU / ~150Mi RAM; оставляем запас под пики маршрутизации.
+        cpu: 200m
+        memory: 256Mi
 
 vmalert:
   spec:
@@ -138,7 +140,8 @@ vmalert:
       requests:
         # 2 CPU × 2 реплики сильно забирают allocatable; limit 4 остаётся для пиков.
         cpu: "1500m"
-        memory: 3Gi
+        # Факт ~1.2–1.3Gi при сотнях VMRule; 3Gi request избыточен для планировщика.
+        memory: 2Gi
 
 # VMAgent: при ~1100+ VMRule (31 000+ алертов) эндпоинт /metrics vmalert превышает
 # дефолтный maxScrapeSize (16 МБ) — vmagent перестаёт скрейпить vmalert. 128 МБ — до ~2k+ VMRule.
@@ -161,5 +164,6 @@ victoria-metrics-operator:
       cpu: "4"
       memory: 6Gi
     requests:
-      cpu: 500m
-      memory: 2Gi
+      # README: ~198m CPU при ~660 VMRule; факт часто <300m. 2Gi memory request не нужен — см. README про OOM только при ~1.2k+ VMRule при 512Mi.
+      cpu: 300m
+      memory: 1Gi
