@@ -24,14 +24,7 @@ defaultDatasources:
   victoriametrics:
     datasources:
       - name: VictoriaMetrics
-        type: prometheus
-        access: proxy
         isDefault: true
-        jsonData:
-          httpMethod: POST
-          queryTimeout: 300s
-      - name: VictoriaMetrics (DS)
-        isDefault: false
         access: proxy
         type: victoriametrics-metrics-datasource
         jsonData:
