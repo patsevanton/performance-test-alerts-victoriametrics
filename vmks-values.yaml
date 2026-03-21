@@ -7,6 +7,10 @@
 # Ниже значения с увеличенным запасом (нагрузка + ноутбук/длительные apply); выше — см. README (шардирование).
 
 grafana:
+  # Нужен для datasource type victoriametrics-metrics-datasource (см. defaultDatasources ниже).
+  # Без плагина Grafana логирует «Could not find plugin definition for data source».
+  plugins:
+    - victoriametrics-metrics-datasource
   ingress:
     ingressClassName: nginx
     enabled: true
@@ -44,6 +48,8 @@ vmcluster:
     replicationFactor: 2
 
     vmstorage:
+      # Иначе оператор подмешивает свои CPU defaults поверх requests из values.
+      useDefaultResources: false
       # Минимум 2 реплики, чтобы replicationFactor=2 имел смысл.
       replicaCount: 2
       # Поиск выполняется на vmstorage; дефолт maxConcurrentRequests=2 даёт 503 «couldn't start executing in 10s»
@@ -51,15 +57,20 @@ vmcluster:
       extraArgs:
         search.maxConcurrentRequests: "16"
         search.maxQueueDuration: "60s"
+        # У vmstorage нет флага search.maxQueryDuration (только у vmselect); см. vmselect.extraArgs выше.
       # Запас по памяти выше прежних 2Gi под длительную нагрузку и пики записи.
+      # CPU: при лимите 1 было заметное throttling на поисковых запросах.
       resources:
         limits:
+          cpu: "2"
           memory: 4Gi
         requests:
+          cpu: 250m
           memory: 1Gi
 
     # VMSelect и VMInsert тоже без SPOF: по 2 реплики.
     vmselect:
+      useDefaultResources: false
       replicaCount: 2
       # При большом числе VMRule vmalert шлёт много запросов (restore ALERTS_FOR_STATE + eval).
       # Дефолт maxConcurrentRequests=2 даёт 429 и "couldn't start executing in 10s".
@@ -71,8 +82,11 @@ vmcluster:
         search.maxLabelsAPIDuration: 120s
       resources:
         limits:
+          cpu: "2"
           memory: 3Gi
         requests:
+          # Ниже 500m: иначе на ноде с PVC vmselect + другими подами часто Insufficient cpu.
+          cpu: 300m
           memory: 512Mi
     vminsert:
       replicaCount: 2
@@ -102,7 +116,7 @@ alertmanager:
 
     resources:
       limits:
-        cpu: "1"
+        cpu: "2"
         memory: 1Gi
       requests:
         cpu: 300m
@@ -122,7 +136,8 @@ vmalert:
         cpu: "4"
         memory: 4Gi
       requests:
-        cpu: "2"
+        # 2 CPU × 2 реплики сильно забирают allocatable; limit 4 остаётся для пиков.
+        cpu: "1500m"
         memory: 3Gi
 
 # VMAgent: при ~1100+ VMRule (31 000+ алертов) эндпоинт /metrics vmalert превышает
@@ -131,6 +146,14 @@ vmagent:
   spec:
     extraArgs:
       promscrape.maxScrapeSize: "134217728"
+    # Дефолт чарта ~200m CPU — при большом числе таргетов сильный CFS-throttling.
+    resources:
+      limits:
+        cpu: "2"
+        memory: 1Gi
+      requests:
+        cpu: 250m
+        memory: 256Mi
 
 victoria-metrics-operator:
   resources:
@@ -138,5 +161,5 @@ victoria-metrics-operator:
       cpu: "4"
       memory: 6Gi
     requests:
-      cpu: "1"
+      cpu: 500m
       memory: 2Gi
