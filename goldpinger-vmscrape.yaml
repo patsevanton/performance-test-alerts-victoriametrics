@@ -1,0 +1,19 @@
+# Скрап метрик Goldpinger в VictoriaMetrics (vmagent из victoria-metrics-k8s-stack).
+# Применять после установки чарта: kubectl apply -f goldpinger-vmscrape.yaml
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: goldpinger
+  namespace: vmks
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: goldpinger
+      app.kubernetes.io/instance: goldpinger
+  namespaceSelector:
+    matchNames:
+      - goldpinger
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s

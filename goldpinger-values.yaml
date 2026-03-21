@@ -1,0 +1,15 @@
+# Goldpinger — проверка и визуализация сетевой связности между нодами кластера.
+# Чарт: https://github.com/bloomberg/goldpinger/tree/master/charts/goldpinger
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: goldpinger.apatsev.org.ru
+      paths:
+        - path: /
+          pathType: Prefix
+
+# ServiceMonitor — для kube-prometheus; со стеком VictoriaMetrics используйте goldpinger-vmscrape.yaml.
+serviceMonitor:
+  enabled: false
