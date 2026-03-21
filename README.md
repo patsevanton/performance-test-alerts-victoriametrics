@@ -13,7 +13,17 @@
 
 ### Infrastructure
 
-**Кластер:** 3 ноды Kubernetes v1.32.1 на Yandex Cloud (Ubuntu 22.04.5 LTS, containerd 1.7.27).
+**Кластер:** 3 ноды Kubernetes v1.32.1 на Yandex Cloud (Ubuntu 22.04.5 LTS, containerd 1.7.27, 8 vCPU / 24 GB RAM на ноду).
+
+### Установленные Helm-чарты
+
+| Чарт | Версия | App Version | Namespace |
+|------|--------|-------------|-----------|
+| victoria-metrics-k8s-stack | 0.72.5 | v1.138.0 | vmks |
+| victoria-logs-cluster | 0.0.31 | v1.48.0 | victoria-logs-cluster |
+| victoria-logs-collector | 0.2.13 | v1.48.0 | victoria-logs-collector |
+| goldpinger | 1.0.2 | 3.10.3 | goldpinger |
+| ingress-nginx | 4.15.1 | 1.15.1 | ingress-nginx |
 
 ### VictoriaMetrics Stack
 
@@ -26,11 +36,20 @@
 | Компонент | Deployment | Реплики | PDB | Роль / Механизм HA |
 |-----------|------------|---------|-----|---------------------|
 | **VMCluster** | vmstorage / vmselect / vminsert | 2 / 2 / 2 | — | Хранение метрик (replicationFactor=2, каждая точка в 2 копиях); select/insert — stateless |
-| **VMAlert** | vmalert | 2 | minAvailable: 1 | Оценка правил и отправка алертов; обе реплики оценивают все правила, дедупликация на стороне Alertmanager. Лимиты **4 CPU / 4Gi** |
+| **VMAlert** | vmalert | 2 | minAvailable: 1 | Оценка правил и отправка алертов; обе реплики оценивают все правила, дедупликация на стороне Alertmanager. |
 | **VMAgent** | vmagent | 1 | — | Сбор метрик (scrape) |
 | **VMAlertmanager** | vmalertmanager | 2 | minAvailable: 1 | Маршрутизация уведомлений; кластерный режим, автодедупликация |
 | **VM Operator** | victoria-metrics-operator | 1 | — | Управление CRD-ресурсами |
 | **Grafana** | grafana | 1 | — | Визуализация |
+
+### Инфраструктура (Terraform)
+
+Кластер Kubernetes и сопутствующие ресурсы создаются через Terraform на Yandex Cloud:
+
+- **k8s.tf** — кластер `vmalert` (K8s v1.32, node-group 3 ноды × 8 vCPU / 24 GB RAM, мультизональный), ingress-nginx через Helm.
+- **net.tf** — VPC-сеть и подсети в зонах `ru-central1-a/b/d`.
+- **ip-dns.tf** — статический IP, DNS-зона `apatsev.org.ru`, A-записи для `grafana`, `goldpinger`, `victorialogs`, `vmselect`.
+- **versions.tf** — версии Terraform и провайдера Yandex Cloud.
 
 ## Установка
 
@@ -117,20 +136,9 @@ kubectl apply -f goldpinger-vmscrape.yaml
 
 Исходный код файлов [goldpinger-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/goldpinger-values.yaml), [goldpinger-vmscrape.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/goldpinger-vmscrape.yaml).
 
-Проверка: `kubectl get pods -n goldpinger`. Ingress (из values): `goldpinger.apatsev.org.ru`. Метрики снимает `VMServiceScrape` в namespace `vmks`; при необходимости поправьте labels `app.kubernetes.io/instance`, если релиз Helm назван иначе, чем `goldpinger`.
-
 #### Дашборд в Grafana
 
 В репозитории Goldpinger лежит готовый JSON: [extras/goldpinger-dashboard.json](https://github.com/bloomberg/goldpinger/blob/master/extras/goldpinger-dashboard.json) (описание в [разделе Grafana](https://github.com/bloomberg/goldpinger?tab=readme-ov-file#grafana) upstream).
-
-**Импорт:**
-
-1. Убедитесь, что метрики `goldpinger_*` уже попадают в хранилище (после `kubectl apply -f goldpinger-vmscrape.yaml` подождите один–два интервала сбора).
-2. Откройте Grafana ([grafana.apatsev.org.ru](http://grafana.apatsev.org.ru)), войдите (пароль — см. [victoria-metrics-k8s-stack](#victoria-metrics-k8s-stack)).
-3. Слева: **Dashboards** → **New** → **Import**.
-4. В поле **Import via grafana.com** можно не заполнять; нажмите **Upload dashboard JSON file** и выберите скачанный `goldpinger-dashboard.json`, либо вставьте содержимое файла в поле **Import via dashboard json model** (удобно взять [raw JSON](https://raw.githubusercontent.com/bloomberg/goldpinger/master/extras/goldpinger-dashboard.json)).
-5. На шаге импорта в выпадающем списке **Prometheus** (или аналогичном) укажите datasource с VictoriaMetrics — обычно он называется **VictoriaMetrics** или **default** в установке `victoria-metrics-k8s-stack`.
-6. Нажмите **Import**. При пустых панелях проверьте в **Explore**, что есть серии с префиксом `goldpinger_`, и что в дашборде выбран тот же datasource.
 
 ### Генерация нагрузочных VMRule
 
@@ -221,23 +229,23 @@ cd alerts
 
 ## Текущее состояние (тест в процессе)
 
-> **Примечание:** тест ещё выполняется — скрипты этапов продолжают применять VMRule. Данные ниже — снимок на момент **~203** применённых VMRule.
+> **Примечание:** тест ещё выполняется — скрипты этапов продолжают применять VMRule. Данные ниже — снимок на момент **~252** применённых VMRule.
 
 ### Общие цифры
 
 | Метрика | Значение |
 |---------|----------|
-| VMRule в кластере (всего) | **203** (39 системных + 164 нагрузочных) |
+| VMRule в кластере (всего) | **252** (39 системных + 213 нагрузочных) |
 | Целевое количество алертов | **~1 000 000** |
-| Активные алерты (ALERTS) | **~17 000** |
-| ALERTS_FOR_STATE | **~16 400** |
-| sum(vmalert_alerts_firing) | **~28 550** (сумма по 2 репликам) |
-| Временные ряды (totalSeries) | **~2 966 000** |
-| ConfigMap'ов с правилами | **13** |
-| Перезапусков vmalert (ReplicaSet'ов) | **11** (10 пересозданий) |
+| Активные алерты (ALERTS) | **~22 973** |
+| ALERTS_FOR_STATE | **~21 298** |
+| sum(vmalert_alerts_firing) | **~36 883** (сумма по 2 репликам) |
+| Временные ряды (totalSeries) | **~4 793 000** |
+| ConfigMap'ов с правилами | **17** |
+| Перезапусков vmalert (ReplicaSet'ов) | **15** (14 пересозданий) |
 | vmalert_execution_errors_total | **0** |
 | vmalert_iteration_missed_total | **0** |
-| max(vmalert_iteration_duration_seconds) | **1.57 сек** |
+| max(vmalert_iteration_duration_seconds) | **3.84 сек** |
 
 ### Распределение правил по ConfigMap'ам
 
@@ -254,10 +262,14 @@ vm-vmks-victoria-metrics-k8s-stack-rulefiles-8    506.31 KB
 vm-vmks-victoria-metrics-k8s-stack-rulefiles-9    508.18 KB
 vm-vmks-victoria-metrics-k8s-stack-rulefiles-10   505.04 KB
 vm-vmks-victoria-metrics-k8s-stack-rulefiles-11   507.87 KB
-vm-vmks-victoria-metrics-k8s-stack-rulefiles-12   463.39 KB
+vm-vmks-victoria-metrics-k8s-stack-rulefiles-12   508.54 KB
+vm-vmks-victoria-metrics-k8s-stack-rulefiles-13   506.72 KB
+vm-vmks-victoria-metrics-k8s-stack-rulefiles-14   509.00 KB
+vm-vmks-victoria-metrics-k8s-stack-rulefiles-15   507.19 KB
+vm-vmks-victoria-metrics-k8s-stack-rulefiles-16   345.61 KB
 ```
 
-Суммарный размер: **~6.5 MB**. Operator заполняет каждый ConfigMap до ~505–508 KB, затем создаёт следующий. Последний (`rulefiles-12`) ещё не полон — тест продолжается.
+Суммарный размер: **~8.5 MB**. Operator заполняет каждый ConfigMap до ~505–509 KB, затем создаёт следующий. Последний (`rulefiles-16`) ещё не полон — тест продолжается.
 
 ### Перезапуски vmalert
 
@@ -270,50 +282,54 @@ vm-vmks-victoria-metrics-k8s-stack-rulefiles-12   463.39 KB
 - **Сохранённое состояние в VictoriaMetrics** — `count(ALERTS_FOR_STATE)` до рестарта: это то, что vmalert прочитает при старте; при следующем рестарте новое состояние снова запишется через remote write.
 - **Корректность восстановления** — отсутствие роста `vmalert_execution_errors_total` и возврат `sum(ALERTS)` к прежнему уровню означают, что remoteRead прошёл успешно и vmalert импортировал алерты из VictoriaMetrics.
 
-За время применения Pod'ы `vmalert` пересоздавались **10 раз** (11 ReplicaSet'ов), с интервалом **~14–18 мин** между пересозданиями:
+За время применения Pod'ы `vmalert` пересоздавались **14 раз** (15 ReplicaSet'ов), с интервалом **~13–15 мин** между пересозданиями:
 
 ```
 vmalert-vmks-...-6b98fd4f88   T+0        (08:26, начальный наблюдаемый)
 vmalert-vmks-...-67cbbb4457   T+15 мин   (08:41, +15 мин)
-vmalert-vmks-...-5597648fc4   T+29 мин   (08:55, +15 мин)
+vmalert-vmks-...-5597648fc4   T+29 мин   (08:55, +14 мин)
 vmalert-vmks-...-d77fb9ff     T+43 мин   (09:09, +14 мин)
 vmalert-vmks-...-6585cf5864   T+58 мин   (09:24, +15 мин)
-vmalert-vmks-...-5766f64545   T+72 мин   (09:38, +15 мин)
+vmalert-vmks-...-5766f64545   T+72 мин   (09:38, +14 мин)
 vmalert-vmks-...-745d97dbfd   T+87 мин   (09:53, +15 мин)
-vmalert-vmks-...-6cd95b8b47   T+101 мин  (10:07, +15 мин)
+vmalert-vmks-...-6cd95b8b47   T+101 мин  (10:07, +14 мин)
 vmalert-vmks-...-75c5dff6cb   T+115 мин  (10:21, +14 мин)
 vmalert-vmks-...-8564bf4d5f   T+130 мин  (10:36, +15 мин)
-vmalert-vmks-...-86f7995b74   T+145 мин  (10:51, +15 мин, текущий)
+vmalert-vmks-...-86f7995b74   T+145 мин  (10:51, +15 мин)
+vmalert-vmks-...-5fc45554f5   T+159 мин  (11:04, +13 мин)
+vmalert-vmks-...-5db98d6d     T+173 мин  (11:19, +15 мин)
+vmalert-vmks-...-56b498897f   T+188 мин  (11:34, +15 мин)
+vmalert-vmks-...-d4c8457d6    T+202 мин  (11:48, +14 мин, текущий)
 ```
 
-Каждое пересоздание происходит при добавлении нового ConfigMap — требуется новый `volume` + `volumeMount`, что вызывает rolling restart Pod'а. Интервал ~15 мин определяется темпом apply и количеством VMRule, умещающихся в один ConfigMap (~510 KB).
+Каждое пересоздание происходит при добавлении нового ConfigMap — требуется новый `volume` + `volumeMount`, что вызывает rolling restart Pod'а. Интервал ~14–15 мин определяется темпом apply и количеством VMRule, умещающихся в один ConfigMap (~505–509 KB).
 
 ### Потребление ресурсов
 
 ```
 NAME                                                        CPU(cores)   MEMORY(bytes)
-vmalert-...-q4qg4  (реплика 1)                              632m         519Mi
-vmalert-...-zvrtw  (реплика 2)                              458m         497Mi
-vmagent-...                                                 127m         164Mi
-vmalertmanager-...-0                                        254m         81Mi
-vmalertmanager-...-1                                        261m         80Mi
-vminsert-...-6whtl                                          23m          146Mi
-vminsert-...-xwwdc                                          36m          139Mi
-vmselect-...-0                                              108m         384Mi
-vmselect-...-1                                              312m         185Mi
-vmstorage-...-0                                             135m         1418Mi
-vmstorage-...-1                                             144m         1514Mi
-vmks-victoria-metrics-operator-...                          52m          134Mi
-vmks-grafana-...                                            11m          346Mi
+vmalert-...-fcsgn  (реплика 1)                              783m         706Mi
+vmalert-...-n2twd  (реплика 2)                              663m         645Mi
+vmagent-...                                                 156m         174Mi
+vmalertmanager-...-0                                        313m         95Mi
+vmalertmanager-...-1                                        284m         96Mi
+vminsert-...-6whtl                                          40m          160Mi
+vminsert-...-xwwdc                                          27m          128Mi
+vmselect-...-0                                              154m         221Mi
+vmselect-...-1                                              387m         257Mi
+vmstorage-...-0                                             134m         1613Mi
+vmstorage-...-1                                             183m         1662Mi
+vmks-victoria-metrics-operator-...                          52m          173Mi
+vmks-grafana-...                                            10m          349Mi
 vmks-kube-state-metrics-...                                 3m           21Mi
 vmks-prometheus-node-exporter (×3)                          2–3m         9–10Mi
 ```
 
-**vmalert** потребляет **~545m CPU** (в среднем на реплику) и ~508Mi памяти. При ~17 000 алертов нагрузка умеренная; CPU не является узким местом на текущем этапе.
+**vmalert** потребляет **~723m CPU** (в среднем на реплику) и ~676Mi памяти. При ~23 000 алертов нагрузка заметная, но CPU не является узким местом (лимит 4 CPU).
 
-**vmstorage** потребляет **~1.4–1.5 Gi памяти** на реплику — основной потребитель RAM в стеке.
+**vmstorage** потребляет **~1.6 Gi памяти** на реплику — основной потребитель RAM в стеке.
 
-**VM Operator** потребляет **52m CPU** — reconcile-цикл по ~17 000 алертов проходит быстро.
+**VM Operator** потребляет **52m CPU** — reconcile-цикл по ~23 000 алертов проходит быстро.
 
 ## Механизм распределения алертов и перезапуски vmalert
 
@@ -423,25 +439,26 @@ vmalert настроен на запись и чтение состояния и
 | Начало (baseline) | _—_ | _—_ | _—_ | _—_ | _—_ | _—_ | До массового apply |
 | Снимок ~13 500 алертов | **161** | **~13 500** | **10** | **~409m** | **~373Mi** | **51m** | 39 системных + 122 нагрузочных; ошибок 0, missed 0 |
 | Снимок ~17 000 алертов | **203** | **~17 000** | **13** | **~545m** | **~508Mi** | **52m** | 39 системных + 164 нагрузочных; ошибок 0, missed 0 |
+| Снимок ~23 000 алертов | **252** | **~22 973** | **17** | **~723m** | **~676Mi** | **52m** | 39 системных + 213 нагрузочных; ошибок 0, missed 0, max iteration 3.84 сек |
 | После stage2 (~500) | _—_ | _—_ | _—_ | _—_ | _—_ | _—_ | |
 | Целевая (~1M алертов) | _—_ | _—_ | _—_ | _—_ | _—_ | _—_ | При полной нагрузке |
 
 Используемые ресурсы (пример для одного среза): `kubectl top pods -n vmks`; метрики — `count(ALERTS)`, `count(ALERTS_FOR_STATE)`, `vmalert_alerts_firing`, размер ConfigMap'ов (см. [Полезные команды](#полезные-команды-для-мониторинга)).
 
-Данные двух точек (~13 500 и ~17 000 алертов) подтверждают линейный рост: CPU vmalert вырос с ~409m до ~545m (+33% при росте алертов на ~26%), память — с ~373Mi до ~508Mi (+36%).
+Данные трёх точек (~13 500, ~17 000 и ~23 000 алертов) подтверждают линейный рост: CPU vmalert вырос с ~409m → ~545m → ~723m, память — с ~373Mi → ~508Mi → ~676Mi. Прирост пропорционален числу алертов; max iteration duration выросла с 1.57 до 3.84 сек.
 
-### Наблюдаемые данные при ~17 000 активных алертов
+### Наблюдаемые данные при ~23 000 активных алертов
 
 | Метрика | Значение |
 |---------|----------|
-| CPU vmalert (каждая реплика) | ~545m (средн.) |
-| Memory vmalert (каждая реплика) | ~508Mi |
+| CPU vmalert (каждая реплика) | ~723m (средн.) |
+| Memory vmalert (каждая реплика) | ~676Mi |
 | CPU VM Operator | 52m |
-| CPU vmstorage (каждая реплика) | ~140m |
-| Memory vmstorage (каждая реплика) | ~1 466Mi |
-| ConfigMap'ов | 13 × ~506 KB (последний 463 KB) |
-| Временные ряды | ~2 966 000 |
-| max(vmalert_iteration_duration_seconds) | 1.57 сек |
+| CPU vmstorage (каждая реплика) | ~159m |
+| Memory vmstorage (каждая реплика) | ~1 638Mi |
+| ConfigMap'ов | 17 × ~505–509 KB (последний 346 KB) |
+| Временные ряды | ~4 793 000 |
+| max(vmalert_iteration_duration_seconds) | 3.84 сек |
 | vmalert_execution_errors_total | 0 |
 | vmalert_iteration_missed_total | 0 |
 
@@ -449,23 +466,23 @@ vmalert настроен на запись и чтение состояния и
 
 | Нода | CPU | CPU% | Memory | Memory% |
 |------|-----|------|--------|---------|
-| cl1...iror | 1058m | 13% | 1984Mi | 9% |
-| cl1...otib | 710m | 8% | 3214Mi | 15% |
-| cl1...yruq | 1139m | 14% | 3854Mi | 18% |
+| cl1...iror | 1545m | 19% | 2394Mi | 11% |
+| cl1...otib | 773m | 9% | 3426Mi | 16% |
+| cl1...yruq | 1236m | 15% | 4414Mi | 21% |
 
-Кластер загружен на 9–18% по памяти и 8–14% по CPU — значительный запас для дальнейшего роста нагрузки.
+Кластер загружен на 11–21% по памяти и 9–19% по CPU — запас для дальнейшего роста нагрузки есть, но загрузка растёт.
 
 ### Экстраполяция
 
-| Метрика | ~17 000 алертов (факт) | ~84 000 алертов | ~420 000 алертов | ~840 000 алертов |
+| Метрика | ~23 000 алертов (факт) | ~84 000 алертов | ~420 000 алертов | ~840 000 алертов |
 |---------|---------------------|-------------------|-------------------|-------------------|
-| VMRule | ~203 | ~1 000 | ~5 000 | ~10 000 |
-| CPU vmalert (реплика) | ~545m | ~2.7 | ~13.4 | ~26.8 |
-| Memory vmalert (реплика) | ~508Mi | ~2.5Gi | ~12.5Gi | ~25.0Gi |
-| ConfigMap'ов | 13 | ~64 | ~320 | ~640 |
-| Временные ряды | 2.97M | ~14.6M | ~73.1M | ~146.1M |
+| VMRule | ~252 | ~920 | ~4 600 | ~9 200 |
+| CPU vmalert (реплика) | ~723m | ~2.6 | ~13.2 | ~26.4 |
+| Memory vmalert (реплика) | ~676Mi | ~2.5Gi | ~12.3Gi | ~24.7Gi |
+| ConfigMap'ов | 17 | ~62 | ~310 | ~621 |
+| Временные ряды | 4.79M | ~17.5M | ~87.6M | ~175.2M |
 
-Вывод: при линейной экстраполяции **~840 000 алертов потребуют серьёзного шардирования vmalert** — один инстанс не справится ни по CPU, ни по памяти. Уже при ~84 000 алертов CPU vmalert превысит типичный лимит в 2–4 CPU. Также потребуется масштабирование VMCluster (vmselect/vmstorage) из-за роста числа временных рядов.
+Вывод: при линейной экстраполяции **~840 000 алертов потребуют серьёзного шардирования vmalert** — один инстанс не справится ни по CPU, ни по памяти. Уже при ~84 000 алертов CPU vmalert превысит типичный лимит в 2–4 CPU. `max(vmalert_iteration_duration_seconds)` при ~23 000 алертов уже достигает 3.84 сек — при дальнейшем росте итерация может не укладываться в `interval`, что приведёт к росту `vmalert_iteration_missed_total`. Также потребуется масштабирование VMCluster (vmselect/vmstorage) из-за роста числа временных рядов.
 
 ### Рекомендации по масштабированию
 
@@ -479,9 +496,9 @@ vmalert настроен на запись и чтение состояния и
 
 ### Краткосрочные
 
-- [ ] Отслеживать рост CPU vmalert при продолжении теста (при ~17 000 алертов — ~545m, запас есть)
-- [ ] Мониторинг `vmalert_iteration_missed_total` и `vmalert_iteration_duration_seconds` (текущий max 1.57 сек)
-- [ ] Контролировать память vmstorage (~1.5 Gi на реплику при ~17 000 алертов)
+- [ ] Отслеживать рост CPU vmalert при продолжении теста (при ~23 000 алертов — ~723m, запас до лимита 4 CPU есть)
+- [ ] Мониторинг `vmalert_iteration_missed_total` и `vmalert_iteration_duration_seconds` (текущий max 3.84 сек — приближается к `interval`)
+- [ ] Контролировать память vmstorage (~1.6 Gi на реплику при ~23 000 алертов)
 
 ### Среднесрочные
 
@@ -552,7 +569,7 @@ kubectl top pods -n vmks
 
 # Метрики, выросшие при нагрузке (VictoriaMetrics stack)
 
-Оценки даны для роста от малой нагрузки до **~17 000 алертов** (~203 VMRule, ~2,97 млн рядов). Базовый URL запросов: `http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometheus`.
+Оценки даны для роста от малой нагрузки до **~23 000 алертов** (~252 VMRule, ~4,79 млн рядов). Базовый URL запросов: `http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometheus`.
 
 ---
 
@@ -561,11 +578,11 @@ kubectl top pods -n vmks
 - **vmalert_iteration_duration_seconds** — выросла в **десятки раз** (оценка всех групп за одну итерацию занимает существенную долю interval).
 - **vmalert_iteration_missed_total** — при перегрузке растёт; при ~15 000 алертов может оставаться 0, при дальнейшем росте — рост в **разы**.
 - **vmalert_execution_errors_total** — при сбоях vmselect/vminsert рост от 0 до **единиц–десятков** в час.
-- **vmalert_alerts_firing** / **vmalert_alerts_pending** — растут **пропорционально числу правил** (~17 000 ALERTS, sum(vmalert_alerts_firing) ~28 550 по 2 репликам).
+- **vmalert_alerts_firing** / **vmalert_alerts_pending** — растут **пропорционально числу правил** (~23 000 ALERTS, sum(vmalert_alerts_firing) ~36 883 по 2 репликам).
 - **vmalert_remotewrite_requests_total** — рост примерно **в 2–3 раза** от числа групп (запись ALERTS и ALERTS_FOR_STATE при каждой итерации).
 - **vmalert_remoteread_requests_total** — скачок при каждом рестарте vmalert (один большой запрос при старте).
-- **container_cpu_usage_seconds_total** (vmalert) — при ~17 000 алертов **~545m** (в среднем на реплику); относительно пустого старта рост в **несколько раз**, есть запас до лимита.
-- **container_memory_working_set_bytes** (vmalert) — **~2–2.5 раза** (с ~200–300 Mi до ~508 Mi).
+- **container_cpu_usage_seconds_total** (vmalert) — при ~23 000 алертов **~723m** (в среднем на реплику); относительно пустого старта рост в **несколько раз**, запас до лимита 4 CPU.
+- **container_memory_working_set_bytes** (vmalert) — **~2.5–3 раза** (с ~200–300 Mi до ~676 Mi).
 
 ---
 
@@ -581,7 +598,7 @@ kubectl top pods -n vmks
 
 ## 3. VMStorage
 
-- **vm_rows** / **vm_rows_inserted_total** — рост **пропорционально числу рядов** (~2,97 млн при ~17 000 алертов; от нуля — в **тысячи раз**).
+- **vm_rows** / **vm_rows_inserted_total** — рост **пропорционально числу рядов** (~4,79 млн при ~23 000 алертов; от нуля — в **тысячи раз**).
 - **vm_storage_blocks** — рост в **разы** с ростом объёма данных.
 - **vm_cache_*_requests_total** / **vm_cache_*_misses_total** — объём запросов вырос в **разы**; miss rate может вырасти в **1,5–2 раза** при нехватке кэша.
 - **vm_http_requests_total** (job=vmstorage) — запросы от vmselect выросли в **десятки раз**.
@@ -599,31 +616,31 @@ kubectl top pods -n vmks
 ## 5. VMAgent
 
 - **scrape_series_added** (target=vmalert) — выросло в **десятки раз** (размер /metrics vmalert растёт с числом правил и алертов).
-- **scrape_body_size_bytes** (target=vmalert) — рост в **10–20+ раз** (при ~17 000 алертов уже сотни KB; при ~31 000+ алертов может превысить maxScrapeSize 16 MB).
+- **scrape_body_size_bytes** (target=vmalert) — рост в **10–20+ раз** (при ~23 000 алертов уже сотни KB; при ~50 000+ алертов может превысить maxScrapeSize 16 MB).
 - **scrape_samples_scraped** (job=vmalert) — рост **пропорционально** числу метрик vmalert (в **десятки раз**).
 
 ---
 
 ## 6. Victoria Metrics Operator
 
-- **process_cpu_seconds_total** (job=operator) — при ~17 000 алертов **~52m**; относительно малой нагрузки рост в **2–5 раз** (reconcile по всем правилам и сборке ConfigMap).
-- **process_resident_memory_bytes** (job=operator) — **~134Mi** при ~17 000 алертов; рост в **1.5–2 раза** с ростом числа алертов.
+- **process_cpu_seconds_total** (job=operator) — при ~23 000 алертов **~52m**; относительно малой нагрузки рост в **2–5 раз** (reconcile по всем правилам и сборке ConfigMap).
+- **process_resident_memory_bytes** (job=operator) — **~173Mi** при ~23 000 алертов; рост в **1.5–2 раза** с ростом числа алертов.
 
 ---
 
 ## 7. Kubernetes / ресурсы подов
 
 - **container_cpu_usage_seconds_total** (vmalert) — см. раздел 1; **container_cpu** для vmselect, vmstorage, vminsert — рост в **2–4 раза** при той же нагрузке.
-- **container_memory_working_set_bytes** (vmstorage) — при ~17 000 алертов **~1 418–1 514 Mi** на реплику; рост в **3–5 раз** от старта.
-- **container_memory_working_set_bytes** (vmselect) — **~185–384Mi**; рост в **1,5–3 раза**.
+- **container_memory_working_set_bytes** (vmstorage) — при ~23 000 алертов **~1 613–1 662 Mi** на реплику; рост в **3–5 раз** от старта.
+- **container_memory_working_set_bytes** (vmselect) — **~221–257Mi**; рост в **1,5–3 раза**.
 
 ---
 
 ## 8. Алерты и объём данных
 
-- **count(ALERTS)** — при ~17 000 алертов **~17 000**; рост от 0 до этого значения (фактически **на порядки**).
-- **count(ALERTS_FOR_STATE)** — **~16 400**; того же порядка, что и ALERTS; рост **пропорционально** числу алертов.
-- **totalSeries** (через API/tsdb) — при ~17 000 алертов **~2,97 млн** рядов; рост от нуля в **тысячи раз**.
+- **count(ALERTS)** — при ~23 000 алертов **~22 973**; рост от 0 до этого значения (фактически **на порядки**).
+- **count(ALERTS_FOR_STATE)** — **~21 298**; того же порядка, что и ALERTS; рост **пропорционально** числу алертов.
+- **totalSeries** (через API/tsdb) — при ~23 000 алертов **~4,79 млн** рядов; рост от нуля в **тысячи раз**.
 
 ---
 
@@ -642,16 +659,16 @@ kubectl top pods -n vmks
 
 ### Достигнутые результаты
 
-- **Распределение правил по ConfigMap'ам:** Operator стабильно дробит правила при приближении к лимиту ~1 MiB: каждый ConfigMap заполняется до ~505–508 KB, затем создаётся следующий. При ~17 000 алертов наблюдается 13 ConfigMap'ов (~6,5 MB суммарно). Механизм предсказуем и масштабируется линейно.
-- **Перезапуски vmalert:** Каждое появление нового ConfigMap приводит к пересозданию Pod'а vmalert (из-за добавления volume/volumeMount). Интервал между рестартами составил ~14–15 мин. Горячая перезагрузка (SIGHUP) применяется только при обновлении существующих ConfigMap'ов без добавления новых.
+- **Распределение правил по ConfigMap'ам:** Operator стабильно дробит правила при приближении к лимиту ~1 MiB: каждый ConfigMap заполняется до ~505–509 KB, затем создаётся следующий. При ~23 000 алертов наблюдается 17 ConfigMap'ов (~8,5 MB суммарно). Механизм предсказуем и масштабируется линейно.
+- **Перезапуски vmalert:** Каждое появление нового ConfigMap приводит к пересозданию Pod'а vmalert (из-за добавления volume/volumeMount). Интервал между рестартами составил ~13–15 мин. За время теста зафиксировано 15 ReplicaSet'ов (14 пересозданий). Горячая перезагрузка (SIGHUP) применяется только при обновлении существующих ConfigMap'ов без добавления новых.
 - **Сохранение состояния:** Механизм remoteWrite/remoteRead (`ALERTS`, `ALERTS_FOR_STATE`) работает корректно: после рестарта vmalert восстанавливает состояние алертов из VictoriaMetrics, счётчики `for` не сбрасываются, потери алертов не происходит. `vmalert_execution_errors_total = 0` и `vmalert_iteration_missed_total = 0` подтверждают стабильную работу. Временное падение `sum(ALERTS)` во время рестарта — следствие задержки первой итерации, а не потери данных.
-- **Пороги масштабируемости:** При ~17 000 алертов (~2,97 млн рядов) vmalert потребляет ~545m CPU и ~508Mi памяти на реплику — нагрузка умеренная. VM Operator потребляет ~52m CPU. Линейная экстраполяция на ~840 000 алертов указывает на необходимость шардирования vmalert и масштабирования VMCluster.
+- **Пороги масштабируемости:** При ~23 000 алертов (~4,79 млн рядов) vmalert потребляет ~723m CPU и ~676Mi памяти на реплику — нагрузка заметная, но в пределах лимитов (4 CPU / 4 Gi). VM Operator потребляет ~52m CPU. `max(vmalert_iteration_duration_seconds)` достигла 3.84 сек — важный индикатор приближения к пределу при интервалах 30s. Линейная экстраполяция на ~840 000 алертов указывает на необходимость шардирования vmalert и масштабирования VMCluster.
 
 ### Основные выводы
 
 1. **Операционная модель:** При массовом добавлении VMRule следует учитывать периодические рестарты vmalert (по одному на каждый новый ConfigMap). Для production целесообразно применять правила батчами или через GitOps с контролируемым темпом, чтобы не создавать лишние ConfigMap'ы подряд и снизить частоту рестартов.
-2. **Ресурсы:** При ~17 000 алертов CPU vmalert ~545m — запас есть. До ~170 000 алертов достаточно увеличить CPU limit. При росте выше ~170 000–420 000 алертов необходимо шардирование vmalert и масштабирование VMCluster. vmstorage потребляет ~1.5 Gi RAM на реплику — следует учитывать при планировании ресурсов нод.
+2. **Ресурсы:** При ~23 000 алертов CPU vmalert ~723m — запас до лимита 4 CPU есть. До ~170 000 алертов достаточно увеличить CPU limit. При росте выше ~170 000–420 000 алертов необходимо шардирование vmalert и масштабирование VMCluster. vmstorage потребляет ~1.6 Gi RAM на реплику — следует учитывать при планировании ресурсов нод.
 3. **Отказоустойчивость:** Конфигурация с двумя репликами vmalert, remoteRead/remoteWrite и Alertmanager в кластерном режиме обеспечивает восстановление без потери состояния алертов и без дублирования уведомлений. RTO vmalert — в пределах минуты. На текущем этапе `vmalert_execution_errors_total = 0` и `vmalert_iteration_missed_total = 0`.
-4. **Мониторинг:** Ключевые метрики для раннего обнаружения перегрузки — `vmalert_iteration_duration_seconds` (текущий max ~1.57 сек), `vmalert_iteration_missed_total`, `container_cpu_usage_seconds_total` (vmalert), а также размер и количество ConfigMap'ов с правилами.
+4. **Мониторинг:** Ключевые метрики для раннего обнаружения перегрузки — `vmalert_iteration_duration_seconds` (текущий max ~3.84 сек — рост в 2.4 раза по сравнению со снимком ~17 000 алертов), `vmalert_iteration_missed_total`, `container_cpu_usage_seconds_total` (vmalert), а также размер и количество ConfigMap'ов с правилами.
 
 Итог: VictoriaMetrics stack при правильной настройке (remoteRead/remoteWrite, HA vmalert и Alertmanager) выдерживает нагрузку тысячами правил и алертов с сохранением целостности состояния. Ограничения носят в основном ресурсный характер и снимаются шардированием и увеличением ресурсов в соответствии с приведёнными рекомендациями.
