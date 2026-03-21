@@ -224,13 +224,6 @@ Operator по-прежнему упаковывает большинство Con
 - `vmselect` (каждая реплика): **~272–359m CPU**, **~215–244Mi RAM**
 - `victoria-metrics-operator`: **~113m CPU / ~283Mi RAM**
 
-### Проверка через MCP (VictoriaLogs / VictoriaMetrics)
-
-- `user-victorialogs` MCP в рабочем состоянии: `LogsQL`-запросы выполняются, логи `vmks` доступны.
-- Через MCP VictoriaLogs подтверждены периодические `422` в `vmalert` для запроса `sum(increase(vmalert_alerting_rules_errors_total[5m])) without(id) > 0` с причиной `matching timeseries exceeds 1000000` (лимит `search.maxUniqueTimeseries`).
-- `user-victoriametrics` MCP сейчас указывает на `http://vmsingle.apatsev.org.ru/...` и в этом стенде недоступен (`no such host`), так как используется `vmcluster` + `vmselect`.
-- Для метрик в текущем состоянии используем прямые запросы к ingress `https://vmselect.apatsev.org.ru/...` (см. команды ниже).
-
 ### Как переобновлять этот срез
 
 ```bash
