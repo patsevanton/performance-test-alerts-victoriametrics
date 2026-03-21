@@ -387,6 +387,7 @@ vmalert настроен на запись и чтение состояния и
 | Снимок ~13 500 алертов | **161**        | **~13 500**              | **10**       | **~409m**             | **~373Mi**               | **51m**      | *—*                | 39 системных + 122 нагрузочных; ошибок 0, missed 0                         |
 | Снимок ~17 000 алертов | **203**        | **~17 000**              | **13**       | **~545m**             | **~508Mi**               | **52m**      | *—*                | 39 системных + 164 нагрузочных; ошибок 0, missed 0                         |
 | Снимок ~23 000 алертов | **252**        | **~22 973**              | **17**       | **~723m**             | **~676Mi**               | **52m**      | *—*                | 39 системных + 213 нагрузочных; ошибок 0, missed 0, max iteration 3.84 сек |
+| Снимок ~42 000 алертов | **389**        | **~42 214**              | **28**       | **~1250–1464m**       | **~867–1020Mi**          | **96m**      | **~94m**           | API Server из dashboard `Kubernetes / System / API Server`; `apiserver` RPS ~13.1, p99 ~60s |
 
 
 Используемые ресурсы (пример для одного среза): `kubectl top pods -n vmks`; метрики — `count(ALERTS)`, `count(ALERTS_FOR_STATE)`, `vmalert_alerts_firing`, размер ConfigMap'ов (см. [Полезные команды](#полезные-команды-для-мониторинга)).
@@ -516,6 +517,22 @@ kubectl get replicasets -n vmks -l app.kubernetes.io/name=vmalert \
 
 ```bash
 kubectl top pods -n vmks
+```
+
+### Kubernetes / System / API Server (ключевые метрики)
+
+```bash
+# CPU kube-apiserver (cores -> mCPU: *1000)
+curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query=sum(rate(process_cpu_seconds_total{job=~".*apiserver.*"}[5m]))' \
+  | jq -r '.data.result[0].value[1]'
+
+# RPS
+curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query=sum(rate(apiserver_request_total[5m]))' \
+  | jq -r '.data.result[0].value[1]'
+
+# p99 latency
+curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query=histogram_quantile(0.99, sum(rate(apiserver_request_duration_seconds_bucket[5m])) by (le))' \
+  | jq -r '.data.result[0].value[1]'
 ```
 
 ---
