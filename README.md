@@ -229,25 +229,25 @@ cd alerts
 ### Общие цифры
 
 
-| Метрика                                  | Значение       |
-| ---------------------------------------- | -------------- |
-| VMRule в кластере (всего)                | **389**        |
-| VMRule в namespace `vmks`                | **39**         |
-| Целевое количество алертов               | **~1 000 000** |
-| Активные алерты (ALERTS)                 | **42 214**     |
-| ALERTS_FOR_STATE                         | **34 996**     |
-| sum(vmalert_alerts_firing)               | **0**          |
-| Временные ряды (totalSeries)             | **12 196 362** |
-| ConfigMap'ов с правилами (`rulefiles-`*) | **28**         |
-| ReplicaSet'ов vmalert                    | **11**         |
-| sum(vmalert_execution_errors_total)      | **10**         |
-| sum(vmalert_iteration_missed_total)      | **0**          |
-| max(vmalert_iteration_duration_seconds)  | **5.24 сек**   |
+| Метрика                                  | Значение                                  |
+| ---------------------------------------- | ----------------------------------------- |
+| VMRule в кластере (всего)                | **434**                                   |
+| VMRule в namespace `vmks`                | **39**                                    |
+| Целевое количество алертов               | **~1 000 000**                            |
+| Активные алерты (ALERTS)                 | **43 823**                                |
+| ALERTS_FOR_STATE                         | **39 415**                                |
+| sum(vmalert_alerts_firing)               | **422** (`matching timeseries > 1000000`) |
+| Временные ряды (totalSeries)             | **14 838 042**                            |
+| ConfigMap'ов с правилами (`rulefiles-`*) | **31**                                    |
+| ReplicaSet'ов vmalert                    | **11**                                    |
+| sum(vmalert_execution_errors_total)      | **30**                                    |
+| sum(vmalert_iteration_missed_total)      | **0**                                     |
+| max(vmalert_iteration_duration_seconds)  | **1.95 сек**                              |
 
 
 ### Распределение правил по ConfigMap'ам
 
-Суммарный размер `rulefiles-`*: **14 177 327 bytes (~13.52 MiB)**, средний размер ConfigMap: **~506 KB**.  
+Суммарный размер `rulefiles-`*: **15 937 038 bytes (~15.20 MiB)**, средний размер ConfigMap: **~514 KB**.  
 Operator по-прежнему упаковывает большинство ConfigMap около ~505–511 KB и создаёт новый по мере роста числа `VMRule`.
 
 ### Перезапуски vmalert и восстановление состояния
@@ -260,17 +260,34 @@ Operator по-прежнему упаковывает большинство Con
 
 Ключевые потребители на текущем этапе:
 
-- `vmalert` (каждая реплика): **~1250–1464m CPU**, **~867–1020Mi RAM**
-- `vmstorage` (каждая реплика): **~210–236m CPU**, **~2.6–2.8Gi RAM**
-- `vmselect` (каждая реплика): **~251–392m CPU**, **~265–283Mi RAM**
-- `victoria-metrics-operator`: **~96m CPU / ~197Mi RAM**
+- `vmalert` (каждая реплика): **~1384–1407m CPU**, **~1218–1307Mi RAM**
+- `vmstorage` (каждая реплика): **~195–205m CPU**, **~2.1–2.2Gi RAM**
+- `vmselect` (каждая реплика): **~272–359m CPU**, **~215–244Mi RAM**
+- `victoria-metrics-operator`: **~113m CPU / ~283Mi RAM**
 
 ### Проверка через MCP (VictoriaLogs / VictoriaMetrics)
 
-- `user-victorialogs` MCP в рабочем состоянии: запросы `LogsQL` выполняются, видны логи `vmks`.
-- Через MCP VictoriaLogs подтверждены периодические `422` для запроса `sum(increase(vmalert_alerting_rules_errors_total[5m])) without(id) > 0` с причиной: `matching timeseries exceeds 1000000` (лимит `search.maxUniqueTimeseries`).
+- `user-victorialogs` MCP в рабочем состоянии: `LogsQL`-запросы выполняются, логи `vmks` доступны.
+- Через MCP VictoriaLogs подтверждены периодические `422` в `vmalert` для запроса `sum(increase(vmalert_alerting_rules_errors_total[5m])) without(id) > 0` с причиной `matching timeseries exceeds 1000000` (лимит `search.maxUniqueTimeseries`).
 - `user-victoriametrics` MCP сейчас указывает на `http://vmsingle.apatsev.org.ru/...` и в этом стенде недоступен (`no such host`), так как используется `vmcluster` + `vmselect`.
 - Для метрик в текущем состоянии используем прямые запросы к ingress `https://vmselect.apatsev.org.ru/...` (см. команды ниже).
+
+### Как переобновлять этот срез
+
+```bash
+# Kubernetes: VMRule / ConfigMap / ReplicaSet
+kubectl get vmrules -A --no-headers | wc -l
+kubectl get vmrules -n vmks --no-headers | wc -l
+kubectl get configmaps -n vmks -o json | jq '[.items[] | select(.metadata.name | test("rulefiles"))] | length'
+kubectl get replicasets -n vmks -l app.kubernetes.io/name=vmalert --no-headers | wc -l
+
+# VictoriaMetrics: ключевые показатели
+curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query=count(ALERTS)' | jq -r '.data.result[0].value[1]'
+curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query=count(ALERTS_FOR_STATE)' | jq -r '.data.result[0].value[1]'
+curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query=sum(vmalert_execution_errors_total)' | jq -r '.data.result[0].value[1]'
+curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query=max(vmalert_iteration_duration_seconds)' | jq -r '.data.result[0].value[1]'
+curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/status/tsdb' | jq -r '.data.totalSeries'
+```
 
 ## Механизм распределения алертов и перезапуски vmalert
 
