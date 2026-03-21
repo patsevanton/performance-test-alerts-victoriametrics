@@ -48,6 +48,9 @@ vmcluster:
       extraArgs:
         search.maxConcurrentRequests: "16"
         search.maxQueueDuration: "60s"
+        # С v1.105.0 лимит auto-calculated и может быть слишком мал при 16 concurrent + 4Gi;
+        # фиксируем явно, чтобы query вроде topk(5, sum(vmalert_alerts_firing{…}) by(…)) не падал с 422.
+        search.maxUniqueTimeseries: "300000"
         # У vmstorage нет флага search.maxQueryDuration (только у vmselect); см. vmselect.extraArgs выше.
       # Запас по памяти выше прежних 2Gi под длительную нагрузку и пики записи.
       # CPU: при лимите 1 было заметное throttling на поисковых запросах.
