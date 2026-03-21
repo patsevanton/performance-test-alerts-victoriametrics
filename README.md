@@ -157,7 +157,7 @@ cd alerts
 
 **Без сохранения прогресса:** каждый запуск скрипта батча снова проходит **весь** его диапазон с первого файла. Если была ошибка — остановились, исправили, запустили тот же скрипт ещё раз (`kubectl apply` идемпотентен).
 
-**Темп:** между apply паузы так, чтобы суммарный sleep на батч был ≈ `STAGE_DURATION_SEC` (по умолчанию 9 ч).
+**Темп:** между apply паузы так, чтобы суммарный sleep на батч был ≈ `STAGE_DURATION_SEC` (по умолчанию 9 ч). **Время полного прогона** = эти паузы плюс время всех `kubectl apply` (для батча 01: ~9 ч пауз + сотни вызовов API — ориентировочно **~9–12 ч** суммарно, точнее зависит от кластера).
 
 | Батч | Скрипт | Глобальные индексы (1…N) |
 |------|--------|--------------------------|
@@ -212,6 +212,8 @@ export GRAFANA_TOKEN="glsa_xxxxxxxx"
 cd alerts
 ./apply-yaml-batch-01.sh
 ```
+
+Один полный прогон батча 01 при настройках по умолчанию занимает **примерно 9–12 ч** (≈9 ч на паузы между apply плюс время 500 применений; при медленном API может быть дольше).
 
 Исходный код: [alerts/apply-yaml-lib.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-lib.sh), [alerts/apply-yaml-batch-01.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-batch-01.sh).
 

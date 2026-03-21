@@ -9,6 +9,26 @@ set -euo pipefail
 VMRULES_SUBDIR="${VMRULES_SUBDIR:-vmrules}"
 STAGE_DURATION_SEC="${STAGE_DURATION_SEC:-$((9 * 3600))}"
 
+# Секунды → краткая русская строка (9 ч, 1 мин 5 с, 45 с).
+sec_to_ru() {
+  awk -v s="$1" 'BEGIN {
+    if (s >= 3600) {
+      h = int(s / 3600)
+      rest = s - h * 3600
+      m = int(rest / 60)
+      if (m == 0) printf "%d ч", h
+      else printf "%d ч %d мин", h, m
+    } else if (s >= 60) {
+      m = int(s / 60)
+      sec = int(s - m * 60 + 0.5)
+      if (sec == 60) { m++; sec = 0 }
+      printf "%d мин %d с", m, sec
+    } else {
+      printf "%.0f с", s
+    }
+  }'
+}
+
 grafana_annotation() {
   local tag=$1
   local text=$2
@@ -71,7 +91,11 @@ run_batch() {
     else printf "%.4f", d / (c - 1)
   }')
 
-  echo "Батч ${batch_id}: индексы ${istart}–${iend} (${bcount} файлов), паузы ~${STAGE_DURATION_SEC} с суммарно, шаг sleep ≈ ${sleep_interval} с."
+  local stage_ru sleep_ru
+  stage_ru=$(sec_to_ru "$STAGE_DURATION_SEC")
+  sleep_ru=$(sec_to_ru "$sleep_interval")
+  echo "Батч ${batch_id}: глобальные индексы ${istart}–${iend} (${bcount} файлов). Паузы между apply суммарно ~${stage_ru}; после каждого файла (кроме последнего) ~${sleep_ru}."
+  echo "Ориентир по времени всего скрипта: ~${stage_ru} пауз + ${bcount}×kubectl apply (зависит от API); суммарно обычно на десятки минут–час дольше, чем одни паузы."
 
   local gtag="apply-yaml-batch${batch_id}"
   grafana_annotation "$gtag" "apply batch ${batch_id} (${istart}-${iend}) started" && echo "Аннотация Grafana: старт батча ${batch_id}."
