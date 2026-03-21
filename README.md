@@ -282,25 +282,7 @@ vm-vmks-victoria-metrics-k8s-stack-rulefiles-16   345.61 KB
 - **Сохранённое состояние в VictoriaMetrics** — `count(ALERTS_FOR_STATE)` до рестарта: это то, что vmalert прочитает при старте; при следующем рестарте новое состояние снова запишется через remote write.
 - **Корректность восстановления** — отсутствие роста `vmalert_execution_errors_total` и возврат `sum(ALERTS)` к прежнему уровню означают, что remoteRead прошёл успешно и vmalert импортировал алерты из VictoriaMetrics.
 
-За время применения Pod'ы `vmalert` пересоздавались **14 раз** (15 ReplicaSet'ов), с интервалом **~13–15 мин** между пересозданиями:
-
-```
-vmalert-vmks-...-6b98fd4f88   T+0        (08:26, начальный наблюдаемый)
-vmalert-vmks-...-67cbbb4457   T+15 мин   (08:41, +15 мин)
-vmalert-vmks-...-5597648fc4   T+29 мин   (08:55, +14 мин)
-vmalert-vmks-...-d77fb9ff     T+43 мин   (09:09, +14 мин)
-vmalert-vmks-...-6585cf5864   T+58 мин   (09:24, +15 мин)
-vmalert-vmks-...-5766f64545   T+72 мин   (09:38, +14 мин)
-vmalert-vmks-...-745d97dbfd   T+87 мин   (09:53, +15 мин)
-vmalert-vmks-...-6cd95b8b47   T+101 мин  (10:07, +14 мин)
-vmalert-vmks-...-75c5dff6cb   T+115 мин  (10:21, +14 мин)
-vmalert-vmks-...-8564bf4d5f   T+130 мин  (10:36, +15 мин)
-vmalert-vmks-...-86f7995b74   T+145 мин  (10:51, +15 мин)
-vmalert-vmks-...-5fc45554f5   T+159 мин  (11:04, +13 мин)
-vmalert-vmks-...-5db98d6d     T+173 мин  (11:19, +15 мин)
-vmalert-vmks-...-56b498897f   T+188 мин  (11:34, +15 мин)
-vmalert-vmks-...-d4c8457d6    T+202 мин  (11:48, +14 мин, текущий)
-```
+За время применения Pod'ы `vmalert` пересоздавались **14 раз** (15 ReplicaSet'ов), с интервалом **~13–15 мин** между пересозданиями.
 
 Каждое пересоздание происходит при добавлении нового ConfigMap — требуется новый `volume` + `volumeMount`, что вызывает rolling restart Pod'а. Интервал ~14–15 мин определяется темпом apply и количеством VMRule, умещающихся в один ConfigMap (~505–509 KB).
 
@@ -308,28 +290,30 @@ vmalert-vmks-...-d4c8457d6    T+202 мин  (11:48, +14 мин, текущий)
 
 ```
 NAME                                                        CPU(cores)   MEMORY(bytes)
-vmalert-...-fcsgn  (реплика 1)                              783m         706Mi
-vmalert-...-n2twd  (реплика 2)                              663m         645Mi
-vmagent-...                                                 156m         174Mi
-vmalertmanager-...-0                                        313m         95Mi
-vmalertmanager-...-1                                        284m         96Mi
-vminsert-...-6whtl                                          40m          160Mi
-vminsert-...-xwwdc                                          27m          128Mi
-vmselect-...-0                                              154m         221Mi
-vmselect-...-1                                              387m         257Mi
-vmstorage-...-0                                             134m         1613Mi
-vmstorage-...-1                                             183m         1662Mi
-vmks-victoria-metrics-operator-...                          52m          173Mi
-vmks-grafana-...                                            10m          349Mi
-vmks-kube-state-metrics-...                                 3m           21Mi
-vmks-prometheus-node-exporter (×3)                          2–3m         9–10Mi
+vmalert-vmks-victoria-metrics-k8s-stack-767d8f77dc-gksdh  (реплика 1)     1184m        698Mi
+vmalert-vmks-victoria-metrics-k8s-stack-767d8f77dc-zrgql  (реплика 2)     1181m        723Mi
+vmagent-vmks-victoria-metrics-k8s-stack-5c987bfb49-4fkwc                 215m         263Mi
+vmalertmanager-vmks-victoria-metrics-k8s-stack-0                          415m         128Mi
+vmalertmanager-vmks-victoria-metrics-k8s-stack-1                          332m         129Mi
+vminsert-vmks-victoria-metrics-k8s-stack-86448d5978-6whtl                 50m          171Mi
+vminsert-vmks-victoria-metrics-k8s-stack-86448d5978-xwwdc                 41m          207Mi
+vmselect-vmks-victoria-metrics-k8s-stack-0                                107m         199Mi
+vmselect-vmks-victoria-metrics-k8s-stack-1                                487m         197Mi
+vmstorage-vmks-victoria-metrics-k8s-stack-0                               199m         2118Mi
+vmstorage-vmks-victoria-metrics-k8s-stack-1                               260m         2147Mi
+vmks-victoria-metrics-operator-774bc4974c-kmpvx                           90m          225Mi
+vmks-grafana-597b584cb-qphwl                                              10m          281Mi
+vmks-kube-state-metrics-6fff65dd67-rkpr5                                  3m           24Mi
+vmks-prometheus-node-exporter-hhj5v                                       2m           10Mi
+vmks-prometheus-node-exporter-qkxg9                                       3m           10Mi
+vmks-prometheus-node-exporter-qxpfz                                       2m           10Mi
 ```
 
-**vmalert** потребляет **~723m CPU** (в среднем на реплику) и ~676Mi памяти. При ~23 000 алертов нагрузка заметная, но CPU не является узким местом (лимит 4 CPU).
+**vmalert** потребляет **~1183m CPU** (в среднем на реплику) и ~711Mi памяти. Нагрузка заметная, но CPU не является узким местом (лимит 4 CPU). Ориентиры по сценарию ~23 000 алертов — в таблицах ниже.
 
-**vmstorage** потребляет **~1.6 Gi памяти** на реплику — основной потребитель RAM в стеке.
+**vmstorage** потребляет **~2.1 Gi памяти** на реплику — основной потребитель RAM в стеке.
 
-**VM Operator** потребляет **52m CPU** — reconcile-цикл по ~23 000 алертов проходит быстро.
+**VM Operator** потребляет **~90m CPU** — reconcile по всем VMRule и сборке ConfigMap проходит быстро.
 
 ## Механизм распределения алертов и перезапуски vmalert
 
