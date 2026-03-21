@@ -81,7 +81,8 @@ resource "yandex_kubernetes_node_group" "k8s-node-group" {
 
     resources {
       # По kubectl top нод: память ~23–47% от allocatable (~17Gi), CPU заметно выше — 8 vCPU оставляем.
-      memory = 20  # ГБ (32 избыточно при ~35% средней утилизации RAM)
+      # Для standard-v2 + 8 vCPU допустимы только 8, 16, 24, 32… ГБ — 20 недоступен, берём 24 (ближе к цели, чем 32).
+      memory = 24  # ГБ
       cores  = 8   # vCPU
     }
 
