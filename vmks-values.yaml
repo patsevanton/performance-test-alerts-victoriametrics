@@ -13,6 +13,25 @@ grafana:
     hosts:
       - grafana.apatsev.org.ru
 
+# Таймауты Grafana ↔ vmselect: при большом числе серий/алертов дефолт 30s даёт
+# «context deadline exceeded» на query_range и на API меток для переменных дашбордов.
+defaultDatasources:
+  victoriametrics:
+    datasources:
+      - name: VictoriaMetrics
+        type: prometheus
+        access: proxy
+        isDefault: true
+        jsonData:
+          httpMethod: POST
+          queryTimeout: 300s
+      - name: VictoriaMetrics (DS)
+        isDefault: false
+        access: proxy
+        type: victoriametrics-metrics-datasource
+        jsonData:
+          queryTimeout: 300s
+
 # SLA 99.9 для хранилища метрик: уходим от SPOF `vmsingle` к реплицируемому `VMCluster`.
 # Это "настоящая" HA: потеря pod/ноды не равна потере сервиса и данных.
 vmsingle:
@@ -42,6 +61,9 @@ vmcluster:
       extraArgs:
         search.maxConcurrentRequests: "16"
         search.maxQueueDuration: "60s"
+        # Согласовать с queryTimeout в defaultDatasources (иначе vmselect обрежет раньше Grafana).
+        search.maxQueryDuration: 300s
+        search.maxLabelsAPIDuration: 120s
       resources:
         limits:
           memory: 3Gi
