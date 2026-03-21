@@ -242,23 +242,23 @@ cd alerts
 
 ## Текущее состояние (тест в процессе)
 
-> **Примечание:** тест ещё выполняется — скрипты этапов продолжают применять VMRule. Данные ниже — снимок на момент **~161** применённых VMRule.
+> **Примечание:** тест ещё выполняется — скрипты этапов продолжают применять VMRule. Данные ниже — снимок на момент **~203** применённых VMRule.
 
 ### Общие цифры
 
 | Метрика | Значение |
 |---------|----------|
-| VMRule в кластере (всего) | **161** (39 системных + 122 нагрузочных) |
+| VMRule в кластере (всего) | **203** (39 системных + 164 нагрузочных) |
 | Целевое количество VMRule | 10 000 нагрузочных |
-| Активные алерты (ALERTS) | **~13 500** |
-| ALERTS_FOR_STATE | **~12 250** |
-| sum(vmalert_alerts_firing) | **~19 900** (сумма по 2 репликам) |
-| Временные ряды (totalSeries) | **~1 879 000** |
-| ConfigMap'ов с правилами | **10** |
-| Перезапусков vmalert (ReplicaSet'ов) | **10** (9 пересозданий) |
+| Активные алерты (ALERTS) | **~17 000** |
+| ALERTS_FOR_STATE | **~16 400** |
+| sum(vmalert_alerts_firing) | **~28 550** (сумма по 2 репликам) |
+| Временные ряды (totalSeries) | **~2 966 000** |
+| ConfigMap'ов с правилами | **13** |
+| Перезапусков vmalert (ReplicaSet'ов) | **11** (10 пересозданий) |
 | vmalert_execution_errors_total | **0** |
 | vmalert_iteration_missed_total | **0** |
-| max(vmalert_iteration_duration_seconds) | **1.65 сек** |
+| max(vmalert_iteration_duration_seconds) | **1.57 сек** |
 
 ### Распределение правил по ConfigMap'ам
 
@@ -272,10 +272,13 @@ vm-vmks-victoria-metrics-k8s-stack-rulefiles-5    507.28 KB
 vm-vmks-victoria-metrics-k8s-stack-rulefiles-6    508.48 KB
 vm-vmks-victoria-metrics-k8s-stack-rulefiles-7    504.92 KB
 vm-vmks-victoria-metrics-k8s-stack-rulefiles-8    506.31 KB
-vm-vmks-victoria-metrics-k8s-stack-rulefiles-9    346.15 KB
+vm-vmks-victoria-metrics-k8s-stack-rulefiles-9    508.18 KB
+vm-vmks-victoria-metrics-k8s-stack-rulefiles-10   505.04 KB
+vm-vmks-victoria-metrics-k8s-stack-rulefiles-11   507.87 KB
+vm-vmks-victoria-metrics-k8s-stack-rulefiles-12   463.39 KB
 ```
 
-Суммарный размер: **~4.9 MB**. Operator заполняет каждый ConfigMap до ~505–508 KB, затем создаёт следующий. Последний (`rulefiles-9`) ещё не полон — тест продолжается.
+Суммарный размер: **~6.5 MB**. Operator заполняет каждый ConfigMap до ~505–508 KB, затем создаёт следующий. Последний (`rulefiles-12`) ещё не полон — тест продолжается.
 
 ### Перезапуски vmalert
 
@@ -288,19 +291,20 @@ vm-vmks-victoria-metrics-k8s-stack-rulefiles-9    346.15 KB
 - **Сохранённое состояние в VictoriaMetrics** — `count(ALERTS_FOR_STATE)` до рестарта: это то, что vmalert прочитает при старте; при следующем рестарте новое состояние снова запишется через remote write.
 - **Корректность восстановления** — отсутствие роста `vmalert_execution_errors_total` и возврат `sum(ALERTS)` к прежнему уровню означают, что remoteRead прошёл успешно и vmalert импортировал алерты из VictoriaMetrics.
 
-За время применения Pod'ы `vmalert` пересоздавались **9 раз** (10 ReplicaSet'ов), с интервалом **~14–18 мин** между пересозданиями:
+За время применения Pod'ы `vmalert` пересоздавались **10 раз** (11 ReplicaSet'ов), с интервалом **~14–18 мин** между пересозданиями:
 
 ```
-vmalert-vmks-...-84fdc8f74    T+0        (начальный)
-vmalert-vmks-...-7fbdf5bdd7   T+18 мин   (+18 мин)
-vmalert-vmks-...-6b98fd4f88   T+33 мин   (+15 мин)
-vmalert-vmks-...-67cbbb4457   T+47 мин   (+15 мин)
-vmalert-vmks-...-5597648fc4   T+62 мин   (+15 мин)
-vmalert-vmks-...-d77fb9ff     T+76 мин   (+14 мин)
-vmalert-vmks-...-6585cf5864   T+90 мин   (+15 мин)
-vmalert-vmks-...-5766f64545   T+105 мин  (+15 мин)
-vmalert-vmks-...-745d97dbfd   T+119 мин  (+15 мин)
-vmalert-vmks-...-6cd95b8b47   T+134 мин  (+15 мин, текущий)
+vmalert-vmks-...-6b98fd4f88   T+0        (08:26, начальный наблюдаемый)
+vmalert-vmks-...-67cbbb4457   T+15 мин   (08:41, +15 мин)
+vmalert-vmks-...-5597648fc4   T+29 мин   (08:55, +15 мин)
+vmalert-vmks-...-d77fb9ff     T+43 мин   (09:09, +14 мин)
+vmalert-vmks-...-6585cf5864   T+58 мин   (09:24, +15 мин)
+vmalert-vmks-...-5766f64545   T+72 мин   (09:38, +15 мин)
+vmalert-vmks-...-745d97dbfd   T+87 мин   (09:53, +15 мин)
+vmalert-vmks-...-6cd95b8b47   T+101 мин  (10:07, +15 мин)
+vmalert-vmks-...-75c5dff6cb   T+115 мин  (10:21, +14 мин)
+vmalert-vmks-...-8564bf4d5f   T+130 мин  (10:36, +15 мин)
+vmalert-vmks-...-86f7995b74   T+145 мин  (10:51, +15 мин, текущий)
 ```
 
 Каждое пересоздание происходит при добавлении нового ConfigMap — требуется новый `volume` + `volumeMount`, что вызывает rolling restart Pod'а. Интервал ~15 мин определяется темпом apply и количеством VMRule, умещающихся в один ConfigMap (~510 KB).
@@ -309,28 +313,28 @@ vmalert-vmks-...-6cd95b8b47   T+134 мин  (+15 мин, текущий)
 
 ```
 NAME                                                        CPU(cores)   MEMORY(bytes)
-vmalert-...-gdp8h  (реплика 1)                              423m         342Mi
-vmalert-...-ttkbb  (реплика 2)                              395m         403Mi
-vmagent-...                                                 92m          145Mi
-vmalertmanager-...-0                                        182m         68Mi
-vmalertmanager-...-1                                        152m         67Mi
-vminsert-...-6whtl                                          18m          95Mi
-vminsert-...-xwwdc                                          27m          115Mi
-vmselect-...-0                                              21m          171Mi
-vmselect-...-1                                              341m         154Mi
-vmstorage-...-0                                             100m         1646Mi
-vmstorage-...-1                                             117m         1502Mi
-vmks-victoria-metrics-operator-...                          51m          116Mi
-vmks-grafana-...                                            8m           1479Mi
-vmks-kube-state-metrics-...                                 3m           22Mi
-vmks-prometheus-node-exporter (×3)                          2–3m         9–11Mi
+vmalert-...-q4qg4  (реплика 1)                              632m         519Mi
+vmalert-...-zvrtw  (реплика 2)                              458m         497Mi
+vmagent-...                                                 127m         164Mi
+vmalertmanager-...-0                                        254m         81Mi
+vmalertmanager-...-1                                        261m         80Mi
+vminsert-...-6whtl                                          23m          146Mi
+vminsert-...-xwwdc                                          36m          139Mi
+vmselect-...-0                                              108m         384Mi
+vmselect-...-1                                              312m         185Mi
+vmstorage-...-0                                             135m         1418Mi
+vmstorage-...-1                                             144m         1514Mi
+vmks-victoria-metrics-operator-...                          52m          134Mi
+vmks-grafana-...                                            11m          346Mi
+vmks-kube-state-metrics-...                                 3m           21Mi
+vmks-prometheus-node-exporter (×3)                          2–3m         9–10Mi
 ```
 
-**vmalert** потребляет **~409m CPU** (в среднем на реплику) и ~373Mi памяти. При 161 VMRule нагрузка умеренная; CPU не является узким местом на текущем этапе.
+**vmalert** потребляет **~545m CPU** (в среднем на реплику) и ~508Mi памяти. При 203 VMRule нагрузка умеренная; CPU не является узким местом на текущем этапе.
 
-**vmstorage** потребляет **~1.5–1.6 Gi памяти** на реплику — основной потребитель RAM в стеке.
+**vmstorage** потребляет **~1.4–1.5 Gi памяти** на реплику — основной потребитель RAM в стеке.
 
-**VM Operator** потребляет **51m CPU** — reconcile-цикл по 161 VMRule проходит быстро.
+**VM Operator** потребляет **52m CPU** — reconcile-цикл по 203 VMRule проходит быстро.
 
 ## Механизм распределения алертов и перезапуски vmalert
 
@@ -445,23 +449,26 @@ vmalert настроен на запись и чтение состояния и
 |---------------|----------------|---------------------------|--------------|------------------------|---------------------------|--------------|------------|
 | Начало (baseline) | _—_ | _—_ | _—_ | _—_ | _—_ | _—_ | До массового apply |
 | Снимок ~161 VMRule | **161** | **~13 500** | **10** | **~409m** | **~373Mi** | **51m** | 39 системных + 122 нагрузочных; ошибок 0, missed 0 |
+| Снимок ~203 VMRule | **203** | **~17 000** | **13** | **~545m** | **~508Mi** | **52m** | 39 системных + 164 нагрузочных; ошибок 0, missed 0 |
 | После stage2 (~500) | _—_ | _—_ | _—_ | _—_ | _—_ | _—_ | |
 | Целевая (10k) | _—_ | _—_ | _—_ | _—_ | _—_ | _—_ | При полной нагрузке |
 
 Используемые ресурсы (пример для одного среза): `kubectl top pods -n vmks`; метрики — `count(ALERTS)`, `count(ALERTS_FOR_STATE)`, `vmalert_alerts_firing`, размер ConfigMap'ов (см. [Полезные команды](#полезные-команды-для-мониторинга)).
 
-### Наблюдаемые данные при ~161 VMRule / ~13 500 активных алертов
+Данные двух точек (161 и 203 VMRule) подтверждают линейный рост: CPU vmalert вырос с ~409m до ~545m (+33% при росте VMRule на ~26%), память — с ~373Mi до ~508Mi (+36%).
+
+### Наблюдаемые данные при ~203 VMRule / ~17 000 активных алертов
 
 | Метрика | Значение |
 |---------|----------|
-| CPU vmalert (каждая реплика) | ~409m (средн.) |
-| Memory vmalert (каждая реплика) | ~373Mi |
-| CPU VM Operator | 51m |
-| CPU vmstorage (каждая реплика) | ~109m |
-| Memory vmstorage (каждая реплика) | ~1 574Mi |
-| ConfigMap'ов | 10 × ~506 KB (последний 346 KB) |
-| Временные ряды | ~1 879 000 |
-| max(vmalert_iteration_duration_seconds) | 1.65 сек |
+| CPU vmalert (каждая реплика) | ~545m (средн.) |
+| Memory vmalert (каждая реплика) | ~508Mi |
+| CPU VM Operator | 52m |
+| CPU vmstorage (каждая реплика) | ~140m |
+| Memory vmstorage (каждая реплика) | ~1 466Mi |
+| ConfigMap'ов | 13 × ~506 KB (последний 463 KB) |
+| Временные ряды | ~2 966 000 |
+| max(vmalert_iteration_duration_seconds) | 1.57 сек |
 | vmalert_execution_errors_total | 0 |
 | vmalert_iteration_missed_total | 0 |
 
@@ -469,21 +476,21 @@ vmalert настроен на запись и чтение состояния и
 
 | Нода | CPU | CPU% | Memory | Memory% |
 |------|-----|------|--------|---------|
-| cl1...iror | 905m | 11% | 1650Mi | 7% |
-| cl1...otib | 1049m | 13% | 3571Mi | 17% |
-| cl1...yruq | 575m | 7% | 3328Mi | 16% |
+| cl1...iror | 1058m | 13% | 1984Mi | 9% |
+| cl1...otib | 710m | 8% | 3214Mi | 15% |
+| cl1...yruq | 1139m | 14% | 3854Mi | 18% |
 
-Кластер загружен на 7–17% по памяти и 7–13% по CPU — значительный запас для дальнейшего роста нагрузки.
+Кластер загружен на 9–18% по памяти и 8–14% по CPU — значительный запас для дальнейшего роста нагрузки.
 
 ### Экстраполяция
 
-| Метрика | ~161 VMRule (факт) | Прогноз на 1 000 | Прогноз на 5 000 | Прогноз на 10 000 |
+| Метрика | ~203 VMRule (факт) | Прогноз на 1 000 | Прогноз на 5 000 | Прогноз на 10 000 |
 |---------|---------------------|-------------------|-------------------|-------------------|
-| Активные алерты | ~13 500 | ~84 000 | ~419 000 | ~839 000 |
-| CPU vmalert (реплика) | ~409m | ~2.5 | ~12.7 | ~25.4 |
-| Memory vmalert (реплика) | ~373Mi | ~2.3Gi | ~11.6Gi | ~23.2Gi |
-| ConfigMap'ов | 10 | ~62 | ~311 | ~621 |
-| Временные ряды | 1.88M | ~11.7M | ~58.3M | ~116.7M |
+| Активные алерты | ~17 000 | ~84 000 | ~419 000 | ~838 000 |
+| CPU vmalert (реплика) | ~545m | ~2.7 | ~13.4 | ~26.8 |
+| Memory vmalert (реплика) | ~508Mi | ~2.5Gi | ~12.5Gi | ~25.0Gi |
+| ConfigMap'ов | 13 | ~64 | ~320 | ~640 |
+| Временные ряды | 2.97M | ~14.6M | ~73.1M | ~146.1M |
 
 Вывод: при линейной экстраполяции **10 000 VMRule потребуют серьёзного шардирования vmalert** — один инстанс не справится ни по CPU, ни по памяти. Уже при 1 000 VMRule CPU vmalert превысит типичный лимит в 2–4 CPU. Также потребуется масштабирование VMCluster (vmselect/vmstorage) из-за роста числа временных рядов.
 
@@ -499,9 +506,9 @@ vmalert настроен на запись и чтение состояния и
 
 ### Краткосрочные
 
-- [ ] Отслеживать рост CPU vmalert при продолжении теста (при 161 VMRule — ~409m, запас есть)
-- [ ] Мониторинг `vmalert_iteration_missed_total` и `vmalert_iteration_duration_seconds` (текущий max 1.65 сек)
-- [ ] Контролировать память vmstorage (~1.5 Gi на реплику при 161 VMRule)
+- [ ] Отслеживать рост CPU vmalert при продолжении теста (при 203 VMRule — ~545m, запас есть)
+- [ ] Мониторинг `vmalert_iteration_missed_total` и `vmalert_iteration_duration_seconds` (текущий max 1.57 сек)
+- [ ] Контролировать память vmstorage (~1.5 Gi на реплику при 203 VMRule)
 
 ### Среднесрочные
 
@@ -572,7 +579,7 @@ kubectl top pods -n vmks
 
 # Метрики, выросшие при нагрузке (VictoriaMetrics stack)
 
-Оценки даны для роста от малой нагрузки до **~161 VMRule** (~13 500 алертов, ~1,88 млн рядов). Базовый URL запросов: `http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometheus`.
+Оценки даны для роста от малой нагрузки до **~203 VMRule** (~17 000 алертов, ~2,97 млн рядов). Базовый URL запросов: `http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometheus`.
 
 ---
 
@@ -581,11 +588,11 @@ kubectl top pods -n vmks
 - **vmalert_iteration_duration_seconds** — выросла в **десятки раз** (оценка всех групп за одну итерацию занимает существенную долю interval).
 - **vmalert_iteration_missed_total** — при перегрузке растёт; при 660 VMRule может оставаться 0, при дальнейшем росте — рост в **разы**.
 - **vmalert_execution_errors_total** — при сбоях vmselect/vminsert рост от 0 до **единиц–десятков** в час.
-- **vmalert_alerts_firing** / **vmalert_alerts_pending** — растут **пропорционально числу правил** (~13 500 ALERTS при 161 VMRule, sum(vmalert_alerts_firing) ~19 900 по 2 репликам).
+- **vmalert_alerts_firing** / **vmalert_alerts_pending** — растут **пропорционально числу правил** (~17 000 ALERTS при 203 VMRule, sum(vmalert_alerts_firing) ~28 550 по 2 репликам).
 - **vmalert_remotewrite_requests_total** — рост примерно **в 2–3 раза** от числа групп (запись ALERTS и ALERTS_FOR_STATE при каждой итерации).
 - **vmalert_remoteread_requests_total** — скачок при каждом рестарте vmalert (один большой запрос при старте).
-- **container_cpu_usage_seconds_total** (vmalert) — при 161 VMRule **~409m** (в среднем на реплику); относительно пустого старта рост в **несколько раз**, есть запас до лимита.
-- **container_memory_working_set_bytes** (vmalert) — **~1.5–2 раза** (с ~200–300 Mi до ~373 Mi).
+- **container_cpu_usage_seconds_total** (vmalert) — при 203 VMRule **~545m** (в среднем на реплику); относительно пустого старта рост в **несколько раз**, есть запас до лимита.
+- **container_memory_working_set_bytes** (vmalert) — **~2–2.5 раза** (с ~200–300 Mi до ~508 Mi).
 
 ---
 
@@ -601,7 +608,7 @@ kubectl top pods -n vmks
 
 ## 3. VMStorage
 
-- **vm_rows** / **vm_rows_inserted_total** — рост **пропорционально числу рядов** (~1,88 млн при 161 VMRule; от нуля — в **тысячи раз**).
+- **vm_rows** / **vm_rows_inserted_total** — рост **пропорционально числу рядов** (~2,97 млн при 203 VMRule; от нуля — в **тысячи раз**).
 - **vm_storage_blocks** — рост в **разы** с ростом объёма данных.
 - **vm_cache_*_requests_total** / **vm_cache_*_misses_total** — объём запросов вырос в **разы**; miss rate может вырасти в **1,5–2 раза** при нехватке кэша.
 - **vm_http_requests_total** (job=vmstorage) — запросы от vmselect выросли в **десятки раз**.
@@ -619,31 +626,31 @@ kubectl top pods -n vmks
 ## 5. VMAgent
 
 - **scrape_series_added** (target=vmalert) — выросло в **десятки раз** (размер /metrics vmalert растёт с числом правил и алертов).
-- **scrape_body_size_bytes** (target=vmalert) — рост в **10–20+ раз** (при 161 VMRule уже сотни KB; при 1100+ VMRule может превысить maxScrapeSize 16 MB).
+- **scrape_body_size_bytes** (target=vmalert) — рост в **10–20+ раз** (при 203 VMRule уже сотни KB; при 1100+ VMRule может превысить maxScrapeSize 16 MB).
 - **scrape_samples_scraped** (job=vmalert) — рост **пропорционально** числу метрик vmalert (в **десятки раз**).
 
 ---
 
 ## 6. Victoria Metrics Operator
 
-- **process_cpu_seconds_total** (job=operator) — при 161 VMRule **~51m**; относительно малого числа VMRule рост в **2–5 раз** (reconcile по всем VMRule и сборке ConfigMap).
-- **process_resident_memory_bytes** (job=operator) — **~116Mi** при 161 VMRule; рост в **1.5–2 раза** с ростом числа VMRule.
+- **process_cpu_seconds_total** (job=operator) — при 203 VMRule **~52m**; относительно малого числа VMRule рост в **2–5 раз** (reconcile по всем VMRule и сборке ConfigMap).
+- **process_resident_memory_bytes** (job=operator) — **~134Mi** при 203 VMRule; рост в **1.5–2 раза** с ростом числа VMRule.
 
 ---
 
 ## 7. Kubernetes / ресурсы подов
 
 - **container_cpu_usage_seconds_total** (vmalert) — см. раздел 1; **container_cpu** для vmselect, vmstorage, vminsert — рост в **2–4 раза** при той же нагрузке.
-- **container_memory_working_set_bytes** (vmstorage) — при 161 VMRule **~1 500–1 650 Mi** на реплику; рост в **3–5 раз** от старта.
-- **container_memory_working_set_bytes** (vmselect) — **~154–171Mi**; рост в **1,5–2 раза**.
+- **container_memory_working_set_bytes** (vmstorage) — при 203 VMRule **~1 418–1 514 Mi** на реплику; рост в **3–5 раз** от старта.
+- **container_memory_working_set_bytes** (vmselect) — **~185–384Mi**; рост в **1,5–3 раза**.
 
 ---
 
 ## 8. Алерты и объём данных
 
-- **count(ALERTS)** — при 161 VMRule **~13 500**; рост от 0 до этого значения (фактически **на порядки**).
-- **count(ALERTS_FOR_STATE)** — **~12 250**; того же порядка, что и ALERTS; рост **пропорционально** числу алертов.
-- **totalSeries** (через API/tsdb) — при 161 VMRule **~1,88 млн** рядов; рост от нуля в **тысячи раз**.
+- **count(ALERTS)** — при 203 VMRule **~17 000**; рост от 0 до этого значения (фактически **на порядки**).
+- **count(ALERTS_FOR_STATE)** — **~16 400**; того же порядка, что и ALERTS; рост **пропорционально** числу алертов.
+- **totalSeries** (через API/tsdb) — при 203 VMRule **~2,97 млн** рядов; рост от нуля в **тысячи раз**.
 
 ---
 
@@ -662,16 +669,16 @@ kubectl top pods -n vmks
 
 ### Достигнутые результаты
 
-- **Распределение правил по ConfigMap'ам:** Operator стабильно дробит правила при приближении к лимиту ~1 MiB: каждый ConfigMap заполняется до ~505–508 KB, затем создаётся следующий. При ~161 VMRule наблюдается 10 ConfigMap'ов (~4,9 MB суммарно). Механизм предсказуем и масштабируется линейно.
-- **Перезапуски vmalert:** Каждое появление нового ConfigMap приводит к пересозданию Pod'а vmalert (из-за добавления volume/volumeMount). Интервал между рестартами составил ~14–18 мин. Горячая перезагрузка (SIGHUP) применяется только при обновлении существующих ConfigMap'ов без добавления новых.
+- **Распределение правил по ConfigMap'ам:** Operator стабильно дробит правила при приближении к лимиту ~1 MiB: каждый ConfigMap заполняется до ~505–508 KB, затем создаётся следующий. При ~203 VMRule наблюдается 13 ConfigMap'ов (~6,5 MB суммарно). Механизм предсказуем и масштабируется линейно.
+- **Перезапуски vmalert:** Каждое появление нового ConfigMap приводит к пересозданию Pod'а vmalert (из-за добавления volume/volumeMount). Интервал между рестартами составил ~14–15 мин. Горячая перезагрузка (SIGHUP) применяется только при обновлении существующих ConfigMap'ов без добавления новых.
 - **Сохранение состояния:** Механизм remoteWrite/remoteRead (`ALERTS`, `ALERTS_FOR_STATE`) работает корректно: после рестарта vmalert восстанавливает состояние алертов из VictoriaMetrics, счётчики `for` не сбрасываются, потери алертов не происходит. `vmalert_execution_errors_total = 0` и `vmalert_iteration_missed_total = 0` подтверждают стабильную работу. Временное падение `sum(ALERTS)` во время рестарта — следствие задержки первой итерации, а не потери данных.
-- **Пороги масштабируемости:** При ~161 VMRule (~13 500 алертов, ~1,88 млн рядов) vmalert потребляет ~409m CPU и ~373Mi памяти на реплику — нагрузка умеренная. VM Operator потребляет ~51m CPU. Линейная экстраполяция на 10 000 VMRule указывает на необходимость шардирования vmalert и масштабирования VMCluster.
+- **Пороги масштабируемости:** При ~203 VMRule (~17 000 алертов, ~2,97 млн рядов) vmalert потребляет ~545m CPU и ~508Mi памяти на реплику — нагрузка умеренная. VM Operator потребляет ~52m CPU. Линейная экстраполяция на 10 000 VMRule указывает на необходимость шардирования vmalert и масштабирования VMCluster.
 
 ### Основные выводы
 
 1. **Операционная модель:** При массовом добавлении VMRule следует учитывать периодические рестарты vmalert (по одному на каждый новый ConfigMap). Для production целесообразно применять правила батчами или через GitOps с контролируемым темпом, чтобы не создавать лишние ConfigMap'ы подряд и снизить частоту рестартов.
-2. **Ресурсы:** При 161 VMRule CPU vmalert ~409m — запас есть. До 2 000 VMRule достаточно увеличить CPU limit. При росте выше 2 000–5 000 VMRule необходимо шардирование vmalert и масштабирование VMCluster. vmstorage потребляет ~1.5 Gi RAM на реплику — следует учитывать при планировании ресурсов нод.
+2. **Ресурсы:** При 203 VMRule CPU vmalert ~545m — запас есть. До 2 000 VMRule достаточно увеличить CPU limit. При росте выше 2 000–5 000 VMRule необходимо шардирование vmalert и масштабирование VMCluster. vmstorage потребляет ~1.5 Gi RAM на реплику — следует учитывать при планировании ресурсов нод.
 3. **Отказоустойчивость:** Конфигурация с двумя репликами vmalert, remoteRead/remoteWrite и Alertmanager в кластерном режиме обеспечивает восстановление без потери состояния алертов и без дублирования уведомлений. RTO vmalert — в пределах минуты. На текущем этапе `vmalert_execution_errors_total = 0` и `vmalert_iteration_missed_total = 0`.
-4. **Мониторинг:** Ключевые метрики для раннего обнаружения перегрузки — `vmalert_iteration_duration_seconds` (текущий max ~1.65 сек), `vmalert_iteration_missed_total`, `container_cpu_usage_seconds_total` (vmalert), а также размер и количество ConfigMap'ов с правилами.
+4. **Мониторинг:** Ключевые метрики для раннего обнаружения перегрузки — `vmalert_iteration_duration_seconds` (текущий max ~1.57 сек), `vmalert_iteration_missed_total`, `container_cpu_usage_seconds_total` (vmalert), а также размер и количество ConfigMap'ов с правилами.
 
 Итог: VictoriaMetrics stack при правильной настройке (remoteRead/remoteWrite, HA vmalert и Alertmanager) выдерживает нагрузку тысячами правил и алертов с сохранением целостности состояния. Ограничения носят в основном ресурсный характер и снимаются шардированием и увеличением ресурсов в соответствии с приведёнными рекомендациями.
