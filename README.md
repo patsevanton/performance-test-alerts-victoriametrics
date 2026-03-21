@@ -14,7 +14,7 @@
 - `vmks-values.yaml` — основной values для `victoria-metrics-k8s-stack` (HA-конфигурация, ресурсы, ingress, лимиты поиска).
 - `victoria-logs-cluster-values.yaml` и `victoria-logs-collector-values.yaml` — деплой VictoriaLogs и сбор логов кластера.
 - `alerts/generate_alerts.py` — генератор нагрузочных `VMRule` (`500` файлов по `100` алертов каждый, детерминированный seed=42).
-- `alerts/apply-yaml-batch-01.sh` + `alerts/apply-yaml-lib.sh` — поэтапный apply с длинным stage-duration и аннотациями в Grafana.
+- `alerts/apply-yaml-batch-01.sh` — поэтапный apply с длинным stage-duration.
 - `alerts/monitor-batch.sh` — сторож во время apply (OOM vmalert, ошибки в VictoriaLogs, критичные метрики VM).
 - `alerts/vmrules/` — сгенерированные YAML-файлы (`500` в репозитории на текущий момент).
 
@@ -162,46 +162,7 @@ cd alerts
 
 Расчёт на **500** файлов из `generate_alerts.py`; при другом `num_vmrules` поправьте `APPLY_INDEX_END` в `apply-yaml-batch-01.sh` или добавьте батчи по образцу (в скрипте задаются `APPLY_BATCH_ID`, `APPLY_INDEX_START`, `APPLY_INDEX_END`).
 
-Общая логика: `[alerts/apply-yaml-lib.sh](alerts/apply-yaml-lib.sh)`. Быстро применить всё подряд: `[alerts/apply-yaml.sh](alerts/apply-yaml.sh)` (интервал 5 с).
-
-#### Создание токена Grafana
-
-Чтобы скрипты батчей могли писать аннотации в Grafana, нужен API-токен с правами редактора.
-
-**Ручное создание токена:**
-
-1. Откройте Grafana в браузере (например, [grafana.apatsev.org.ru](http://grafana.apatsev.org.ru)).
-2. Войдите под учётной записью с правами администратора (логин `admin`, пароль — из секрета `vmks-grafana`, см. раздел [victoria-metrics-k8s-stack](#victoria-metrics-k8s-stack)).
-3. В левом меню: **Administration** (иконка шестерёнки) → **Service accounts**.
-4. Нажмите **Add service account**, задайте имя (например, `apply-yaml-annotations`), роль **Editor** → **Create**. Откройте созданный аккаунт → вкладка **Tokens** → **Add service account token**, имя токена (например, `annotations`) → **Generate token**. Скопируйте токен — он показывается один раз.
-5. Экспортируйте переменные перед запуском (подставьте свой URL и токен):
-
-```bash
-export GRAFANA_URL="http://grafana.apatsev.org.ru"
-export GRAFANA_TOKEN="glsa_xxxxxxxx"
-```
-
-Затем запустите скрипты по порядку (см. блок команд ниже).
-
-Если `GRAFANA_TOKEN` не задан, скрипт запросит его в терминале; без токена аннотации не создаются.
-
-**Как включить аннотации на дашборде (новая Grafana):**
-
-Аннотации создаются скриптами через API и хранятся во встроенном хранилище Grafana (не в VictoriaMetrics). Чтобы они отображались на графиках:
-
-1. Откройте нужный дашборд (например, **VictoriaMetrics - vmalert**).
-2. Вверху справа нажмите **Dashboard settings** (иконка шестерёнки).
-3. В левой колонке выберите **Annotations** → **New annotation**.
-4. Заполните:
-  - **Name:** например, `apply-yaml-annotations`.
-  - **Data source:** выберите **Grafana** (встроенные аннотации). Не выбирайте VictoriaMetrics — наши аннотации создаются через API и лежат в Grafana.
-  - **Filter by tags:** при необходимости укажите тег `apply-yaml-batch01`. Можно оставить пустым — тогда показываются все аннотации с дашборда.
-  - **Enabled** — включено (галочка).
-  - **Color** — цвет маркеров (например, красный).
-  - **Show in** — **All panels**, чтобы аннотации были видны на всех панелях.
-5. Нажмите **Back to list**, затем **Save dashboard** (синяя кнопка вверху справа).
-
-После этого на графиках появятся вертикальные маркеры в моменты старта и окончания батча (тег `apply-yaml-batch01`).
+Батч-скрипт: `[alerts/apply-yaml-batch-01.sh](alerts/apply-yaml-batch-01.sh)`. Быстро применить всё подряд: `[alerts/apply-yaml.sh](alerts/apply-yaml.sh)` (интервал 5 с).
 
 **Запуск (из каталога `alerts`):**
 
@@ -212,9 +173,7 @@ cd alerts
 
 Один полный прогон батча 01 при настройках по умолчанию занимает **примерно 9–12 ч** (≈9 ч на паузы между apply плюс время 500 применений; при медленном API может быть дольше).
 
-Исходный код: [alerts/apply-yaml-lib.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-lib.sh), [alerts/apply-yaml-batch-01.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-batch-01.sh).
-
-Скрипты батча при старте и по завершении создают **аннотации в Grafana** (начало/конец батча). Для этого задайте переменные окружения (см. [Создание токена Grafana](#создание-токена-grafana)).
+Исходный код: [alerts/apply-yaml-batch-01.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-batch-01.sh).
 
 **Мониторинг ошибок:** в отдельном терминале запустите `./monitor-batch.sh` — при первой проблеме скрипт **печатает в stdout** текст (строки логов из VictoriaLogs с префиксом namespace/pod/container или ненулевые метрики). Момент и детали пишутся в `alerts/first-error-batch.txt` (`RESULT_FILE=...`). Проверяются: OOM vmalert; **LogsQL** по широкому OR (`i(error)`, fatal, panic, HTTP 5xx/422, timeout, OOM в тексте и т.д., см. `VL_LOGSQL_QUERY` в скрипте); метрики `vmalert_execution_errors_total`, `vm_concurrent_select_limit_reached_total`, суммарный rate **5xx** по `vmselect|vmstorage|vminsert`. Переменные: `INTERVAL` (30 с), `VL_LOG_LIMIT`, `VL_WINDOW_MIN`, `VL_LOGSQL_QUERY`; для самоподписанных сертификатов: `CURL_OPTS="-k"`.
 
@@ -233,7 +192,7 @@ cd alerts
 | ---------------------------------------- | ----------------------------------------- |
 | VMRule в кластере (всего)                | **434**                                   |
 | VMRule в namespace `vmks`                | **39**                                    |
-| Целевое количество алертов               | **~1 000 000**                            |
+| Целевое количество алертов               | **~50 000** (`500` VMRule × `100` алертов) |
 | Активные алерты (ALERTS)                 | **43 823**                                |
 | ALERTS_FOR_STATE                         | **39 415**                                |
 | sum(vmalert_alerts_firing)               | **422** (`matching timeseries > 1000000`) |
@@ -247,7 +206,7 @@ cd alerts
 
 ### Распределение правил по ConfigMap'ам
 
-Суммарный размер `rulefiles-`*: **15 937 038 bytes (~15.20 MiB)**, средний размер ConfigMap: **~514 KB**.  
+Суммарный размер `rulefiles-`*: **15 937 038 bytes (~15.20 MiB)** — достаточно (~15.20 MiB), средний размер ConfigMap: **~514 KB**.  
 Operator по-прежнему упаковывает большинство ConfigMap около ~505–511 KB и создаёт новый по мере роста числа `VMRule`.
 
 ### Перезапуски vmalert и восстановление состояния
@@ -427,18 +386,6 @@ vmalert настроен на запись и чтение состояния и
 | vmalert_execution_errors_total          | 0                                   |
 | vmalert_iteration_missed_total          | 0                                   |
 
-
-**Ресурсы нод кластера:**
-
-
-| Нода       | CPU   | CPU% | Memory | Memory% |
-| ---------- | ----- | ---- | ------ | ------- |
-| cl1...iror | 1545m | 19%  | 2394Mi | 11%     |
-| cl1...otib | 773m  | 9%   | 3426Mi | 16%     |
-| cl1...yruq | 1236m | 15%  | 4414Mi | 21%     |
-
-
-Кластер загружен на 11–21% по памяти и 9–19% по CPU — запас для дальнейшего роста нагрузки есть, но загрузка растёт.
 
 ### Экстраполяция
 
