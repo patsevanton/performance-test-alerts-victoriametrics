@@ -1,10 +1,10 @@
 # Helm: vm/victoria-metrics-k8s-stack 0.72.5 (VictoriaMetrics v1.138.0) — см. README.
 # Шкала нагрузки (ориентир при выборе ресурсов):
-#   ~260 VMRule (~5k алертов)     — порог: дефолтные alertmanager/vmalert дают throttling/OOM.
-#   ~660 VMRule (~15k алертов)    — vmstorage ~800–870Mi, vmalert ~930m CPU / ~570Mi, operator ~198m CPU.
-#   ~1k+ VMRule (~20k+ алертов)   — vmstorage ~1140–1150Mi; vmselect при 1Gi — риск OOM.
-#   ~1.2k+ VMRule (~26k+ алертов) — vmselect OOM при лимите 1Gi; operator при 512Mi — OOM.
-#   ~1.1k+ VMRule (31k+ алертов)  — /metrics vmalert превышает 16 MiB, нужен promscrape.maxScrapeSize.
+#   ~5k алертов     — порог: дефолтные alertmanager/vmalert дают throttling/OOM.
+#   ~15k алертов    — vmstorage ~800–870Mi, vmalert ~930m CPU / ~570Mi, operator ~198m CPU.
+#   ~20k+ алертов   — vmstorage ~1140–1150Mi; vmselect при 1Gi — риск OOM.
+#   ~26k+ алертов   — vmselect OOM при лимите 1Gi; operator при 512Mi — OOM.
+#   ~31k+ алертов   — /metrics vmalert превышает 16 MiB, нужен promscrape.maxScrapeSize.
 # Ниже значения с увеличенным запасом (нагрузка + ноутбук/длительные apply); выше — см. README (шардирование).
 
 grafana:
@@ -134,8 +134,8 @@ vmalert:
         # Факт ~1.2–1.3Gi при сотнях VMRule; 3Gi request избыточен для планировщика.
         memory: 2Gi
 
-# VMAgent: при ~1100+ VMRule (31 000+ алертов) эндпоинт /metrics vmalert превышает
-# дефолтный maxScrapeSize (16 МБ) — vmagent перестаёт скрейпить vmalert. 128 МБ — до ~2k+ VMRule.
+# VMAgent: при ~31 000+ алертов эндпоинт /metrics vmalert превышает
+# дефолтный maxScrapeSize (16 МБ) — vmagent перестаёт скрейпить vmalert. 128 МБ — до ~200 000 алертов.
 vmagent:
   spec:
     extraArgs:
