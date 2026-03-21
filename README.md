@@ -535,13 +535,11 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query
   | jq -r '.data.result[0].value[1]'
 ```
 
----
 
 # Метрики, выросшие при нагрузке (VictoriaMetrics stack)
 
 Оценки даны для роста от малой нагрузки до **~23 000 алертов** (~252 VMRule, ~4,79 млн рядов). Базовый URL запросов: `http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometheus`.
 
----
 
 ## 1. VMAlert (vmalert)
 
@@ -554,7 +552,6 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query
 - **container_cpu_usage_seconds_total** (vmalert) — при ~~23 000 алертов **~~723m** (в среднем на реплику); относительно пустого старта рост в **несколько раз**, запас до лимита 4 CPU.
 - **container_memory_working_set_bytes** (vmalert) — **~2.5–3 раза** (с ~200–300 Mi до ~676 Mi).
 
----
 
 ## 2. VMSelect
 
@@ -564,7 +561,6 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query
 - **vm_select_request_duration_seconds** — p99 вырос в **2–4 раза** (тяжёлые запросы по ALERTS_FOR_STATE и правилам).
 - **vm_http_requests_total** (job=vmselect) — запросы к select выросли **пропорционально числу групп и интервалам** (в **десятки раз**).
 
----
 
 ## 3. VMStorage
 
@@ -573,7 +569,6 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query
 - **vm_cache_*_requests_total** / **vm_cache_*_misses_total** — объём запросов вырос в **разы**; miss rate может вырасти в **1,5–2 раза** при нехватке кэша.
 - **vm_http_requests_total** (job=vmstorage) — запросы от vmselect выросли в **десятки раз**.
 
----
 
 ## 4. VMInsert
 
@@ -581,7 +576,6 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query
 - **vm_insert_request_duration_seconds** — при росте объёма записи p99 может вырасти в **1,5–3 раза**.
 - **vm_insert_requests_total** — рост **пропорционально** записи (в **десятки раз** относительно малой нагрузки).
 
----
 
 ## 5. VMAgent
 
@@ -589,14 +583,12 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query
 - **scrape_body_size_bytes** (target=vmalert) — рост в **10–20+ раз** (при ~23 000 алертов уже сотни KB; при ~50 000+ алертов может превысить maxScrapeSize 16 MB).
 - **scrape_samples_scraped** (job=vmalert) — рост **пропорционально** числу метрик vmalert (в **десятки раз**).
 
----
 
 ## 6. Victoria Metrics Operator
 
 - **process_cpu_seconds_total** (job=operator) — при ~~23 000 алертов **~~52m**; относительно малой нагрузки рост в **2–5 раз** (reconcile по всем правилам и сборке ConfigMap).
 - **process_resident_memory_bytes** (job=operator) — **~173Mi** при ~23 000 алертов; рост в **1.5–2 раза** с ростом числа алертов.
 
----
 
 ## 7. Kubernetes / ресурсы подов
 
@@ -604,7 +596,6 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query
 - **container_memory_working_set_bytes** (vmstorage) — при ~~23 000 алертов **~~1 613–1 662 Mi** на реплику; рост в **3–5 раз** от старта.
 - **container_memory_working_set_bytes** (vmselect) — **~221–257Mi**; рост в **1,5–3 раза**.
 
----
 
 ## 8. Алерты и объём данных
 
@@ -612,7 +603,6 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query
 - **count(ALERTS_FOR_STATE)** — **~21 298**; того же порядка, что и ALERTS; рост **пропорционально** числу алертов.
 - **totalSeries** (через API/tsdb) — при ~~23 000 алертов **~~4,79 млн** рядов; рост от нуля в **тысячи раз**.
 
----
 
 ## Как считать прирост
 
@@ -621,7 +611,6 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query
 - Список имён метрик: `GET /api/v1/label/__name__/values`, затем фильтр по префиксу (`vmalert_`*, `vm_concurrent_select_*` и т.д.).
 - Ресурсы подов: `kubectl top pods -n vmks`.
 
----
 
 ## Заключение и выводы
 
