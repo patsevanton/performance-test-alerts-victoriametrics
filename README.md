@@ -95,48 +95,6 @@ helm upgrade --install victoria-logs-collector vm/victoria-logs-collector \
 
 Проверка: `kubectl get pods -n victoria-logs-collector`. Логи стека (vmks, vmalert, vmagent и др.) можно запрашивать в Grafana через datasource VictoriaLogs или в UI VictoriaLogs.
 
-### Chaos Mesh
-
-[Chaos Mesh](https://chaos-mesh.org/) — платформа для chaos engineering в Kubernetes. Можно использовать для проверки отказоустойчивости стенда (pod-kill, network partition, stress и т.д.).
-
-**Установка:**
-
-```bash
-helm repo add chaos-mesh https://charts.chaos-mesh.org
-helm repo update
-
-helm upgrade --install chaos-mesh chaos-mesh/chaos-mesh \
-  --namespace chaos-mesh \
-  --create-namespace \
-  -f chaos-mesh/chaos-mesh-values.yaml \
-  --version 2.8.1 \
-  --wait
-```
-
-Исходный код файла [chaos-mesh/chaos-mesh-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chaos-mesh/chaos-mesh-values.yaml).
-
-Проверка: `kubectl get pods -n chaos-mesh`.
-
-**Сбор метрик Chaos Mesh в VictoriaMetrics K8s Stack:**
-
-```bash
-kubectl apply -f chaos-mesh/chaos-mesh-vmservicescrape.yaml
-```
-
-Исходный код файла [chaos-mesh/chaos-mesh-vmservicescrape.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chaos-mesh/chaos-mesh-vmservicescrape.yaml).
-
-**Доступ к Dashboard (RBAC + токен):**
-
-```bash
-kubectl apply -f chaos-mesh/chaos-mesh-rbac.yaml
-sleep 3
-kubectl get secret chaos-mesh-admin-token -n chaos-mesh -o jsonpath='{.data.token}' | base64 -d; echo
-```
-
-Исходный код файла [chaos-mesh/chaos-mesh-rbac.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chaos-mesh/chaos-mesh-rbac.yaml).
-
-Токен вставить в Chaos Mesh Dashboard. Ingress: `chaos-dashboard.apatsev.org.ru` (из [chaos-mesh/chaos-mesh-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chaos-mesh/chaos-mesh-values.yaml)).
-
 ### Генерация нагрузочных VMRule
 
 Скрипт [`alerts/generate_alerts.py`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/generate_alerts.py) генерирует YAML-файлы `VMRule` в директорию `alerts/vmrules/`. По умолчанию создаётся **2 000** файлов; каждый `VMRule` содержит **4–6 групп** (с `interval` 30s/1m/2m) и **100 алертов** суммарно.
@@ -478,7 +436,6 @@ vmalert настроен на запись и чтение состояния и
 ### Долгосрочные
 
 - [ ] Cross-region replication на уровне кластера
-- [ ] Chaos Engineering: использовать [Chaos Mesh](https://github.com/patsevanton/performance-test-alerts-victoriametrics#chaos-mesh-опционально) для валидации процедур восстановления (pod-kill vmalert/vmstorage, network partition и т.д.)
 
 ## Полезные команды для мониторинга
 

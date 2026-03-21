@@ -1,5 +1,5 @@
 # VictoriaLogs cluster — хранилище логов (LogsQL).
-# Адаптировано из https://github.com/patsevanton/strimzi-kafka-chaos-testing
+# Адаптировано из https://github.com/patsevanton/performance-test-alerts-victoriametrics
 # Требование: VictoriaMetrics K8s Stack установлен первым (CRD VMServiceScrape).
 
 vlselect:

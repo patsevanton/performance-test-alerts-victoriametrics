@@ -1,5 +1,5 @@
 # Victoria-logs-collector — сбор логов со всех контейнеров в кластере.
-# Адаптировано из https://github.com/patsevanton/strimzi-kafka-chaos-testing
+# Адаптировано из https://github.com/patsevanton/performance-test-alerts-victoriametrics
 # Требование: VictoriaLogs cluster развёрнут (vlinsert доступен).
 
 remoteWrite:
