@@ -14,7 +14,7 @@
 - `vmks-values.yaml` — основной values для `victoria-metrics-k8s-stack` (HA-конфигурация, ресурсы, ingress, лимиты поиска).
 - `victoria-logs-cluster-values.yaml` и `victoria-logs-collector-values.yaml` — деплой VictoriaLogs и сбор логов кластера.
 - `alerts/generate_alerts.py` — генератор нагрузочных `VMRule` (`500` файлов по `100` алертов каждый, детерминированный seed=42).
-- `alerts/apply-yaml-batch-01.sh` — поэтапный apply с длинным stage-duration.
+- `alerts/apply-yaml-batch.sh` — поэтапный apply с длинным stage-duration.
 - `alerts/monitor-batch.sh` — сторож во время apply (OOM vmalert, ошибки в VictoriaLogs, критичные метрики VM).
 - `alerts/vmrules/` — сгенерированные YAML-файлы (`500` в репозитории на текущий момент).
 
@@ -157,23 +157,23 @@ cd alerts
 
 | Батч | Скрипт                   | Глобальные индексы (1…N) |
 | ---- | ------------------------ | ------------------------ |
-| 01   | `apply-yaml-batch-01.sh` | 1–500                    |
+| 01   | `apply-yaml-batch.sh` | 1–500                    |
 
 
-Расчёт на **500** файлов из `generate_alerts.py`; при другом `num_vmrules` поправьте `APPLY_INDEX_END` в `apply-yaml-batch-01.sh` или добавьте батчи по образцу (в скрипте задаются `APPLY_BATCH_ID`, `APPLY_INDEX_START`, `APPLY_INDEX_END`).
+Расчёт на **500** файлов из `generate_alerts.py`; при другом `num_vmrules` поправьте `APPLY_INDEX_END` в `apply-yaml-batch.sh` или добавьте батчи по образцу (в скрипте задаются `APPLY_BATCH_ID`, `APPLY_INDEX_START`, `APPLY_INDEX_END`).
 
-Батч-скрипт: `[alerts/apply-yaml-batch-01.sh](alerts/apply-yaml-batch-01.sh)`. Быстро применить всё подряд: `[alerts/apply-yaml.sh](alerts/apply-yaml.sh)` (интервал 5 с).
+Батч-скрипт: `[alerts/apply-yaml-batch.sh](alerts/apply-yaml-batch.sh)`. Быстро применить всё подряд: `[alerts/apply-yaml.sh](alerts/apply-yaml.sh)` (интервал 5 с).
 
 **Запуск (из каталога `alerts`):**
 
 ```bash
 cd alerts
-./apply-yaml-batch-01.sh
+./apply-yaml-batch.sh
 ```
 
-Один полный прогон батча 01 при настройках по умолчанию занимает **примерно 9–12 ч** (≈9 ч на паузы между apply плюс время 500 применений; при медленном API может быть дольше).
+Один полный прогон при настройках по умолчанию занимает **примерно 9–12 ч** (≈9 ч на паузы между apply плюс время 500 применений; при медленном API может быть дольше).
 
-Исходный код: [alerts/apply-yaml-batch-01.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-batch-01.sh).
+Исходный код: [alerts/apply-yaml-batch.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-batch.sh).
 
 **Мониторинг ошибок:** в отдельном терминале запустите `./monitor-batch.sh` — при первой проблеме скрипт **печатает в stdout** текст (строки логов из VictoriaLogs с префиксом namespace/pod/container или ненулевые метрики). Момент и детали пишутся в `alerts/first-error-batch.txt` (`RESULT_FILE=...`). Проверяются: OOM vmalert; **LogsQL** по широкому OR (`i(error)`, fatal, panic, HTTP 5xx/422, timeout, OOM в тексте и т.д., см. `VL_LOGSQL_QUERY` в скрипте); метрики `vmalert_execution_errors_total`, `vm_concurrent_select_limit_reached_total`, суммарный rate **5xx** по `vmselect|vmstorage|vminsert`. Переменные: `INTERVAL` (30 с), `VL_LOG_LIMIT`, `VL_WINDOW_MIN`, `VL_LOGSQL_QUERY`; для самоподписанных сертификатов: `CURL_OPTS="-k"`.
 
@@ -405,9 +405,9 @@ vmalert настроен на запись и чтение состояния и
 
 Ориентиры «при каком количестве алертов выставлять те или иные ресурсы» — в начале [vmks-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/vmks-values.yaml) (блок **Шкала нагрузки**).
 
-1. **До ~80 000 алертов:** увеличить CPU limit vmalert до 3–4 CPU и контролировать `vmalert_iteration_duration_seconds`
-2. **~80 000–100 000 алертов:** подготовить шардирование vmalert (разделение правил через `-rule.partition` или разные `ruleSelector`) и масштабирование VMCluster
-3. **Выше ~100 000 алертов:** вынесено за рамки текущей экстраполяции; требуется отдельный прогон и пересчёт capacity
+1. **До ~100 000 алертов:** заложить лимиты vmalert на уровне 3–4 CPU и ~3 Gi RAM на реплику, плюс мониторинг `vmalert_iteration_duration_seconds` и `vmalert_iteration_missed_total`
+2. **К ~100 000 алертов:** заранее включить шардирование vmalert (разделение правил через `-rule.partition` или разные `ruleSelector`) и масштабирование VMCluster (прежде всего `vmselect`/`vmstorage`)
+3. **Выше ~100 000 алертов:** считать новой зоной нагрузки; нужен отдельный прогон и пересчёт capacity с фактическими метриками
 
 ## Рекомендации по повышению устойчивости
 
@@ -419,7 +419,7 @@ vmalert настроен на запись и чтение состояния и
 
 ### Среднесрочные
 
-- Подготовить шардирование vmalert при росте к ~100 000 алертов
+- Подготовить шардирование vmalert до достижения ~100 000 алертов
 - Внедрить GitOps (ArgoCD/Flux) для автоматического восстановления VMRule из Git
 - Добавить Network Policies для изоляции трафика между компонентами
 
