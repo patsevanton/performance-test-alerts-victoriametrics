@@ -139,7 +139,7 @@ kubectl get secret chaos-mesh-admin-token -n chaos-mesh -o jsonpath='{.data.toke
 
 ### Генерация нагрузочных VMRule
 
-Скрипт [`alerts/generate_alerts.py`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/generate_alerts.py) генерирует YAML-файлы `VMRule` в директорию `alerts/vmrules/`. По умолчанию создаётся **10 000** файлов; каждый `VMRule` содержит **4–6 групп** (с `interval` 30s/1m/2m) и **20 алертов** суммарно.
+Скрипт [`alerts/generate_alerts.py`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/generate_alerts.py) генерирует YAML-файлы `VMRule` в директорию `alerts/vmrules/`. По умолчанию создаётся **2 000** файлов; каждый `VMRule` содержит **4–6 групп** (с `interval` 30s/1m/2m) и **100 алертов** суммарно.
 
 Исходный код файла [alerts/generate_alerts.py](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/generate_alerts.py).
 
@@ -152,17 +152,24 @@ cd alerts
 
 ### Применение VMRule в Kubernetes
 
-Применение разбито на **три этапа** с разным темпом (и возможностью снимать графики нагрузки между этапами). Используйте три скрипта по порядку:
+Список файлов в `alerts/vmrules/` строится как `find … | sort -V` — **глобальный порядок** (индексы 1…N в таблице ниже — позиция в этом списке).
 
-| Этап | Скрипт | Диапазон файлов | Интервал |
-|------|--------|-----------------|----------|
-| Начальный | `apply-yaml-stage1.sh` | 1–400 | 5 с |
-| Средний | `apply-yaml-stage2.sh` | 401–1222 | 30 с |
-| Завершающий | `apply-yaml-stage3.sh` | 1223–10000 | 90 с |
+**Без сохранения прогресса:** каждый запуск скрипта батча снова проходит **весь** его диапазон с первого файла. Если была ошибка — остановились, исправили, запустили тот же скрипт ещё раз (`kubectl apply` идемпотентен).
+
+**Темп:** между apply паузы так, чтобы суммарный sleep на батч был ≈ `STAGE_DURATION_SEC` (по умолчанию 9 ч).
+
+| Батч | Скрипт | Глобальные индексы (1…N) |
+|------|--------|--------------------------|
+| 01 | `apply-yaml-batch-01.sh` | 1–1000 |
+| 02 | `apply-yaml-batch-02.sh` | 1001–2000 |
+
+Расчёт на **2 000** файлов из `generate_alerts.py`; при другом `num_vmrules` поправьте диапазоны в двух скриптах или добавьте батчи по образцу (в скрипте задаются `APPLY_BATCH_ID`, `APPLY_INDEX_START`, `APPLY_INDEX_END`).
+
+Общая логика: [`alerts/apply-yaml-lib.sh`](alerts/apply-yaml-lib.sh). Быстро применить всё подряд: [`alerts/apply-yaml.sh`](alerts/apply-yaml.sh) (интервал 5 с).
 
 #### Создание токена Grafana
 
-Чтобы скрипты этапов могли писать аннотации в Grafana, нужен API-токен с правами редактора.
+Чтобы скрипты батчей могли писать аннотации в Grafana, нужен API-токен с правами редактора.
 
 **Ручное создание токена:**
 
@@ -170,7 +177,7 @@ cd alerts
 2. Войдите под учётной записью с правами администратора (логин `admin`, пароль — из секрета `vmks-grafana`, см. раздел [victoria-metrics-k8s-stack](#victoria-metrics-k8s-stack)).
 3. В левом меню: **Administration** (иконка шестерёнки) → **Service accounts**.
 4. Нажмите **Add service account**, задайте имя (например, `apply-yaml-annotations`), роль **Editor** → **Create**. Откройте созданный аккаунт → вкладка **Tokens** → **Add service account token**, имя токена (например, `annotations`) → **Generate token**. Скопируйте токен — он показывается один раз.
-5. Экспортируйте переменные перед запуском скриптов этапов (подставьте свой URL и токен):
+5. Экспортируйте переменные перед запуском (подставьте свой URL и токен):
 
 ```bash
 export GRAFANA_URL="http://grafana.apatsev.org.ru"
@@ -179,7 +186,7 @@ export GRAFANA_TOKEN="glsa_xxxxxxxx"
 
 Затем запустите скрипты по порядку (см. блок команд ниже).
 
-Если `GRAFANA_URL` или `GRAFANA_TOKEN` не заданы, скрипты работают как раньше, но аннотации не создаются.
+Если `GRAFANA_TOKEN` не задан, скрипт запросит его в терминале; без токена аннотации не создаются.
 
 **Как включить аннотации на дашборде (новая Grafana):**
 
@@ -191,38 +198,31 @@ export GRAFANA_TOKEN="glsa_xxxxxxxx"
 4. Заполните:
    - **Name:** например, `apply-yaml-annotations`.
    - **Data source:** выберите **Grafana** (встроенные аннотации). Не выбирайте VictoriaMetrics — наши аннотации создаются через API и лежат в Grafana.
-   - **Filter by tags:** при необходимости укажите теги через запятую: `apply-yaml-stage1`, `apply-yaml-stage2`, `apply-yaml-stage3`. Можно оставить пустым — тогда показываются все аннотации с дашборда.
+   - **Filter by tags:** при необходимости укажите теги `apply-yaml-batch01`, `apply-yaml-batch02`. Можно оставить пустым — тогда показываются все аннотации с дашборда.
    - **Enabled** — включено (галочка).
    - **Color** — цвет маркеров (например, красный).
    - **Show in** — **All panels**, чтобы аннотации были видны на всех панелях.
 5. Нажмите **Back to list**, затем **Save dashboard** (синяя кнопка вверху справа).
 
-После этого на графиках появятся вертикальные маркеры в моменты старта и окончания каждого этапа (теги `apply-yaml-stage1`, `apply-yaml-stage2`, `apply-yaml-stage3`).
+После этого на графиках появятся вертикальные маркеры в моменты старта и окончания батча (теги `apply-yaml-batch01`, `apply-yaml-batch02`).
 
-**Запуск (из каталога `alerts`):**
+**Запуск (из каталога `alerts`):** выберите батч (например, пока не закончите `batch-01`, к следующему не переходите). Пример:
 
 ```bash
 cd alerts
-./apply-yaml-stage1.sh
-# после этапа 1 — анализ, при необходимости мониторинг ошибок
-./apply-yaml-stage2.sh
-# после этапа 2 — анализ
-./apply-yaml-stage3.sh
+./apply-yaml-batch-01.sh
+./apply-yaml-batch-02.sh
 ```
 
-Исходный код файлов: [alerts/apply-yaml-stage1.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-stage1.sh), [alerts/apply-yaml-stage2.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-stage2.sh), [alerts/apply-yaml-stage3.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-stage3.sh).
+Исходный код: [alerts/apply-yaml-lib.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-lib.sh), [alerts/apply-yaml-batch-01.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-batch-01.sh), [alerts/apply-yaml-batch-02.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-batch-02.sh).
 
-Скрипты при старте и по завершении создают **аннотации в Grafana** (время начала и окончания этапа), чтобы на графиках было видно, когда какой этап выполнялся. Для этого задайте переменные окружения (см. [Создание токена Grafana](#создание-токена-grafana)).
+Скрипты батча при старте и по завершении создают **аннотации в Grafana** (начало/конец батча). Для этого задайте переменные окружения (см. [Создание токена Grafana](#создание-токена-grafana)).
 
-**Мониторинг появления ошибок во время этапа 1:** в отдельном терминале запустите `./monitor-stage1.sh`. Скрипт каждые 30 с опрашивает VictoriaLogs (victorialogs.apatsev.org.ru) и vmselect (vmselect.apatsev.org.ru) — логи с «error» и метрики `vmalert_execution_errors_total`, `vm_concurrent_select_limit_reached_total`, 5xx на vmselect. При первом обнаружении ошибок момент записывается в `alerts/first-error-stage1.txt`. Интервал задаётся переменной `INTERVAL` (по умолчанию 30), для самоподписанных сертификатов: `CURL_OPTS="-k"`.
+**Мониторинг ошибок:** в отдельном терминале запустите `./monitor-batch.sh` — при первой проблеме (OOM vmalert, ошибки в логах VictoriaLogs или метрики на vmselect) момент пишется в `alerts/first-error-batch.txt` (путь можно переопределить: `RESULT_FILE=...`). Интервал — `INTERVAL` (по умолчанию 30 с), для самоподписанных сертификатов: `CURL_OPTS="-k"`.
 
-Исходный код файла [alerts/monitor-stage1.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/monitor-stage1.sh).
+Исходный код: [alerts/monitor-batch.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/monitor-batch.sh).
 
-**Этап 2:** аналогично запустите `./monitor-stage2.sh` — момент первой ошибки записывается в `alerts/first-error-stage2.txt`.
-
-Исходный код файла [alerts/monitor-stage2.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/monitor-stage2.sh).
-
-После каждого этапа можно анализировать графики нагрузки на vmalert, vmselect, operator.
+После батча можно анализировать графики нагрузки на vmalert, vmselect, operator.
 
 ## Текущее состояние (тест в процессе)
 
