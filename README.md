@@ -17,7 +17,7 @@
 
 ### VictoriaMetrics Stack
 
-**Версия:** `victoria-metrics-k8s-stack` v0.71.1 (VictoriaMetrics v1.136.0), namespace `vmks`.
+**Версия:** `victoria-metrics-k8s-stack` v0.72.5 (VictoriaMetrics v1.138.0), namespace `vmks`.
 
 #### Компоненты
 
@@ -46,7 +46,7 @@ helm repo update
 
 helm upgrade --install vmks vm/victoria-metrics-k8s-stack \
   --namespace vmks --create-namespace \
-  --version 0.71.1 \
+  --version 0.72.5 \
   --wait --values vmks-values.yaml
 ```
 
@@ -74,6 +74,7 @@ helm repo update
 helm upgrade --install victoria-logs-cluster vm/victoria-logs-cluster \
   --namespace victoria-logs-cluster \
   --create-namespace \
+  --version 0.0.31 \
   --wait \
   --timeout 15m \
   -f victoria-logs-cluster-values.yaml
@@ -89,6 +90,7 @@ helm upgrade --install victoria-logs-cluster vm/victoria-logs-cluster \
 helm upgrade --install victoria-logs-collector vm/victoria-logs-collector \
   --namespace victoria-logs-collector \
   --create-namespace \
+  --version 0.2.13 \
   --wait \
   --timeout 15m \
   -f victoria-logs-collector-values.yaml

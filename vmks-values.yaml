@@ -1,3 +1,4 @@
+# Helm: vm/victoria-metrics-k8s-stack 0.72.5 (VictoriaMetrics v1.138.0) — см. README.
 # Шкала нагрузки (ориентир при выборе ресурсов):
 #   ~260 VMRule (~5k алертов)     — порог: дефолтные alertmanager/vmalert дают throttling/OOM.
 #   ~660 VMRule (~15k алертов)    — vmstorage ~800–870Mi, vmalert ~930m CPU / ~570Mi, operator ~198m CPU.
