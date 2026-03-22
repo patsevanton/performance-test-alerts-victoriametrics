@@ -187,7 +187,7 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/status/tsdb
 
 ### Ресурсы подов при росте нагрузки
 
-Первая строка таблиц — базовый снимок **до** нагрузочного прогона (`apply-yaml.sh`): `kubectl top pods -n vmks` (среднее по двум подам там, где есть две реплики). Строки **5000** и **10000** — оценки по историческим рядам vmselect (см. пояснение под таблицей RPS); прирост ресурсов ожидается пропорционален `count(ALERTS)`.
+Первая строка таблиц — базовый снимок **до** нагрузочного прогона (`apply-yaml.sh`): `kubectl top pods -n vmks` (среднее по двум подам там, где есть две реплики). Строки **5000–35000** — срезы из VictoriaMetrics в моменты времени, когда `count(ALERTS)` ближе всего к целевому уровню: `query_range` с шагом **1 минуты** по истории прогона **2026-03-22** (UTC), затем instant `query` с параметром `time` для метрик подов (`pod_cpu_usage_seconds_total` / `pod_memory_working_set_bytes`, `namespace=vmks`, среднее по репликам компонента) и операционных метрик; отклонение |`count(ALERTS)` − N| ≤ **150** для каждого уровня N. Прирост ресурсов ожидается пропорционален `count(ALERTS)`.
 
 > **Важно:** `kubectl top` использует метрики `pod_cpu_usage_seconds_total` и `pod_memory_working_set_bytes` из эндпоинта kubelet `/metrics/resource`. При верификации этих данных через PromQL/MetricsQL необходимо использовать именно эти метрики, а **не** `container_cpu_usage_seconds_total` / `container_memory_working_set_bytes` с `sum by (pod)` — последние дублируются из двух источников (`/metrics/cadvisor` и `/metrics/resource`) и дают завышенные значения (~2x). Подробнее — в разделе [Дублирование метрик kubelet](#дублирование-метрик-kubelet-metricscadvisor-vs-metricsresource).
 
@@ -198,8 +198,13 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/status/tsdb
 | ALERTS | vmalert | vmstorage | vmselect | vminsert | vmagent | operator |
 | ------ | ------- | --------- | -------- | -------- | ------- | -------- |
 | 455    | 16m     | 45m       | 37m      | 12m      | 31m     | 5m       |
-| 5000   | 92m     | 79m       | 88m      | 15m      | 50m     | 28m      |
-| 10000  | 162m    | 113m      | 169m     | 21m      | 78m     | 25m      |
+| 5000   | 151m    | 118m      | 109m     | 15m      | 54m     | 16m      |
+| 10000  | 251m    | 96m       | 127m     | 19m      | 75m     | 34m      |
+| 15000  | 438m    | 146m      | 218m     | 28m      | 101m    | 55m      |
+| 20000  | 609m    | 156m      | 276m     | 33m      | 145m    | 67m      |
+| 25000  | 884m    | 433m      | 342m     | 40m      | 173m    | 104m     |
+| 30000  | 905m    | 505m      | 352m     | 45m      | 179m    | 97m      |
+| 35000  | 1086m   | 322m      | 423m     | 46m      | 202m    | 121m     |
 
 
 #### Memory (на реплику)
@@ -208,8 +213,13 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/status/tsdb
 | ALERTS | vmalert | vmstorage | vmselect | vminsert | vmagent | operator |
 | ------ | ------- | --------- | -------- | -------- | ------- | -------- |
 | 455    | 44Mi    | 227Mi     | 45Mi     | 62Mi     | 83Mi    | 39Mi     |
-| 5000   | 90Mi    | 587Mi     | 89Mi     | 72Mi     | 88Mi    | 66Mi     |
-| 10000  | 137Mi   | 1029Mi    | 248Mi    | 131Mi    | 96Mi    | 89Mi     |
+| 5000   | 136Mi   | 601Mi     | 156Mi    | 64Mi     | 96Mi    | 70Mi     |
+| 10000  | 108Mi   | 744Mi     | 150Mi    | 91Mi     | 107Mi   | 85Mi     |
+| 15000  | 357Mi   | 1529Mi    | 369Mi    | 145Mi    | 160Mi   | 88Mi     |
+| 20000  | 456Mi   | 2057Mi    | 390Mi    | 128Mi    | 168Mi   | 148Mi    |
+| 25000  | 633Mi   | 2341Mi    | 495Mi    | 154Mi    | 254Mi   | 175Mi    |
+| 30000  | 508Mi   | 2548Mi    | 344Mi    | 261Mi    | 203Mi   | 197Mi    |
+| 35000  | 930Mi   | 2650Mi    | 919Mi    | 202Mi    | 254Mi   | 238Mi    |
 
 
 ### RPS и операционные метрики
@@ -217,8 +227,15 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/status/tsdb
 | ALERTS | API Server RPS | API Server p99 lat | API Server CPU | vmselect HTTP RPS | vmstorage HTTP RPS | vminsert HTTP RPS | vmalert iter_duration (max) | vmalert exec_errors | vmalert iter_missed | vmalert remotewrite_req |
 | ------ | -------------- | ------------------ | -------------- | ----------------- | ------------------ | ----------------- | --------------------------- | ------------------- | ------------------- | ----------------------- |
 | 455    | 11.4           | 34 ms              | 70m            | 23.2              | 0.1                | 8.0               | 1.01 сек                    | 2 189               | 0                   | 144                     |
-| 5000   | 11.9           | 47 ms              | 82m            | 207               | 0.1                | 10.2              | 0.83 сек                    | 0                   | 0                   | 854                     |
-| 10000  | 13.4           | 46 ms              | 89m            | 404               | 0.1                | 11.1              | 1.33 сек                    | 0                   | 0                   | 1535                    |
+| 5000   | 12.3           | 48 ms              | 84m            | 206               | 0.1                | 10.5              | 0.85 сек                    | 0                   | 0                   | 861                     |
+| 10000  | 12.3           | 47 ms              | 83m            | 339               | 0.1                | 10.7              | 0.90 сек                    | 0                   | 0                   | 697                     |
+| 15000  | 13.1           | 43 ms              | 86m            | 634               | 0.1                | 11.1              | 2.42 сек                    | 0                   | 0                   | 2372                    |
+| 20000  | 12.8           | 76 ms              | 88m            | 796               | 0.1                | 11.3              | 3.00 сек                    | 0                   | 0                   | 2961                    |
+| 25000  | 13.7           | 79 ms              | 94m            | 1021              | 0.1                | 11.6              | 5.39 сек                    | 0                   | 0                   | 3796                    |
+| 30000  | 13.2           | 85 ms              | 96m            | 1105              | 0.1                | 11.8              | 4.67 сек                    | 0                   | 0                   | 4367                    |
+| 35000  | 13.4           | 84 ms              | 100m           | 1501              | 0.1                | 12.1              | 9.57 сек                    | 0                   | 0                   | 5415                    |
+
+Колонка **vmalert remotewrite_req** — `sum(rate(vmalert_remotewrite_total[5m]))` (RPS remoteWrite). Воспроизведение строк таблицы: [scripts/fetch_capacity_snapshots.py](scripts/fetch_capacity_snapshots.py).
 
 ## Рекомендации по повышению устойчивости
 
@@ -356,8 +373,8 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query
 curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query=sum(rate(apiserver_request_total[5m]))' \
   | jq -r '.data.result[0].value[1]'
 
-# p99 latency
-curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query=histogram_quantile(0.99, sum(rate(apiserver_request_duration_seconds_bucket[5m])) by (le))' \
+# p99 latency (исключить le="+Inf", иначе p99 может быть завышен)
+curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query=histogram_quantile(0.99, sum(rate(apiserver_request_duration_seconds_bucket{le!="+Inf"}[5m])) by (le))' \
   | jq -r '.data.result[0].value[1]'
 ```
 
@@ -442,7 +459,7 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query
 
 ## Заключение и выводы
 
-> Выводы ниже основаны на предыдущем прогоне теста (до ~44 000 алертов). Срез «до» нагрузки и оценки **5000** / **10000** `ALERTS` — в таблицах [Capacity Planning](#capacity-planning); текущий срез кластера (частично применённые `vmrule-*`) — в [Текущее состояние](#текущее-состояние-снимок-на-2026-03-22).
+> Выводы ниже основаны на предыдущем прогоне теста (до ~44 000 алертов). Срез «до» нагрузки и исторические срезы **5000–35000** `ALERTS` — в таблицах [Capacity Planning](#capacity-planning); текущий срез кластера (частично применённые `vmrule-*`) — в [Текущее состояние](#текущее-состояние-снимок-на-2026-03-22).
 
 Проведённое нагрузочное тестирование VictoriaMetrics stack большим количеством VMRule подтвердило заявленные цели и позволило сформулировать практические выводы.
 
