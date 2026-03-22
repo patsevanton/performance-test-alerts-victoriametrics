@@ -213,9 +213,9 @@ python3 scripts/fetch_capacity_snapshots.py
 
 | Метрика | Чем грозит рост метрики | Порядок роста (прогон) |
 | --- | --- | --- |
-| `container_cpu_usage_seconds_total` (pod vmalert) | Исчерпание CPU и задержки оценки правил вплоть до пропусков итераций при приближении к лимитам | **~28 m** CPU на 1000 `ALERTS` |
+| `container_cpu_usage_seconds_total` (pod vmalert) | Исчерпание CPU и задержки оценки правил вплоть до пропусков итераций при приближении к лимитам, но при увеличении **~28 m** CPU на 1000 `ALERTS` риск перегрузки CPU маловероятен | **~28 m** CPU на 1000 `ALERTS` |
 | `container_memory_working_set_bytes` (pod vmalert) | Возможен OOM при нехватке лимита памяти под реестр алертов и крупный `/metrics`, но при увеличении **~23 MiB** на 1000 `ALERTS` риск OOM маловероятен | **~23 MiB** на 1000 `ALERTS` |
-| `vmalert_iteration_duration_seconds` | Пока **~3,8 с ≪ 30 с** (минимальный `interval` групп в нагрузочных VMRule — 30s/1m/2m) проблем нет. | До **~3,8 с** |
+| `vmalert_iteration_duration_seconds` | Пока **~3,8 с ≪ 30 с** проблем нет. | До **~3,8 с** |
 
 ### vmselect и запросы к TSDB
 
