@@ -256,22 +256,6 @@ python3 scripts/fetch_capacity_snapshots.py
 | `process_cpu_seconds_total` / CPU пода operator | Reconcile большого числа `VMRule` и ConfigMap'ов | **~3,3 m** CPU на 1000 `ALERTS` |
 | `process_resident_memory_bytes` / память пода | Рост модели правил в памяти процесса | **~5,4 MiB** на 1000 `ALERTS` |
 
-### Объём рядов и control plane
-
-| Метрика | Зачем смотреть | Порядок роста (прогон) |
-| --- | --- | --- |
-| `count(ALERTS)` / `count(ALERTS_FOR_STATE)` | Масштаб сценария и запись состояния | **~500** → **~50 000** |
-| `totalSeries` (vmselect API) | Контроль лимитов TSDB (`-search.maxUniqueTimeseries` в [vmks-values.yaml](vmks-values.yaml)) | Рост с `ALERTS` и служебными рядами; ориентир **~10 млн** рядов к ~50k алертов |
-| RPS и `apiserver_request_duration_seconds` (kube-apiserver) | Нагрузка на API при apply и reconcile | См. [таблицу RPS](#rps-и-операционные-метрики); рост умеренный, но мониторить вместе с data plane |
-
-### Как считать прирост
-
-- Счётчики: `increase(metric[1h])` или сравнение окон «до» и «после».
-- Gauge (CPU, память, длительность): средние и перцентили по одинаковому окну.
-- Имена: `GET /api/v1/label/__name__/values` и фильтр по префиксу; ресурсы подов: `kubectl top pods -n vmks`.
-- **На 1000 `ALERTS`:** `(значение@~50k − значение@~500) / 49 500 × 1000` — оценка среднего прироста на тысячу алертов по прогону (для экстраполяции; нелинейность всё равно смотреть на графике).
-
-
 ## Заключение и выводы
 
 Нагрузочное тестирование VictoriaMetrics stack выполнено **на полном объёме**: все сгенерированные `VMRule` применены к кластеру (см. [применение VMRule](#применение-vmrule-в-kubernetes)), измерения в [Capacity Planning](#capacity-planning) и в разделе метрик отражают стационар после наращивания нагрузки до **~50 000** активных `ALERTS` (вместе с промежуточными срезами от ~500). Ниже — итоги этого завершённого прогона.
