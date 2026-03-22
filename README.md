@@ -76,8 +76,6 @@ helm upgrade --install victoria-logs-collector vm/victoria-logs-collector \
 
 Исходный код файла [victoria-logs-collector-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/victoria-logs-collector-values.yaml).
 
-Проверка: `kubectl get pods -n victoria-logs-collector`. Логи стека (vmks, vmalert, vmagent и др.) можно запрашивать в Grafana через datasource VictoriaLogs или в UI VictoriaLogs.
-
 ### Goldpinger
 
 [Goldpinger](https://github.com/bloomberg/goldpinger) — DaemonSet на каждой ноде, проверяет ICMP/TCP-связность между подами и отдаёт UI и метрики Prometheus. [Helm chart](https://github.com/bloomberg/goldpinger/tree/master/charts/goldpinger) публикуется в репозитории Bloomberg.
@@ -118,13 +116,11 @@ cd alerts
 
 ### Применение VMRule в Kubernetes
 
-Скрипт [alerts/apply-yaml.sh](alerts/apply-yaml.sh) применяет все **500** YAML-файлов из `alerts/vmrules/` по одному с фиксированной паузой между вызовами `kubectl apply`. Файлы сортируются как `find … | sort -V`.
+Скрипт [alerts/apply-yaml.sh](alerts/apply-yaml.sh) применяет все **500** YAML-файлов из `alerts/vmrules/` по одному с фиксированной паузой между вызовами `kubectl apply`.
 
 **Строгая обработка ошибок:** `set -euo pipefail` — при ошибке любого `kubectl apply` скрипт останавливается. Исправьте причину и запустите скрипт заново (`kubectl apply` идемпотентен).
 
-**Темп:** пауза между apply задаётся константой `APPLY_TIMEOUT` (по умолчанию **30 с**). Общее расчётное время: `APPLY_TIMEOUT × (кол-во файлов − 1)`. При 500 файлах и 30 с паузы: 30 × 499 = 14 970 с ≈ **~4 ч 9 мин** (плюс время самих `kubectl apply`).
-
-Скрипт проверяет, что в каталоге ровно `EXPECTED_COUNT` (500) YAML-файлов. Для изменения темпа или количества файлов — отредактируйте константы `APPLY_TIMEOUT` и `EXPECTED_COUNT` в начале скрипта.
+**Темп:** пауза между apply задаётся константой `APPLY_TIMEOUT` (по умолчанию **30 с**). Общее расчётное время: `APPLY_TIMEOUT × (кол-во файлов − 1)`. При 500 файлах и 30 с паузы: 30 × 499 = 14 970 с ≈ **~4 ч 9 мин**.
 
 **Запуск (из каталога `alerts`):**
 
