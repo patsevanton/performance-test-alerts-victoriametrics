@@ -111,7 +111,7 @@ cd alerts
 
 ### Механизм распределения алертов, перезапуски vmalert и состояние
 
-Перезапуски `vmalert` ожидаемы: при появлении **нового** ConfigMap с правилами под пересобирается с новыми `volume`/`volumeMount`, из‑за чего происходит rolling restart. Если же число ConfigMap'ов не меняется, правила могут подхватываться через SIGHUP без рестарта Pod'а (см. таблицу ниже). Восстановление состояния алертов из VictoriaMetrics выполняется **один раз при старте** процесса `vmalert`; горячая перезагрузка правил (SIGHUP) **не триггерит** restore — см. [документацию](https://docs.victoriametrics.com/victoriametrics/vmalert/#alerts-state-on-restarts).
+Если посмотреть на `vmalert` (статус Pod'ов, счётчик рестартов), видно, что он перезапускается: при появлении **нового** ConfigMap с правилами под пересобирается с новыми `volume`/`volumeMount`, из‑за чего происходит rolling restart. Если же число ConfigMap'ов не меняется, правила могут подхватываться через SIGHUP без рестарта Pod'а (см. таблицу ниже). Восстановление состояния алертов из VictoriaMetrics выполняется **один раз при старте** процесса `vmalert`; горячая перезагрузка правил (SIGHUP) **не триггерит** restore — см. [документацию](https://docs.victoriametrics.com/victoriametrics/vmalert/#alerts-state-on-restarts).
 
 #### Хранение правил в ConfigMap'ах
 
