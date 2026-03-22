@@ -15,25 +15,6 @@
 
 **Кластер:** 3 ноды Kubernetes v1.32.1 на Yandex Cloud (Ubuntu 22.04.5 LTS, containerd 1.7.27, 8 vCPU / 24 GB RAM на ноду).
 
-### VictoriaMetrics Stack
-
-**Версия:** `victoria-metrics-k8s-stack` v0.72.5 (VictoriaMetrics v1.138.0), namespace `vmks`.
-
-#### Компоненты
-
-`vmsingle` **отключен**, вместо него — `vmcluster` с `replicationFactor: 2`. Полные настройки — в [vmks-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/vmks-values.yaml).
-
-
-| Компонент          | Deployment                      | Реплики   | PDB             | Роль / Механизм HA                                                                                         |
-| ------------------ | ------------------------------- | --------- | --------------- | ---------------------------------------------------------------------------------------------------------- |
-| **VMCluster**      | vmstorage / vmselect / vminsert | 2 / 2 / 2 | —               | Хранение метрик (replicationFactor=2, каждая точка в 2 копиях); select/insert — stateless                  |
-| **VMAlert**        | vmalert                         | 2         | minAvailable: 1 | Оценка правил и отправка алертов; обе реплики оценивают все правила, дедупликация на стороне Alertmanager. |
-| **VMAgent**        | vmagent                         | 1         | —               | Сбор метрик (scrape)                                                                                       |
-| **VMAlertmanager** | vmalertmanager                  | 2         | minAvailable: 1 | Маршрутизация уведомлений; кластерный режим, автодедупликация                                              |
-| **VM Operator**    | victoria-metrics-operator       | 1         | —               | Управление CRD-ресурсами                                                                                   |
-| **Grafana**        | grafana                         | 1         | —               | Визуализация                                                                                               |
-
-
 ## Установка
 
 ### victoria-metrics-k8s-stack
@@ -100,8 +81,6 @@ helm upgrade --install victoria-logs-collector vm/victoria-logs-collector \
 ### Goldpinger
 
 [Goldpinger](https://github.com/bloomberg/goldpinger) — DaemonSet на каждой ноде, проверяет ICMP/TCP-связность между подами и отдаёт UI и метрики Prometheus. [Helm chart](https://github.com/bloomberg/goldpinger/tree/master/charts/goldpinger) публикуется в репозитории Bloomberg.
-
-**Требование:** для UI через Ingress — ingress-контроллер (как у Grafana). Для сбора метрик в VictoriaMetrics — установленный стек `vmks` (CRD `VMServiceScrape`).
 
 ```bash
 helm repo add goldpinger https://bloomberg.github.io/goldpinger/
