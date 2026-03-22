@@ -7,8 +7,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VMRULES_SUBDIR="vmrules"
 VMRULES_DIR="${SCRIPT_DIR}/${VMRULES_SUBDIR}"
-# Общая длительность этапа (9 часов)
-STAGE_DURATION_SEC=$((9 * 3600))
+# Таймаут между применением apply (секунды)
+APPLY_TIMEOUT=65
 # Скрипт завершается с ошибкой, если число файлов отличается от ожидаемого
 EXPECTED_COUNT=500
 
@@ -51,15 +51,12 @@ if [ "$total" -ne "$EXPECTED_COUNT" ]; then
   exit 1
 fi
 
-# Пауза между apply = общее_время / (число_файлов - 1), чтобы
-# последний файл применился ровно в конце этапа.
-sleep_interval=$(awk -v d="$STAGE_DURATION_SEC" -v c="$total" 'BEGIN {
-  printf "%.4f", d / (c - 1)
-}')
+sleep_interval="$APPLY_TIMEOUT"
 
-stage_ru=$(sec_to_ru "$STAGE_DURATION_SEC")
+total_time_sec=$(awk -v d="$sleep_interval" -v c="$total" 'BEGIN { printf "%.0f", d * (c - 1) }')
+total_ru=$(sec_to_ru "$total_time_sec")
 sleep_ru=$(sec_to_ru "$sleep_interval")
-echo "Найдено ${total} файлов. Общее время пауз: ~${stage_ru}, пауза между apply: ~${sleep_ru}."
+echo "Найдено ${total} файлов. Таймаут между apply: ~${sleep_ru}, общее время: ~${total_ru}."
 
 # Основной цикл: применяем файлы по одному с паузой между ними.
 # Последний файл применяется без паузы.

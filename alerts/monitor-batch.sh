@@ -13,7 +13,7 @@ VM_URL="https://vmselect.apatsev.org.ru"
 # Файл, в который записывается первая обнаруженная проблема
 RESULT_FILE="${_SCRIPT_DIR}/first-error-batch.txt"
 # Период опроса (секунды)
-INTERVAL=30
+INTERVAL=15
 # Namespace, в котором ищем поды vmalert для проверки OOM
 VMALERT_NAMESPACE="vmks"
 CURL_OPTS="-s --max-time 15"
