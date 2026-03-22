@@ -211,40 +211,40 @@ python3 scripts/fetch_capacity_snapshots.py
 
 ### vmalert
 
-| Метрика | Зачем смотреть | Порядок роста (прогон) |
+| Метрика | Чем грозит рост метрики | Порядок роста (прогон) |
 | --- | --- | --- |
-| `container_cpu_usage_seconds_total` (pod vmalert) | Главный индикатор вычислительной нагрузки на оценку правил | **~28 m** CPU на 1000 `ALERTS` |
-| `container_memory_working_set_bytes` (pod vmalert) | Память под реестр алертов и экспорт метрик | **~23 MiB** на 1000 `ALERTS` |
-| `vmalert_iteration_duration_seconds` | Насколько итерация близко к `interval` группы (риск пропусков при росте) | До **~3,8 с** max при ~23k алертов ([заключение](#заключение-и-выводы)); смотреть перцентили |
+| `container_cpu_usage_seconds_total` (pod vmalert) | Исчерпание CPU и задержки оценки правил вплоть до пропусков итераций при приближении к лимитам | **~28 m** CPU на 1000 `ALERTS` |
+| `container_memory_working_set_bytes` (pod vmalert) | OOM или рестарт пода при нехватке лимита памяти под реестр алертов и крупный `/metrics` | **~23 MiB** на 1000 `ALERTS` |
+| `vmalert_iteration_duration_seconds` | Приближение к `interval` группы, рост `vmalert_iteration_missed_total`, запаздывание срабатывания алертов | До **~3,8 с** max при ~23k алертов ([заключение](#заключение-и-выводы)); смотреть перцентили |
 
 ### vmselect и запросы к TSDB
 
-| Метрика | Зачем смотреть | Порядок роста (прогон) |
+| Метрика | Чем грозит рост метрики | Порядок роста (прогон) |
 | --- | --- | --- |
-| `vm_http_requests_total{job="vmselect"}` | Основной поток чтения при eval и запросах правил | **~40** req/s на 1000 `ALERTS` |
-| `vm_concurrent_select_current` | Параллельная нагрузка на select | Заметно растёт с RPS vmselect (без фиксированного множителя в таблицах) |
-| `vm_select_request_duration_seconds` | Хвост латентности при тяжёлых запросах (в т.ч. `ALERTS_FOR_STATE`) | Смотреть p95/p99 на графике |
+| `vm_http_requests_total{job="vmselect"}` | Перегрузка чтения TSDB, рост латентности и очередей при eval | **~40** req/s на 1000 `ALERTS` |
+| `vm_concurrent_select_current` | Исчерпание параллелизма select — очереди и таймауты запросов | Заметно растёт с RPS vmselect (без фиксированного множителя в таблицах) |
+| `vm_select_request_duration_seconds` | Долгие ответы при eval и чтении `ALERTS_FOR_STATE` — задержки алертов и таймауты клиентов | Смотреть p95/p99 на графике |
 
 ### vmstorage (данные и память)
 
-| Метрика | Зачем смотреть | Порядок роста (прогон) |
+| Метрика | Чем грозит рост метрики | Порядок роста (прогон) |
 | --- | --- | --- |
-| `container_memory_working_set_bytes` (pod vmstorage) | RAM под кэш и данные; типичное узкое место по памяти | **~49 MiB** на 1000 `ALERTS` |
-| `container_cpu_usage_seconds_total` (pod vmstorage) | CPU на слияние и обслуживание данных | **~3,9 m** CPU на 1000 `ALERTS` |
-| `vm_rows` / `vm_rows_inserted_total`, `vm_storage_blocks` | Объём рядов и данных на диске | Рост на порядки по мере заполнения стенда |
+| `container_memory_working_set_bytes` (pod vmstorage) | OOM или давление на ноду при нехватке RAM под кэш и данные; типичное узкое место | **~49 MiB** на 1000 `ALERTS` |
+| `container_cpu_usage_seconds_total` (pod vmstorage) | Замедление слияния и обслуживания данных, рост латентности записи/чтения | **~3,9 m** CPU на 1000 `ALERTS` |
+| `vm_rows` / `vm_rows_inserted_total`, `vm_storage_blocks` | Рост диска, I/O и времени бэкапов и прочих операций обслуживания | Рост на порядки по мере заполнения стенда |
 
 ### vmagent (скрейп vmalert)
 
-| Метрика | Зачем смотреть | Порядок роста (прогон) |
+| Метрика | Чем грозит рост метрики | Порядок роста (прогон) |
 | --- | --- | --- |
-| `scrape_body_size_bytes` / `scrape_samples_scraped` (target vmalert) | Раздувание `/metrics` vmalert при росте числа алертов | **На порядки**; проверять лимиты `maxScrapeSize` и память агента |
+| `scrape_body_size_bytes` / `scrape_samples_scraped` (target vmalert) | Таймауты или обрезка скрейпа, рост памяти агента при превышении `maxScrapeSize` и размера ответа | **На порядки**; проверять лимиты `maxScrapeSize` и память агента |
 
 ### VictoriaMetrics Operator
 
-| Метрика | Зачем смотреть | Порядок роста (прогон) |
+| Метрика | Чем грозит рост метрики | Порядок роста (прогон) |
 | --- | --- | --- |
-| `process_cpu_seconds_total` / CPU пода operator | Reconcile большого числа `VMRule` и ConfigMap'ов | **~3,3 m** CPU на 1000 `ALERTS` |
-| `process_resident_memory_bytes` / память пода | Рост модели правил в памяти процесса | **~5,4 MiB** на 1000 `ALERTS` |
+| `process_cpu_seconds_total` / CPU пода operator | Задержки reconcile и отставание применения конфигурации при перегрузке CPU | **~3,3 m** CPU на 1000 `ALERTS` |
+| `process_resident_memory_bytes` / память пода | OOM или рестарты оператора при нехватке памяти под модель правил | **~5,4 MiB** на 1000 `ALERTS` |
 
 ## Заключение и выводы
 
