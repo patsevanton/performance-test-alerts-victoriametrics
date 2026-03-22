@@ -4,6 +4,7 @@ import json
 import ssl
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 # Match curl -sk (ingress may use a self-signed cert)
 _SSL = ssl.create_default_context()
@@ -12,14 +13,18 @@ _SSL.verify_mode = ssl.CERT_NONE
 
 BASE = "https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query"
 
+# Unix time: ближайший срез к count(ALERTS)≈N (|Δ|≤150), шаг query_range 15s, прогон 2026-03-22 UTC.
 TARGETS = {
     5000: 1774168440,
     10000: 1774169520,
-    15000: 1774171380,
+    15000: 1774171290,
     20000: 1774172640,
-    25000: 1774174140,
-    30000: 1774174860,
-    35000: 1774177080,
+    25000: 1774174170,
+    30000: 1774174830,
+    35000: 1774176015,
+    40000: 1774178280,
+    45000: 1774179990,
+    50000: 1774179705,
 }
 
 QUERIES = {
@@ -102,7 +107,9 @@ def main() -> None:
     rows = []
     for label in sorted(TARGETS.keys()):
         t = TARGETS[label]
-        m = {k: fetch(t, q) for k, q in QUERIES.items()}
+        with ThreadPoolExecutor(max_workers=16) as ex:
+            futs = {k: ex.submit(fetch, t, q) for k, q in QUERIES.items()}
+            m = {k: futs[k].result() for k in QUERIES}
         rows.append((label, t, m))
 
     for label, t, m in rows:
