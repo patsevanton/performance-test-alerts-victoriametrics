@@ -79,31 +79,6 @@ helm upgrade --install victoria-logs-collector vm/victoria-logs-collector \
 
 Исходный код файла [victoria-logs-collector-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/victoria-logs-collector-values.yaml).
 
-### Goldpinger
-
-[Goldpinger](https://github.com/bloomberg/goldpinger) — DaemonSet на каждой ноде, проверяет ICMP/TCP-связность между подами и отдаёт UI и метрики Prometheus. [Helm chart](https://github.com/bloomberg/goldpinger/tree/master/charts/goldpinger) публикуется в репозитории Bloomberg.
-
-```bash
-helm repo add goldpinger https://bloomberg.github.io/goldpinger/
-helm repo update
-
-helm upgrade --install goldpinger goldpinger/goldpinger \
-  --namespace goldpinger \
-  --create-namespace \
-  --version 1.0.2 \
-  --wait \
-  --timeout 10m \
-  -f goldpinger-values.yaml
-
-kubectl apply -f goldpinger-vmscrape.yaml
-```
-
-Исходный код файлов [goldpinger-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/goldpinger-values.yaml), [goldpinger-vmscrape.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/goldpinger-vmscrape.yaml).
-
-#### Дашборд в Grafana
-
-В репозитории Goldpinger лежит готовый JSON: [extras/goldpinger-dashboard.json](https://github.com/bloomberg/goldpinger/blob/master/extras/goldpinger-dashboard.json) (описание в [разделе Grafana](https://github.com/bloomberg/goldpinger?tab=readme-ov-file#grafana) upstream).
-
 ### Генерация нагрузочных VMRule
 
 Скрипт [alerts/generate_alerts.py](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/generate_alerts.py) генерирует YAML-файлы `VMRule` в директорию `alerts/vmrules/`. По умолчанию создаётся **500** файлов; каждый `VMRule` содержит **4–6 групп** (с `interval` 30s/1m/2m) и **100 алертов** суммарно.
