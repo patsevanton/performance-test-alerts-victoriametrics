@@ -313,14 +313,6 @@ vmalert настроен на запись и чтение состояния и
 | 9783   | 13.0           | 46 ms              | 86m            | 395.6             | 0.1                | 10.8              | 1.37 сек                    | 0                   | 0                   | 1505                    |
 | 10299  | 13.0           | 46 ms              | 88m            | 405               | 0.1                | 11.2              | 1.47 сек                    | 0                   | 0                   | 827                     |
 
-
-### Рекомендации по масштабированию
-
-Конфигурация лимитов и запросов в Helm — [vmks-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/vmks-values.yaml). Краткие ориентиры по росту числа алертов:
-
-1. **До ~100 000 алертов:** заложить лимиты vmalert на уровне 3–4 CPU и ~3 Gi RAM на реплику, плюс мониторинг `vmalert_iteration_duration_seconds` и `vmalert_iteration_missed_total`
-2. **К ~100 000 алертов:** заранее включить шардирование vmalert (разделение правил через `-rule.partition` или разные `ruleSelector`) и масштабирование VMCluster (прежде всего `vmselect`/`vmstorage`)
-
 ## Рекомендации по повышению устойчивости
 
 ### Краткосрочные
