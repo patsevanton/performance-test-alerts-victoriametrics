@@ -127,17 +127,13 @@ VictoriaMetrics Operator хранит все правила оповещений
    vm-vmks-victoria-metrics-k8s-stack-rulefiles-1
    ...
   ```
-4. Если количество ConfigMap'ов **не изменилось** — Operator обновляет содержимое ConfigMap'ов и помечает аннотацию Pod'а (`configmap-sync-lastupdate-at`), что вызывает **SIGHUP** (горячую перезагрузку) через `config-reloader` sidecar. Pod **не перезапускается**.
-5. Если создан **новый ConfigMap** — требуется добавить новый `volume` и `volumeMount` к Pod'у, что **принудительно вызывает пересоздание Pod'а**.
+4. **Число** ConfigMap'ов **не меняется** — обновляется содержимое, аннотация Pod'а (`configmap-sync-lastupdate-at`) → **SIGHUP** (`config-reloader`), рестарта нет.
+5. **Новый** ConfigMap — нужны новые `volume`/`volumeMount` → **пересоздание Pod'а**.
 
-#### Горячая перезагрузка vs перезапуск Pod'а
-
-
-| Ситуация                                     | Что происходит                                       | Даунтайм       |
-| -------------------------------------------- | ---------------------------------------------------- | -------------- |
-| Добавлена VMRule, ConfigMap'ы не переполнены | SIGHUP через config-reloader, правила перечитываются | Нет            |
-| Добавлена VMRule, требуется новый ConfigMap  | Пересоздание Pod'а с новыми volume mounts            | Есть (секунды) |
-
+| Условие | Результат | Даунтайм |
+| --- | --- | --- |
+| VMRule без нового ConfigMap'а (лимит не исчерпан) | SIGHUP, правила перечитываются | Нет |
+| Нужен ещё один ConfigMap (split) | Новый Pod | Секунды |
 
 #### Сохранение состояния (State Persistence)
 
@@ -155,34 +151,23 @@ vmalert настроен на запись и чтение состояния и
 
 **`ALERTS_FOR_STATE`** содержит полную информацию о состоянии каждого алерта (`ActiveAt`, `for` duration и т.д.), необходимую для восстановления после рестарта. При запуске vmalert однократно читает этот ряд для восстановления.
 
-Целевые RTO/RPO, сценарии отказов (рестарт vmalert, недоступность VMCluster, потеря PVC у vmstorage, потеря namespace/CRD) и правила дедупликации уведомлений при двух репликах vmalert вынесены в комментарии к [`vmks-values.yaml`](vmks-values.yaml): блок «HA / RTO / RPO» непосредственно перед секцией `vmcluster`.
-
-### Как переобновлять этот срез
-
-```bash
-# Kubernetes: VMRule / ConfigMap / ReplicaSet
-kubectl get vmrules -A --no-headers | wc -l
-kubectl get vmrules -n vmks --no-headers | wc -l
-kubectl get vmrules -A -o json | jq '[.items[] | select(.metadata.name | test("^vmrule-"))] | length'
-kubectl get configmaps -n vmks -o json | jq '[.items[] | select(.metadata.name | test("rulefiles"))] | length'
-kubectl get replicasets -n vmks -l app.kubernetes.io/name=vmalert --no-headers | wc -l
-
-# VictoriaMetrics: ключевые показатели
-curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query=count(ALERTS)' | jq -r '.data.result[0].value[1]'
-curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query=count(ALERTS_FOR_STATE)' | jq -r '.data.result[0].value[1]'
-curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query=sum(vmalert_execution_errors_total)' | jq -r '.data.result[0].value[1]'
-curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query=max(vmalert_iteration_duration_seconds)' | jq -r '.data.result[0].value[1]'
-curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/status/tsdb' | jq -r '.data.totalSeries'
-```
-
 ## Capacity Planning
 
+### Скрипт `scripts/fetch_capacity_snapshots.py`
+
+**Что делает:** для каждого целевого уровня активных алертов (`count(ALERTS)` ≈ 5000, 10000, …, 50000) выполняет **instant**-запросы к Prometheus API VictoriaMetrics (`GET …/api/v1/query` с параметром `time`) в заранее выбранные моменты нагрузочного прогона (Unix time заданы в словаре `TARGETS` в коде). Запросы те же, что используются для таблиц ниже: средние CPU и память по репликам компонентов в `namespace=vmks` (vmalert, vmstorage, vmselect, vminsert, vmagent, operator), RPS и p99 задержка kube-apiserver, CPU apiserver, HTTP RPS vmselect/vmstorage/vminsert. Запросы к API выполняются параллельно (до 16 потоков). Вывод — текстовые блоки по каждому уровню (`ALERTS~N`), строки **CPU**, **MEM**, **RPS** в порядке колонок, совместимом с таблицами в этом README. Проверка TLS для внешнего ingress отключена (аналог `curl -sk`).
+
+**Ограничение:** базовый URL vmselect и метки времени **зашиты** под конкретный стенд и прогон; для другого кластера или даты нужно изменить константу `BASE` и словарь `TARGETS` в скрипте.
+
+**Как запустить** (только стандартная библиотека Python 3, зависимости не устанавливаются):
+
+```bash
+python3 scripts/fetch_capacity_snapshots.py
+```
+
+Команда предполагает текущий каталог — **корень репозитория**.
+
 ### Ресурсы подов при росте нагрузки
-
-Первая строка таблиц — базовый снимок **до** нагрузочного прогона (`apply-yaml.sh`): `kubectl top pods -n vmks` (среднее по двум подам там, где есть две реплики). Строки **5000–50000** — срезы из VictoriaMetrics в моменты времени, когда `count(ALERTS)` ближе всего к целевому уровню: `query_range` с шагом **15 секунд** по истории прогона **2026-03-22** (UTC), затем instant `query` с параметром `time` для метрик подов (`pod_cpu_usage_seconds_total` / `pod_memory_working_set_bytes`, `namespace=vmks`, среднее по репликам компонента) и операционных метрик; отклонение |`count(ALERTS)` − N| ≤ **150** для каждого уровня N. Для всех перечисленных N (включая **35000–50000**) в истории метрик такие срезы **есть**. На высоких уровнях `count(ALERTS)` заметно флуктуирует, поэтому моменты времени соседних строк не обязаны идти строго по календарю (например, срез ~50 000 может быть раньше среза ~45 000). Прирост ресурсов ожидается пропорционален `count(ALERTS)`.
-
-> **Метрики для таблиц ниже:** таблицы **CPU** и **Memory** — `avg(rate(pod_cpu_usage_seconds_total{namespace="vmks", pod=~"<компонент>-..."}[2m])) * 1000` (милликоры на реплику) и `avg(pod_memory_working_set_bytes{...}) / 1024 / 1024` (MiB); первая строка (**~500**) согласована с `kubectl top pods` (те же `pod_*` с kubelet `/metrics/resource`). Таблица **RPS и операционные метрики** — `apiserver_request_total`, `apiserver_request_duration_seconds_bucket` (p99), `process_cpu_seconds_total` (CPU kube-apiserver), `vm_http_requests_total` по `job` для vmselect/vmstorage/vminsert. Полные запросы — в [scripts/fetch_capacity_snapshots.py](scripts/fetch_capacity_snapshots.py).
-
 
 #### CPU (на реплику)
 
