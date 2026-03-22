@@ -1,5 +1,5 @@
 #!/bin/bash
-# Мониторинг во время apply-yaml-batch-*.sh: логи VictoriaLogs, метрики VictoriaMetrics, OOM vmalert.
+# Мониторинг во время apply-yaml.sh: логи VictoriaLogs, метрики VictoriaMetrics, OOM vmalert.
 # При первом срабатывании печатает текст ошибки в stdout, пишет момент и детали в RESULT_FILE и завершается.
 #
 # Анализ логов (VictoriaLogs): типичные срабатывания — i(error)/fatal/panic, _error, level:error,
@@ -109,7 +109,7 @@ write_result() {
   local when=$2
   local detail=$3
   {
-    echo "# Первое срабатывание во время apply-yaml-batch"
+    echo "# Первое срабатывание во время apply-yaml"
     echo "first_error_reason=${reason}"
     echo "first_error_utc=${when}"
     echo "stage_start_utc=${START_TS}"
