@@ -180,30 +180,30 @@ cd alerts
 
 | Метрика                                  | Значение                                   |
 | ---------------------------------------- | ------------------------------------------ |
-| VMRule в кластере (всего)                | **81** (42 тестовых + 39 встроенных)        |
+| VMRule в кластере (всего)                | **134** (95 тестовых + 39 встроенных)       |
 | VMRule в namespace `vmks`                | **39**                                     |
-| VMRule в namespace `default` (тестовые)  | **42**                                     |
+| VMRule в namespace `default` (тестовые)  | **95**                                     |
 | Целевое количество алертов               | **~50 000** (`500` VMRule × `100` алертов)  |
-| Активные алерты (ALERTS)                 | **5 116**                                  |
-| ALERTS_FOR_STATE                         | **4 153**                                  |
-| sum(vmalert_alerts_firing)               | **2 464**                                  |
-| Временные ряды (totalSeries)             | **483 529**                                |
-| ConfigMap'ов с правилами (`rulefiles-`*) | **4**                                      |
-| Суммарный размер ConfigMap'ов            | **1 826 891 bytes (~1.74 MiB)**            |
-| ReplicaSet'ов vmalert                    | **4**                                      |
+| Активные алерты (ALERTS)                 | **11 340**                                 |
+| ALERTS_FOR_STATE                         | **9 407**                                  |
+| sum(vmalert_alerts_firing)               | **8 844**                                  |
+| Временные ряды (totalSeries)             | **1 286 594**                              |
+| ConfigMap'ов с правилами (`rulefiles-`*) | **8**                                      |
+| Суммарный размер ConfigMap'ов            | **3 946 159 bytes (~3.76 MiB)**            |
+| ReplicaSet'ов vmalert                    | **8**                                      |
 | sum(vmalert_execution_errors_total)      | **0**                                      |
 | sum(vmalert_iteration_missed_total)      | **0**                                      |
-| max(vmalert_iteration_duration_seconds)  | **0.87 сек**                               |
+| max(vmalert_iteration_duration_seconds)  | **1.48 сек**                               |
 
 
 ### Распределение правил по ConfigMap'ам
 
-Суммарный размер `rulefiles-`*: **1 826 891 bytes (~1.74 MiB)**, средний размер ConfigMap: **~457 KB**.
-Operator упаковывает правила в ConfigMap'ы до ~505–511 KB и создаёт новый по мере роста числа `VMRule`. На текущий момент 4 ConfigMap'а.
+Суммарный размер `rulefiles-`*: **3 946 159 bytes (~3.76 MiB)**, средний размер ConfigMap: **~493 KB**.
+Operator упаковывает правила в ConfigMap'ы до ~505–521 KB и создаёт новый по мере роста числа `VMRule`. На текущий момент 8 ConfigMap'ов (rulefiles-0 … rulefiles-7), последний (rulefiles-7) заполнен частично (~472 KB).
 
 ### Перезапуски vmalert и восстановление состояния
 
-`vmalert` остаётся в ожидаемой модели: при появлении нового ConfigMap возможен rolling restart (из-за новых `volume`/`volumeMount`), а восстановление состояния идёт через `remoteRead` по `ALERTS_FOR_STATE`. За время apply-yaml.sh зафиксировано 4 ReplicaSet'а (3 пересоздания).
+`vmalert` остаётся в ожидаемой модели: при появлении нового ConfigMap возможен rolling restart (из-за новых `volume`/`volumeMount`), а восстановление состояния идёт через `remoteRead` по `ALERTS_FOR_STATE`. За время apply-yaml.sh зафиксировано 8 ReplicaSet'ов (7 пересозданий).
 
 Это согласуется с документацией VictoriaMetrics (`vmalert`: state restore выполняется один раз при старте процесса; hot reload не триггерит restore).
 
@@ -338,6 +338,7 @@ vmalert настроен на запись и чтение состояния и
 | Этап (алерты) | vmalert | vmstorage | vmselect | vminsert | vmagent | operator |
 | ------------- | ------- | --------- | -------- | -------- | ------- | -------- |
 | ~5 000        | 139m    | 93m       | 87m      | 18m      | 50m     | 20m      |
+| ~10 000       | 281m    | 152m      | 161m     | 22m      | 79m     | 50m      |
 | ~13 500       |         |           |          |          |         |          |
 | ~17 000       |         |           |          |          |         |          |
 | ~23 000       |         |           |          |          |         |          |
@@ -350,6 +351,7 @@ vmalert настроен на запись и чтение состояния и
 | Этап (алерты) | vmalert | vmstorage | vmselect | vminsert | vmagent | operator |
 | ------------- | ------- | --------- | -------- | -------- | ------- | -------- |
 | ~5 000        | 121Mi   | 652Mi     | 112Mi    | 99Mi     | 85Mi    | 66Mi     |
+| ~10 000       | 265Mi   | 1 329Mi   | 146Mi    | 108Mi    | 141Mi   | 97Mi     |
 | ~13 500       |         |           |          |          |         |          |
 | ~17 000       |         |           |          |          |         |          |
 | ~23 000       |         |           |          |          |         |          |
@@ -362,6 +364,7 @@ vmalert настроен на запись и чтение состояния и
 | Этап (алерты) | API Server RPS | API Server p99 lat | API Server CPU | vmselect HTTP RPS | vmstorage HTTP RPS | vminsert HTTP RPS | vmalert iter_duration (max) | vmalert exec_errors | vmalert iter_missed | vmalert remotewrite_req |
 | ------------- | -------------- | ------------------ | -------------- | ----------------- | ------------------ | ----------------- | --------------------------- | ------------------- | ------------------- | ----------------------- |
 | ~5 000        | 12.3           | 48 ms              | 81m            | 201               | 0.1                | 10.4              | 0.87 сек                    | 0                   | 0                   | 860                     |
+| ~10 000       | 12.6           | 49 ms              | 81m            | 460               | 0.1                | 10.8              | 1.48 сек                    | 0                   | 0                   | 1 309                   |
 | ~13 500       |                |                    |                |                   |                    |                   |                             |                     |                     |                         |
 | ~17 000       |                |                    |                |                   |                    |                   |                             |                     |                     |                         |
 | ~23 000       |                |                    |                |                   |                    |                   |                             |                     |                     |                         |
@@ -371,13 +374,14 @@ vmalert настроен на запись и чтение состояния и
 ### Объёмные метрики и состояние
 
 
-| Этап (алерты) | ALERTS | ALERTS_FOR_STATE | vmalert_alerts_firing | totalSeries | ConfigMaps (кол-во) | ConfigMaps (размер) | vm_concurrent_select_current | scrape_body_size (vmalert) |
-| ------------- | ------ | ---------------- | --------------------- | ----------- | ------------------- | ------------------- | ---------------------------- | -------------------------- |
-| ~5 000        | 5 116  | 4 153            | 2 464                 | 483 529     | 4                   | 1.74 MiB            | 0                            | 5.3 MiB                    |
-| ~13 500       |        |                  |                       |             |                     |                     |                              |                            |
-| ~17 000       |        |                  |                       |             |                     |                     |                              |                            |
-| ~23 000       |        |                  |                       |             |                     |                     |                              |                            |
-| ~44 000       |        |                  |                       |             |                     |                     |                              |                            |
+| Этап (алерты) | ALERTS  | ALERTS_FOR_STATE | vmalert_alerts_firing | totalSeries | ConfigMaps (кол-во) | ConfigMaps (размер) | vm_concurrent_select_current | scrape_body_size (vmalert) |
+| ------------- | ------- | ---------------- | --------------------- | ----------- | ------------------- | ------------------- | ---------------------------- | -------------------------- |
+| ~5 000        | 5 116   | 4 153            | 2 464                 | 483 529     | 4                   | 1.74 MiB            | 0                            | 5.3 MiB                    |
+| ~10 000       | 11 340  | 9 407            | 8 844                 | 1 286 594   | 8                   | 3.76 MiB            | 0                            | 12.0 MiB                   |
+| ~13 500       |         |                  |                       |             |                     |                     |                              |                            |
+| ~17 000       |         |                  |                       |             |                     |                     |                              |                            |
+| ~23 000       |         |                  |                       |             |                     |                     |                              |                            |
+| ~44 000       |         |                  |                       |             |                     |                     |                              |                            |
 
 
 
@@ -393,9 +397,10 @@ vmalert настроен на запись и чтение состояния и
 
 ### Краткосрочные
 
-- Отслеживать рост CPU vmalert при продолжении теста (при ~5 000 алертов — ~139m, запас до лимита 4 CPU значительный)
-- Мониторинг `vmalert_iteration_missed_total` и `vmalert_iteration_duration_seconds` (текущий max 0.87 сек — далеко от `interval` 30s)
-- Контролировать память vmstorage (~652 Mi на реплику при ~5 000 алертов; лимит 4 Gi)
+- Отслеживать рост CPU vmalert при продолжении теста (при ~10 000 алертов — ~281m, запас до лимита 4 CPU значительный)
+- Мониторинг `vmalert_iteration_missed_total` и `vmalert_iteration_duration_seconds` (текущий max 1.48 сек — далеко от `interval` 30s, но рост с 0.87 сек при ~5 000 алертов заметен)
+- Контролировать память vmstorage (~1 329 Mi на реплику при ~10 000 алертов; лимит 4 Gi)
+- Размер `/metrics` vmalert уже ~12.0 MiB — отслеживать приближение к `maxScrapeSize` (128 MB)
 
 ### Среднесрочные
 
