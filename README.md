@@ -224,6 +224,7 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/status/tsdb
 
 | ALERTS | API Server RPS | API Server p99 lat | API Server CPU | vmselect HTTP RPS | vmstorage HTTP RPS | vminsert HTTP RPS | vmalert iter_duration (max) | vmalert exec_errors | vmalert iter_missed | vmalert remotewrite_req |
 | ------ | -------------- | ------------------ | -------------- | ----------------- | ------------------ | ----------------- | --------------------------- | ------------------- | ------------------- | ----------------------- |
+|  |  |  |  |  |  |  | Макс. длительность итерации правил, с | Ошибки выполнения правил (сумма) | Пропущенные итерации (сумма) | RPS remoteWrite (ряды ALERTS / состояние в VM) |
 | ~500   | 11.4           | 34 ms              | 70m            | 23.2              | 0.1                | 8.0               | 1.01 сек                    | 2 189               | 0                   | 144                     |
 | ~5000  | 12.3           | 48 ms              | 84m            | 206               | 0.1                | 10.5              | 0.85 сек                    | 0                   | 0                   | 861                     |
 | ~10000 | 12.3           | 47 ms              | 83m            | 339               | 0.1                | 10.7              | 0.90 сек                    | 0                   | 0                   | 697                     |
