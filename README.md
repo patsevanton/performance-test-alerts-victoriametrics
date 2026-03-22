@@ -221,9 +221,20 @@ python3 scripts/fetch_capacity_snapshots.py
 
 | Метрика | Чем грозит рост метрики | Порядок роста (прогон) |
 | --- | --- | --- |
-| `vm_http_requests_total{job="vmselect"}` | В потенциале — перегрузка чтения TSDB, рост латентности и очередей при eval. **В отчётном прогоне перегрузки не было:** `vmalert_execution_errors_total = 0`, `vmalert_iteration_missed_total = 0`, итерации vmalert укладываются в `interval` с большим запасом. | **~40** req/s на 1000 `ALERTS` |
-| `vm_concurrent_select_current` | Исчерпание параллелизма select — очереди и таймауты запросов | Заметно растёт с RPS vmselect (без фиксированного множителя в таблицах) |
+| `vm_http_requests_total{job="vmselect"}` | Перегрузка чтения TSDB и CPU vmselect, рост латентности и очередей при eval, таймауты запросов от vmalert и других клиентов. | **~40** req/s на 1000 `ALERTS` |
+| `vm_concurrent_select_current` | Исчерпание параллелизма select — очереди и таймауты запросов. Прямого «множителя на 1000 `ALERTS`» нет; нагрузка косвенно по RPS vmselect (см. строку выше). | Растёт с RPS; при перегрузке смотреть также `vm_concurrent_select_limit_reached_total` и таблицу лимитов ниже |
+| `vm_concurrent_select_limit_reached_total` | Счётчик отказов из‑за лимита одновременных select; рост — сигнал поднять `search.maxConcurrentRequests` (см. `vmks-values.yaml`). | `increase(...[1m])` в скриптах мониторинга |
 | `vm_select_request_duration_seconds` | Долгие ответы при eval и чтении `ALERTS_FOR_STATE` — задержки алертов и таймауты клиентов | Смотреть p95/p99 на графике |
+
+Очередь и таймауты поиска (ориентиры из конфигурации стенда и дефолтов VictoriaMetrics; подробности — `vmks-values.yaml`):
+
+| Параметр | Значение | Комментарий |
+| --- | --- | --- |
+| `search.maxConcurrentRequests` (дефолт) | **2** | При параллельной нагрузке — **429** (vmselect) / **503** (vmstorage) и сообщение **«couldn't start executing in 10s»** (таймаут ожидания в очереди) |
+| `search.maxConcurrentRequests` (стенд) | **16** | Поднято вместе с очередью и лимитом серий, чтобы снизить отказы при eval vmalert |
+| `search.maxQueueDuration` (стенд) | **60s** | Максимальное ожидание в очереди перед стартом выполнения запроса |
+| `search.maxQueryDuration` (vmselect, стенд) | **300s** | Согласовано с `queryTimeout` datasource Grafana (**300s**), иначе обрезка раньше клиента |
+| Косвенный ориентир нагрузки на vmselect | **~40** req/s на 1000 `ALERTS` | Строка `vm_http_requests_total` выше; от неё ожидаемо растёт и занятость параллелизма |
 
 ### vmstorage (данные и память)
 
