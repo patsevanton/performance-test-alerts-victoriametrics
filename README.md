@@ -281,6 +281,8 @@ vmalert настроен на запись и чтение состояния и
 
 Данные собраны командой `kubectl top pods -n vmks` на разных этапах теста. Прирост ресурсов пропорционален числу алертов.
 
+> **Важно:** `kubectl top` использует метрики `pod_cpu_usage_seconds_total` и `pod_memory_working_set_bytes` из эндпоинта kubelet `/metrics/resource`. При верификации этих данных через PromQL/MetricsQL необходимо использовать именно эти метрики, а **не** `container_cpu_usage_seconds_total` / `container_memory_working_set_bytes` с `sum by (pod)` — последние дублируются из двух источников (`/metrics/cadvisor` и `/metrics/resource`) и дают завышенные значения (~2x). Подробнее — в разделе [Дублирование метрик kubelet](#дублирование-метрик-kubelet-metricscadvisor-vs-metricsresource).
+
 
 #### CPU (на реплику)
 
@@ -352,6 +354,70 @@ vmalert настроен на запись и чтение состояния и
 - Память vmselect резко выросла до **~1 071 Mi** на реплику (ранее ~218 Mi при ~20 000 алертов) — 5-кратный рост
 - `vm_concurrent_select_limit_reached_total` суммарно **67 583** — vmselect упирается в лимит конкурентных запросов, рекомендуется увеличить `-search.maxConcurrentRequests`
 - Размер `/metrics` vmalert уже **~31.6 MiB** на реплику — отслеживать приближение к `maxScrapeSize` (128 MB)
+
+## Дублирование метрик kubelet (`/metrics/cadvisor` vs `/metrics/resource`)
+
+### Суть проблемы
+
+Kubelet предоставляет метрики контейнеров через два эндпоинта:
+
+| | `/metrics/resource` | `/metrics/cadvisor` |
+|---|---|---|
+| Источник данных | CRI (containerd) | cAdvisor (cgroups/procfs) |
+| Количество метрик | ~5–6 (CPU, Memory) | Сотни (CPU, Memory, сеть, диск, FS и др.) |
+| Потребитель | metrics-server, `kubectl top`, HPA | Prometheus, VictoriaMetrics — полный мониторинг |
+| Нагрузка на kubelet | Минимальная | Заметная ([kubernetes#104459](https://github.com/kubernetes/kubernetes/issues/104459)) |
+| Появился | Kubernetes 1.18 | Изначально встроен в kubelet |
+
+Оба эндпоинта отдают метрики с **одинаковыми именами** (`container_cpu_usage_seconds_total`, `container_memory_working_set_bytes`), но с разными labels (`metrics_path`). При стандартной конфигурации victoria-metrics-k8s-stack (и kube-prometheus-stack) **оба эндпоинта скрапятся одновременно**, что приводит к дублированию.
+
+### Как проявляется
+
+Запрос `sum by (pod)(rate(container_cpu_usage_seconds_total{namespace="vmks"}[5m]))` возвращает **~2x** от реального значения, т.к. складывает одни и те же данные из двух источников. Аналогично для `container_memory_working_set_bytes`.
+
+Дополнительно, внутри `/metrics/cadvisor` каждая метрика отдаётся в трёх вариантах:
+- `container="vmalert"` — контейнер
+- `container="POD"` — pause-контейнер
+- `container=""` — pod-level сумма (cgroup)
+
+Если не фильтровать по `container!=""`, это создаёт ещё один уровень дублирования.
+
+### Корректные запросы для ресурсов подов
+
+```promql
+# CPU (эквивалент kubectl top pods) — использует pod-level метрику из /metrics/resource
+rate(pod_cpu_usage_seconds_total{namespace="vmks"}[1m]) * 1000
+
+# Memory (эквивалент kubectl top pods)
+pod_memory_working_set_bytes{namespace="vmks"} / 1024 / 1024
+
+# Альтернатива: container_* с фильтром по источнику (без дублей)
+rate(container_cpu_usage_seconds_total{namespace="vmks", metrics_path="/metrics/resource", container!="", container!="POD"}[1m]) * 1000
+```
+
+### Связанные issues
+
+**cAdvisor (google/cadvisor):**
+- [#2092](https://github.com/google/cadvisor/issues/2092) — cAdvisor отдаёт одинаковые метрики с разными labels (container vs pod-cgroup)
+- [#2688](https://github.com/google/cadvisor/issues/2688) — пустой `container` даёт 2x при `sum()` для `container_cpu_usage_seconds_total`
+- [#2272](https://github.com/google/cadvisor/issues/2272) — cAdvisor отдаёт метрики дважды
+- [#2844](https://github.com/google/cadvisor/issues/2844) — дубли метрик при рестартах подов (2–3x)
+
+**VictoriaMetrics helm-charts:**
+- [#696](https://github.com/VictoriaMetrics/helm-charts/issues/696) — дубли `machine_cpu_cores`, `machine_memory_bytes` в дашбордах Grafana; рекомендация мейнтейнеров — использовать один источник cadvisor-метрик
+
+**kube-prometheus-stack (prometheus-community/helm-charts):**
+- [#4041](https://github.com/prometheus-community/helm-charts/issues/4041) — дубли machine-метрик при скрапинге нескольких эндпоинтов kubelet
+- [#2038](https://github.com/prometheus-community/helm-charts/issues/2038) — ошибки recording rules "duplicate series for the match group"
+- [#2133](https://github.com/prometheus-community/helm-charts/issues/2133) — предложение уменьшить набор cadvisor-метрик по умолчанию
+- [PR #5063](https://github.com/prometheus-community/helm-charts/pull/5063) — выравнивание scrape interval cadvisor/resource на 10 сек
+
+**Kubernetes:**
+- [#104459](https://github.com/kubernetes/kubernetes/issues/104459) — высокое потребление CPU kubelet из-за скрапинга `/metrics/cadvisor` (Prometheus генерирует ~7 млн объектов за 10–15 скрапов)
+
+**StackOverflow:**
+- [#63020184](https://stackoverflow.com/questions/63020184) — разница между `/metrics/resource` и `/metrics/cadvisor`: resource отдаёт только контейнеры, cadvisor отдаёт контейнеры + POD + pod-level суммы
+- [#69281327](https://stackoverflow.com/questions/69281327) — почему memory контейнера удвоена в cadvisor-метриках
 
 ## Полезные команды для мониторинга
 
