@@ -214,12 +214,6 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/status/tsdb
 
 ### RPS и операционные метрики
 
-> **API Server p99:** для `apiserver_request_duration_seconds` без фильтра по `verb` в гистограмму попадают долгие **WATCH** и квантиль может упираться в верхнюю границу (десятки секунд). В таблице — **p99 для не-WATCH** запросов: `histogram_quantile(0.99, sum(rate(apiserver_request_duration_seconds_bucket{job="apiserver", verb!~"WATCH|WATCHLIST|CONNECT"}[5m])) by (le))`, результат в секундах → миллисекунды.
->
-> **vmalert remotewrite_req:** `sum(rate(vmalert_remotewrite_total[5m]))` (запросов remote write в секунду). HTTP RPS по компонентам: `sum(rate(vm_http_requests_total{job=~"...-vmks-victoria-metrics-k8s-stack"}[5m]))` с соответствующим `job` (`vmselect-…`, `vmstorage-…`, `vminsert-…`).
-
-Строки **5000** и **10000** — оценки по историческим рядам vmselect на **2026-03-22** (интервал нагрузочного прогона по `query_range(count(ALERTS), step=5m)`). Ближайшие к целевым значениям срезы: **08:35 UTC** (`count(ALERTS)=5149`) и **08:55 UTC** (`count(ALERTS)=9733`). Для столбцов таблицы выполнены instant-запросы (`/api/v1/query` с `time=…`) к tenant `0`; показатели с `rate(...[5m])` и ресурсы подов (`rate(pod_cpu_usage_seconds_total{namespace="vmks"}[1m])`, `pod_memory_working_set_bytes{namespace="vmks"}`) **масштабированы** коэффициентами **5000/5149** и **10000/9733** соответственно (API RPS, CPU apiserver, HTTP RPS по `vmselect`/`vminsert`, `sum(rate(vmalert_remotewrite_total[5m]))`, средние CPU/Mi по подам компонентов). **Без масштабирования:** p99 latency apiserver (не-WATCH), `vmstorage` HTTP RPS, `sum(vmalert_execution_errors_total)`, `sum(vmalert_iteration_missed_total)`.
-
 | ALERTS | API Server RPS | API Server p99 lat | API Server CPU | vmselect HTTP RPS | vmstorage HTTP RPS | vminsert HTTP RPS | vmalert iter_duration (max) | vmalert exec_errors | vmalert iter_missed | vmalert remotewrite_req |
 | ------ | -------------- | ------------------ | -------------- | ----------------- | ------------------ | ----------------- | --------------------------- | ------------------- | ------------------- | ----------------------- |
 | 455    | 11.4           | 34 ms              | 70m            | 23.2              | 0.1                | 8.0               | 1.01 сек                    | 2 189               | 0                   | 144                     |
