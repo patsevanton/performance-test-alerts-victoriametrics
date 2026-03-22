@@ -7,42 +7,55 @@
 # Переопределите VL_LOGSQL_QUERY при необходимости сузить/расширить фильтр.
 
 _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Эндпоинты VictoriaLogs и VictoriaMetrics (vmselect)
 VL_URL="${VL_URL:-https://victorialogs.apatsev.org.ru}"
 VM_URL="${VM_URL:-https://vmselect.apatsev.org.ru}"
+# Файл, в который записывается первая обнаруженная проблема
 RESULT_FILE="${RESULT_FILE:-${_SCRIPT_DIR}/first-error-batch.txt}"
+# Период опроса (секунды)
 INTERVAL="${INTERVAL:-30}"
+# Namespace, в котором ищем поды vmalert для проверки OOM
 VMALERT_NAMESPACE="${VMALERT_NAMESPACE:-vmks}"
 CURL_OPTS="${CURL_OPTS:--s --max-time 15}"
+# Максимум строк логов из VictoriaLogs за один запрос
 VL_LOG_LIMIT="${VL_LOG_LIMIT:-20}"
+# Ширина окна поиска логов (минуты назад от текущего момента)
 VL_WINDOW_MIN="${VL_WINDOW_MIN:-2}"
 
 # Дефолтный LogsQL: широкий OR по признакам ошибок (окно времени задаётся start/end в API).
 _DEFAULT_VL_LOGSQL='(_error OR i(error) OR fatal OR panic OR failed OR exception OR unreachable OR critical OR level:error OR log.level:(error OR fatal OR panic OR critical) OR "level=error" OR 503 OR 502 OR 504 OR 422 OR timeout OR OOM OR OOMKilled)'
 VL_LOGSQL_QUERY="${VL_LOGSQL_QUERY:-${_DEFAULT_VL_LOGSQL}}"
 
+# Запоминаем момент старта для записи в отчёт
 START_TS=$(date -Iseconds)
 
+# URL-кодирование строки через jq (безопасно для спецсимволов LogsQL/PromQL)
 urlencode() {
   jq -n --arg q "$1" '$q|@uri'
 }
 
+# Выполняет instant-запрос PromQL к VictoriaMetrics (vmselect)
 promql_query() {
   local q="$1" eq
   eq=$(urlencode "$q")
   curl -sf $CURL_OPTS "${VM_URL}/select/0/prometheus/api/v1/query?query=${eq}" 2>/dev/null
 }
 
+# Проверяет, что первый результат PromQL-ответа > 0
 metric_value_gt_zero() {
   local json="$1"
   echo "$json" | jq -e '(.data.result[0].value[1] | tonumber) > 0' >/dev/null 2>&1
 }
 
+# Форматирует пару label=value из PromQL-ответа для вывода в отчёт
 metric_value_line() {
   local label="$1" json="$2" v
   v=$(echo "$json" | jq -r '.data.result[0].value[1] // "0"')
   echo "${label}=${v}"
 }
 
+# Проверяет, есть ли среди подов vmalert контейнеры, убитые по OOMKilled.
+# Возвращает 0 (true), если OOM обнаружен.
 check_oom_vmalert() {
   local out
   out=$(kubectl get pods -n "$VMALERT_NAMESPACE" -l app.kubernetes.io/name=vmalert -o json 2>/dev/null) || return 1
@@ -53,6 +66,8 @@ check_oom_vmalert() {
   ' &>/dev/null
 }
 
+# Запрашивает логи из VictoriaLogs за последние VL_WINDOW_MIN минут.
+# Поддержка GNU date (-d) и BSD date (-v) для кроссплатформенности.
 query_victorialogs() {
   local start end eq
   start=$(date -u -d "${VL_WINDOW_MIN} minutes ago" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v-${VL_WINDOW_MIN}M +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)
@@ -74,18 +89,25 @@ format_vl_ndjson() {
   done <<< "$raw"
 }
 
+# --- PromQL-запросы к метрикам VictoriaMetrics ---
+
+# Суммарное число ошибок выполнения правил в vmalert
 query_vmselect_errors() {
   promql_query 'sum(vmalert_execution_errors_total) or vector(0)'
 }
 
+# Прирост срабатываний лимита concurrent select за последнюю минуту
 query_vmselect_limit_reached() {
   promql_query 'sum(increase(vm_concurrent_select_limit_reached_total[1m])) or vector(0)'
 }
 
+# Rate HTTP 5xx по vmselect/vmstorage/vminsert за последнюю минуту
 query_vm_http_5xx() {
   promql_query 'sum(rate(vm_http_requests_total{job=~"vmselect|vmstorage|vminsert",code=~"5.."}[1m])) or vector(0)'
 }
 
+# Собирает все PromQL-метрики; возвращает 0 и выводит ненулевые значения,
+# если хотя бы одна метрика > 0 (признак проблемы).
 collect_metric_issues() {
   local out="" json
   json=$(query_vmselect_errors)
@@ -104,6 +126,8 @@ collect_metric_issues() {
   return 1
 }
 
+# Записывает информацию о первой обнаруженной проблеме в RESULT_FILE.
+# Ограничивает detail до 64 КБ, чтобы файл не разросся.
 write_result() {
   local reason=$1
   local when=$2
@@ -128,6 +152,9 @@ echo "Мониторинг: VL=$VL_URL VM=$VM_URL ns=$VMALERT_NAMESPACE инте
 echo "Запись при первой проблеме: $RESULT_FILE"
 echo ""
 
+# --- Основной цикл мониторинга ---
+# Порядок проверок: OOM vmalert → ошибки в логах VictoriaLogs → метрики VM.
+# При первом же обнаружении проблемы — запись в файл и выход.
 while true; do
   when=$(date -Iseconds)
   if check_oom_vmalert; then

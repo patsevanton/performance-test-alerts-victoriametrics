@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
+# Постепенное применение VMRule-ресурсов через kubectl apply.
+# Файлы из каталога vmrules/ применяются с равномерными паузами,
+# чтобы растянуть нагрузку на весь этап (STAGE_DURATION_SEC).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VMRULES_SUBDIR="${VMRULES_SUBDIR:-vmrules}"
 VMRULES_DIR="${SCRIPT_DIR}/${VMRULES_SUBDIR}"
+# Общая длительность этапа, по умолчанию 9 часов
 STAGE_DURATION_SEC="${STAGE_DURATION_SEC:-$((9 * 3600))}"
+# Скрипт завершается с ошибкой, если число файлов отличается от ожидаемого
 EXPECTED_COUNT=500
 
+# Форматирует количество секунд в человекочитаемую строку (ч/мин/с).
 sec_to_ru() {
   awk -v s="$1" 'BEGIN {
     if (s >= 3600) {
@@ -45,6 +51,8 @@ if [ "$total" -ne "$EXPECTED_COUNT" ]; then
   exit 1
 fi
 
+# Пауза между apply = общее_время / (число_файлов - 1), чтобы
+# последний файл применился ровно в конце этапа.
 sleep_interval=$(awk -v d="$STAGE_DURATION_SEC" -v c="$total" 'BEGIN {
   printf "%.4f", d / (c - 1)
 }')
@@ -53,6 +61,8 @@ stage_ru=$(sec_to_ru "$STAGE_DURATION_SEC")
 sleep_ru=$(sec_to_ru "$sleep_interval")
 echo "Найдено ${total} файлов. Общее время пауз: ~${stage_ru}, пауза между apply: ~${sleep_ru}."
 
+# Основной цикл: применяем файлы по одному с паузой между ними.
+# Последний файл применяется без паузы.
 for ((i = 0; i < total; i++)); do
   file="${files[i]}"
   index=$((i + 1))
