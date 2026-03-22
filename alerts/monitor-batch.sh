@@ -130,15 +130,10 @@ check_oom_vmalert() {
 # Запрашивает логи из VictoriaLogs за скользящее окно (VL_WINDOW_MIN минут назад → сейчас).
 # Использует API /select/logsql/query с параметрами start, end, limit.
 #
-# Кроссплатформенность:
-#   GNU date  → date -d "N minutes ago" ...
-#   BSD date  → date -v-NM ...
-# Первый вариант пробуется первым; при ошибке — fallback на BSD.
-#
 # Возвращает NDJSON (по одной JSON-записи на строку) в stdout.
 query_victorialogs() {
   local start end eq
-  start=$(date -u -d "${VL_WINDOW_MIN} minutes ago" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v-${VL_WINDOW_MIN}M +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)
+  start=$(date -u -d "${VL_WINDOW_MIN} minutes ago" +%Y-%m-%dT%H:%M:%SZ)
   end=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   eq=$(urlencode "$VL_LOGSQL_QUERY")
   curl -sf $CURL_OPTS \
