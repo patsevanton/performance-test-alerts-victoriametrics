@@ -273,7 +273,7 @@ vmalert настроен на запись и чтение состояния и
 
 ### Ресурсы подов при росте нагрузки
 
-Первая строка таблиц — базовый снимок **до** нагрузочного прогона (`apply-yaml.sh`): `kubectl top pods -n vmks` (среднее по двум подам там, где есть две реплики). Дальнейшие строки будут дополняться по мере роста числа алертов; прирост ресурсов ожидается пропорционален `count(ALERTS)`.
+Первая строка таблиц — базовый снимок **до** нагрузочного прогона (`apply-yaml.sh`): `kubectl top pods -n vmks` (среднее по двум подам там, где есть две реплики). Следующие строки — срезы на плато при большем `count(ALERTS)` тем же способом; прирост ресурсов ожидается пропорционален `count(ALERTS)`.
 
 > **Важно:** `kubectl top` использует метрики `pod_cpu_usage_seconds_total` и `pod_memory_working_set_bytes` из эндпоинта kubelet `/metrics/resource`. При верификации этих данных через PromQL/MetricsQL необходимо использовать именно эти метрики, а **не** `container_cpu_usage_seconds_total` / `container_memory_working_set_bytes` с `sum by (pod)` — последние дублируются из двух источников (`/metrics/cadvisor` и `/metrics/resource`) и дают завышенные значения (~2x). Подробнее — в разделе [Дублирование метрик kubelet](#дублирование-метрик-kubelet-metricscadvisor-vs-metricsresource).
 
@@ -284,6 +284,8 @@ vmalert настроен на запись и чтение состояния и
 | ALERTS | vmalert | vmstorage | vmselect | vminsert | vmagent | operator |
 | ------ | ------- | --------- | -------- | -------- | ------- | -------- |
 | 455    | 16m     | 45m       | 37m      | 12m      | 31m     | 5m       |
+| 9783   | 253m    | 122m      | 149m     | 19m      | 82m     | 34m      |
+| 10299  | 272m    | 216m      | 156m     | 24m      | 67m     | 32m      |
 
 
 #### Memory (на реплику)
@@ -292,6 +294,8 @@ vmalert настроен на запись и чтение состояния и
 | ALERTS | vmalert | vmstorage | vmselect | vminsert | vmagent | operator |
 | ------ | ------- | --------- | -------- | -------- | ------- | -------- |
 | 455    | 44Mi    | 227Mi     | 45Mi     | 62Mi     | 83Mi    | 39Mi     |
+| 9783   | 246Mi   | 1011Mi    | 121Mi    | 111Mi    | 110Mi   | 92Mi     |
+| 10299  | 218Mi   | 876Mi     | 252Mi    | 125Mi    | 88Mi    | 93Mi     |
 
 
 ### RPS и операционные метрики
@@ -300,9 +304,12 @@ vmalert настроен на запись и чтение состояния и
 >
 > **vmalert remotewrite_req:** `sum(rate(vmalert_remotewrite_total[5m]))` (запросов remote write в секунду). HTTP RPS по компонентам: `sum(rate(vm_http_requests_total{job=~"...-vmks-victoria-metrics-k8s-stack"}[5m]))` с соответствующим `job` (`vmselect-…`, `vmstorage-…`, `vminsert-…`).
 
+Строка **9783** в этой таблице относится к тому же срезу, что и строка **9783** в таблицах ресурсов подов выше: в одном сеансе — `count(ALERTS)`, `kubectl top pods -n vmks`, затем запросы к vmselect для столбцов ниже.
+
 | ALERTS | API Server RPS | API Server p99 lat | API Server CPU | vmselect HTTP RPS | vmstorage HTTP RPS | vminsert HTTP RPS | vmalert iter_duration (max) | vmalert exec_errors | vmalert iter_missed | vmalert remotewrite_req |
 | ------ | -------------- | ------------------ | -------------- | ----------------- | ------------------ | ----------------- | --------------------------- | ------------------- | ------------------- | ----------------------- |
 | 455    | 11.4           | 34 ms              | 70m            | 23.2              | 0.1                | 8.0               | 1.01 сек                    | 2 189               | 0                   | 144                     |
+| 9783   | 13.0           | 46 ms              | 86m            | 395.6             | 0.1                | 10.8              | 1.37 сек                    | 0                   | 0                   | 1505                    |
 
 
 ### Объёмные метрики и состояние
