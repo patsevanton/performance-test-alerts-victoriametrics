@@ -221,7 +221,7 @@ python3 scripts/fetch_capacity_snapshots.py
 
 | Метрика | Чем грозит рост метрики | Порядок роста (прогон) |
 | --- | --- | --- |
-| `vm_http_requests_total{job="vmselect"}` | Перегрузка чтения TSDB, рост латентности и очередей при eval | **~40** req/s на 1000 `ALERTS` |
+| `vm_http_requests_total{job="vmselect"}` | В потенциале — перегрузка чтения TSDB, рост латентности и очередей при eval. **В отчётном прогоне перегрузки не было:** `vmalert_execution_errors_total = 0`, `vmalert_iteration_missed_total = 0`, итерации vmalert укладываются в `interval` с большим запасом. | **~40** req/s на 1000 `ALERTS` |
 | `vm_concurrent_select_current` | Исчерпание параллелизма select — очереди и таймауты запросов | Заметно растёт с RPS vmselect (без фиксированного множителя в таблицах) |
 | `vm_select_request_duration_seconds` | Долгие ответы при eval и чтении `ALERTS_FOR_STATE` — задержки алертов и таймауты клиентов | Смотреть p95/p99 на графике |
 
