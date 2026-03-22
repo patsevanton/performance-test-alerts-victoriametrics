@@ -14,7 +14,7 @@
 - `vmks-values.yaml` — основной values для `victoria-metrics-k8s-stack` (HA-конфигурация, ресурсы, ingress, лимиты поиска).
 - `victoria-logs-cluster-values.yaml` и `victoria-logs-collector-values.yaml` — деплой VictoriaLogs и сбор логов кластера.
 - `alerts/generate_alerts.py` — генератор нагрузочных `VMRule` (`500` файлов по `100` алертов каждый, детерминированный seed=42).
-- `alerts/apply-yaml.sh` — поэтапный apply всех 500 VMRule с контролируемым темпом (паузы растягиваются на `STAGE_DURATION_SEC`).
+- `alerts/apply-yaml.sh` — поэтапный apply всех 500 VMRule с фиксированной паузой `APPLY_TIMEOUT` (по умолчанию 30 с) между файлами.
 - `alerts/monitor-batch.sh` — сторож во время apply (OOM vmalert, ошибки в VictoriaLogs, критичные метрики VM).
 - `alerts/vmrules/` — сгенерированные YAML-файлы (`500` в репозитории на текущий момент).
 
@@ -148,13 +148,13 @@ cd alerts
 
 ### Применение VMRule в Kubernetes
 
-Скрипт [alerts/apply-yaml.sh](alerts/apply-yaml.sh) применяет все **500** YAML-файлов из `alerts/vmrules/` с контролируемым темпом. Файлы сортируются как `find … | sort -V`.
+Скрипт [alerts/apply-yaml.sh](alerts/apply-yaml.sh) применяет все **500** YAML-файлов из `alerts/vmrules/` по одному с фиксированной паузой между вызовами `kubectl apply`. Файлы сортируются как `find … | sort -V`.
 
 **Строгая обработка ошибок:** `set -euo pipefail` — при ошибке любого `kubectl apply` скрипт останавливается. Исправьте причину и запустите скрипт заново (`kubectl apply` идемпотентен).
 
-**Темп:** паузы между apply рассчитываются так, чтобы суммарный sleep составил `STAGE_DURATION_SEC` (по умолчанию 9 ч). При 500 файлах пауза между каждым apply ≈ 64.9 секунды. **Время полного прогона** ≈ паузы + время 500 вызовов `kubectl apply` — ориентировочно **~9–12 ч** (зависит от кластера).
+**Темп:** пауза между apply задаётся константой `APPLY_TIMEOUT` (по умолчанию **30 с**). Общее расчётное время: `APPLY_TIMEOUT × (кол-во файлов − 1)`. При 500 файлах и 30 с паузы: 30 × 499 = 14 970 с ≈ **~4 ч 9 мин** (плюс время самих `kubectl apply`).
 
-Скрипт проверяет, что в каталоге ровно 500 YAML-файлов. Единственная настройка — переменная окружения `STAGE_DURATION_SEC`.
+Скрипт проверяет, что в каталоге ровно `EXPECTED_COUNT` (500) YAML-файлов. Для изменения темпа или количества файлов — отредактируйте константы `APPLY_TIMEOUT` и `EXPECTED_COUNT` в начале скрипта.
 
 **Запуск (из каталога `alerts`):**
 
@@ -163,15 +163,9 @@ cd alerts
 ./apply-yaml.sh
 ```
 
-Для изменения темпа:
-
-```bash
-STAGE_DURATION_SEC=3600 ./apply-yaml.sh   # растянуть на 1 час
-```
-
 Исходный код: [alerts/apply-yaml.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml.sh).
 
-**Мониторинг ошибок:** в отдельном терминале запустите `./monitor-batch.sh` — при первой проблеме скрипт **печатает в stdout** текст (строки логов из VictoriaLogs с префиксом namespace/pod/container или ненулевые метрики). Момент и детали пишутся в `alerts/first-error-batch.txt` (`RESULT_FILE=...`). Проверяются: OOM vmalert; **LogsQL** по широкому OR (`i(error)`, fatal, panic, HTTP 5xx/422, timeout, OOM в тексте и т.д., см. `VL_LOGSQL_QUERY` в скрипте); метрики `vmalert_execution_errors_total`, `vm_concurrent_select_limit_reached_total`, суммарный rate **5xx** по `vmselect|vmstorage|vminsert`. Переменные: `INTERVAL` (30 с), `VL_LOG_LIMIT`, `VL_WINDOW_MIN`, `VL_LOGSQL_QUERY`; для самоподписанных сертификатов: `CURL_OPTS="-k"`.
+**Мониторинг ошибок:** в отдельном терминале запустите `./monitor-batch.sh` — при первой проблеме скрипт **печатает в stdout** текст (строки логов из VictoriaLogs с префиксом namespace/pod/container или ненулевые метрики). Момент и детали пишутся в `alerts/first-error-batch.txt` (`RESULT_FILE=...`). Проверяются: OOM vmalert; **LogsQL** по широкому OR (`i(error)`, fatal, panic, failed, exception, unreachable, critical, `log.level:(error|fatal|panic|critical)`, `"level=error"`, HTTP 5xx/422, timeout, OOM в тексте и т.д., см. `VL_LOGSQL_QUERY` в скрипте); метрики `vmalert_execution_errors_total`, `vm_concurrent_select_limit_reached_total`, суммарный rate **5xx** по `vmselect|vmstorage|vminsert`. Константы: `INTERVAL` (15 с), `VL_LOG_LIMIT` (200), `VL_WINDOW_MIN` (2), `VL_LOGSQL_QUERY`, `CURL_OPTS` (`-s --max-time 15`).
 
 Исходный код: [alerts/monitor-batch.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/monitor-batch.sh).
 
