@@ -15,6 +15,7 @@ BASE = "https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query"
 
 # Unix time: ближайший срез к count(ALERTS)≈N (|Δ|≤150), шаг query_range 15s, прогон 2026-03-22 UTC.
 TARGETS = {
+    500: 1774166460,
     5000: 1774168440,
     10000: 1774169520,
     15000: 1774171290,

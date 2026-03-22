@@ -142,7 +142,7 @@ vmalert настроен на запись и чтение состояния и
 
 ### Скрипт `scripts/fetch_capacity_snapshots.py`
 
-**Что делает:** Скрипт автоматически собирает "снимки" (замеры) загрузки системы VictoriaMetrics в заранее выбранные моменты времени — примерно при 5000, 10000, ... 50000 активных алертах. Для этого он запрашивает метрики напрямую у vmselect через Prometheus API — такие как загрузка CPU, используемая память подов (в пространстве имён `vmks`), нагрузка на kube-apiserver и количество HTTP-запросов к компонентам vmselect/vmstorage/vminsert.
+**Что делает:** Скрипт автоматически собирает "снимки" (замеры) загрузки системы VictoriaMetrics в заранее выбранные моменты времени — примерно при 500, 5000, 10000, ... 50000 активных алертах. Для этого он запрашивает метрики напрямую у vmselect через Prometheus API — такие как загрузка CPU, используемая память подов (в пространстве имён `vmks`), нагрузка на kube-apiserver и количество HTTP-запросов к компонентам vmselect/vmstorage/vminsert.
 
 **Как запустить** (только стандартная библиотека Python 3, зависимости не устанавливаются):
 
@@ -207,66 +207,68 @@ python3 scripts/fetch_capacity_snapshots.py
 
 ## Метрики, выросшие при нагрузке (VictoriaMetrics stack)
 
+Для каждой метрики ниже: **о чём она** и **во сколько раз выросло** (где сравнение **~500** → **~50 000** активных `ALERTS` по [таблицам Capacity Planning](#ресурсы-подов-при-росте-нагрузки) и [RPS](#rps-и-операционные-метрики); для счётчиков ошибок — качественно).
+
 ### 1. VMAlert (vmalert)
 
-- **vmalert_iteration_duration_seconds** — растёт сильнее всего: при десятках тысяч активных алертов максимум по группам может занимать **существенную долю** `interval` (см. также выводы в [Заключение](#заключение-и-выводы)).
-- **vmalert_iteration_missed_total** — в норме 0; при перегрузке или узком vmselect — рост от 0.
-- **vmalert_execution_errors_total** — при сбоях vmselect/vminsert рост от 0 до **единиц–десятков** в час.
-- **vmalert_alerts_firing** / **vmalert_alerts_pending** — растут **с числом срабатывающих правил**; при `count(ALERTS)` ~50k суммы по репликам — **десятки тысяч** (учитывайте дублирование метрик между репликами при `sum()` без `max by`/`avg by`).
-- **vmalert_remotewrite_requests_total** — растёт с числом групп и итераций (запись `ALERTS` и `ALERTS_FOR_STATE`).
-- **vmalert_remoteread_requests_total** — всплеск при **старте** процесса (restore из `ALERTS_FOR_STATE`), плюс нагрузка от eval.
-- **container_cpu_usage_seconds_total** (vmalert) — по срезам таблицы: **~16m** → **~1379m** на реплику (**~500** vs **~50 000** `ALERTS`), т.е. порядка **в десятки–сотню раз** между крайними точками; запас до лимита 4 CPU зависит от шардирования и HPA.
-- **container_memory_working_set_bytes** (vmalert) — **~44 Mi** → **~1202 Mi** на реплику между теми же срезами (**~25–30×**).
+- **`vmalert_iteration_duration_seconds`** — **о чём:** длительность одной итерации оценки правил по группам. **Рост:** при десятках тысяч алертов максимум по группам может занимать существенную долю `interval` (в [заключении](#заключение-и-выводы) — до ~3,8 с при ~23k алертов); единый множитель «до/после» по таблицам не задаётся — смотрите перцентили на графике.
+- **`vmalert_iteration_missed_total`** — **о чём:** сколько итераций пропущено из‑за нехватки времени/ресурсов. **Рост:** в успешном прогоне **0**; при перегрузке — **с 0** до ненуля.
+- **`vmalert_execution_errors_total`** — **о чём:** ошибки выполнения запросов к TSDB при eval. **Рост:** при сбоях vmselect/vminsert — **с 0** до единиц–десятков в час (в отчётном прогоне стабильно **0**).
+- **`vmalert_alerts_firing`** / **`vmalert_alerts_pending`** — **о чём:** число алертов в состояниях firing и pending по реплике. **Рост:** масштабируется с числом срабатывающих правил; при `count(ALERTS)` ~50k — **порядка 10⁴** на сумму реплик (осторожно с `sum()` без `max by`/`avg by` — дубли).
+- **`vmalert_remotewrite_requests_total`** — **о чём:** счётчик HTTP-записей состояния в remote storage (`ALERTS`, `ALERTS_FOR_STATE`). **Рост:** **линейно** с числом групп и итераций; точный множитель — по `rate()` на графике.
+- **`vmalert_remoteread_requests_total`** — **о чём:** запросы чтения из TSDB (в т.ч. восстановление состояния). **Рост:** **всплеск при старте** процесса (restore); в стационаре — с ростом eval-нагрузки.
+- **`container_cpu_usage_seconds_total`** (pod vmalert) — **о чём:** потребление CPU пода (derivative → ядра/сек). **Рост:** по таблице CPU **~16m** → **~1379m** на реплику ≈ **86×** (~500 vs ~50k `ALERTS`).
+- **`container_memory_working_set_bytes`** (pod vmalert) — **о чём:** рабочая память (WSS) пода. **Рост:** **~44 Mi** → **~1202 Mi** ≈ **27×**.
 
 
 ### 2. VMSelect
 
-- **vm_concurrent_select_current** — растёт с параллельными запросами vmalert (eval, запросы правил, remote read при старте).
-- **vm_concurrent_select_limit_reached_total** / **vm_concurrent_select_limit_timeout_total** — при упоре в лимиты — рост от 0; в норме timeout близок к нулю.
-- **vm_select_request_duration_seconds** — p99 растёт с тяжестью запросов (`ALERTS_FOR_STATE`, большие группы правил).
-- **vm_http_requests_total** (job=vmselect) — по таблице [RPS](#rps-и-операционные-метрики): **~23** → **~2 000** req/s (**~90×** между срезами ~500 и ~50 000 `ALERTS`).
+- **`vm_concurrent_select_current`** — **о чём:** текущее число параллельных select-запросов. **Рост:** с запросами vmalert (eval, правила, remote read при старте); без отдельного среза в таблицах — **качественно: заметно**.
+- **`vm_concurrent_select_limit_reached_total`** / **`vm_concurrent_select_limit_timeout_total`** — **о чём:** сколько раз упёрлись в лимит параллелизма / таймаут ожидания слота. **Рост:** в норме **~0**; при упоре — **с 0** вверх.
+- **`vm_select_request_duration_seconds`** — **о чём:** латентность обработки select в storage. **Рост:** p99 растёт с тяжестью запросов (`ALERTS_FOR_STATE`, большие группы); множитель — по перцентилям на графике.
+- **`vm_http_requests_total`** (job=`vmselect`) — **о чём:** все HTTP-запросы к vmselect. **Рост:** по [RPS](#rps-и-операционные-метрики) **~23** → **~2021** req/s ≈ **87×**.
 
 
 ### 3. VMStorage
 
-- **vm_rows** / **vm_rows_inserted_total** — рост **пропорционально** объёму вставляемых рядов; от «почти пустого» стенда до полной нагрузки — **на порядки**.
-- **vm_storage_blocks** — растёт с объёмом данных на диске.
-- **vm_cache_*_requests_total** / **vm_cache_*_misses_total** — объём обращений к кэшу растёт с нагрузкой на select; miss rate может ухудшаться при нехватке RAM.
-- **vm_http_requests_total** (job=vmstorage) — следует за запросами vmselect; абсолютные значения ниже, чем у vmselect (см. таблицу RPS: **~0,1** vs **~2k** на стороне select).
+- **`vm_rows`** / **`vm_rows_inserted_total`** — **о чём:** объём рядов / вставленных точек в storage. **Рост:** **на порядки** от почти пустого стенда до полной нагрузки (пропорционально записи).
+- **`vm_storage_blocks`** — **о чём:** число блоков данных на диске. **Рост:** с объёмом хранимых данных — **на порядки** при том же сценарии.
+- **`vm_cache_*_requests_total`** / **`vm_cache_*_misses_total`** — **о чём:** обращения к кэшу и промахи. **Рост:** запросы к кэшу — с нагрузкой на select; **доля промахов** может ухудшаться при нехватке RAM (смотреть `misses / requests`).
+- **`vm_http_requests_total`** (job=`vmstorage`) — **о чём:** HTTP-запросы к vmstorage (в основном от vmselect). **Рост:** в таблице RPS **~0,1** req/s — **почти без изменения**; нагрузка на select выросла **~87×**, на storage по RPS — **не масштабируется так же**.
 
 
 ### 4. VMInsert
 
-- **vm_http_requests_total** (job=vminsert) — **~8** → **~13** req/s по таблице RPS (умеренный рост: remote write не доминирует над чтением select при таком сценарии).
-- **vm_insert_request_duration_seconds** — p99 может вырасти с пиковой записью.
-- **vm_insert_requests_total** — растёт с объёмом записи vmalert/vmagent; относительно малого среза — **в разы**.
+- **`vm_http_requests_total`** (job=`vminsert`) — **о чём:** входящие запросы на приём данных (remote write и др.). **Рост:** по таблице RPS **~8** → **~13** req/s ≈ **1,6×** (умеренно: в сценарии доминирует чтение select).
+- **`vm_insert_request_duration_seconds`** — **о чём:** латентность приёма insert-запросов. **Рост:** p99 может вырасти при пиках записи — по графику.
+- **`vm_insert_requests_total`** — **о чём:** счётчик принятых insert-запросов. **Рост:** с объёмом записи vmalert/vmagent — **в несколько раз** относительно слабой нагрузки (точнее через `increase()`).
 
 
 ### 5. VMAgent
 
-- **scrape_series_added** (target=vmalert) — резко растёт: `/metrics` vmalert раздувается с числом правил и состояний.
-- **scrape_body_size_bytes** (target=vmalert) — рост **на порядки**; при десятках тысяч алертов следите за `maxScrapeSize` и лимитами памяти агента.
-- **scrape_samples_scraped** (job=vmalert) — **пропорционально** числу отдаваемых vmalert сэмплов.
+- **`scrape_series_added`** (target=`vmalert`) — **о чём:** новые временные ряды при скрейпе цели. **Рост:** **резко** при раздувании `/metrics` vmalert — **на порядки** по сравнению с малым числом алертов.
+- **`scrape_body_size_bytes`** (target=`vmalert`) — **о чём:** размер тела ответа `/metrics`. **Рост:** **на порядки**; контролируйте `maxScrapeSize` и память агента.
+- **`scrape_samples_scraped`** (job=`vmalert`) — **о чём:** число собранных сэмплов за скрейп. **Рост:** **пропорционально** объёму метрик vmalert (~линейно с числом алертов/рядов в экспорте).
 
 
 ### 6. VictoriaMetrics Operator
 
-- **process_cpu_seconds_total** (job=operator) — по таблице CPU: **~5m** → **~169m** (**~500** vs **~50 000** `ALERTS`), т.е. **десятки раз** при росте числа `VMRule` и reconcile.
-- **process_resident_memory_bytes** (job=operator) — **~39 Mi** → **~306 Mi** в тех же срезах (**~8×**).
+- **`process_cpu_seconds_total`** (job=`operator`) — **о чём:** накопленное CPU-время процесса оператора (derivative → использование). **Рост:** по таблице CPU пода **~5m** → **~169m** ≈ **34×**.
+- **`process_resident_memory_bytes`** (job=`operator`) — **о чём:** резидентная память процесса (RSS). **Рост:** **~39 Mi** → **~306 Mi** ≈ **7,8×**.
 
 
 ### 7. Kubernetes / ресурсы подов
 
-- **container_cpu_usage_seconds_total** — для vmselect/vmstorage/vminsert по таблице: типичный рост **в несколько раз** (например vmstorage **~45m** → **~238m**, vmselect **~37m** → **~335m**, vminsert **~12m** → **~75m**).
-- **container_memory_working_set_bytes** (vmstorage) — **~227 Mi** → **~2,6 Gi** на реплику (**~500** vs **~50 000** `ALERTS`).
-- **container_memory_working_set_bytes** (vmselect) — **~45 Mi** → **~262 Mi**.
+- **`container_cpu_usage_seconds_total`** — **о чём:** CPU подов (cgroup). **Рост:** vmstorage **~45m** → **~238m** ≈ **5,3×**; vmselect **~37m** → **~335m** ≈ **9,1×**; vminsert **~12m** → **~75m** ≈ **6,3×** (срезы ~500 vs ~50k `ALERTS`).
+- **`container_memory_working_set_bytes`** (vmstorage) — **о чём:** WSS подов vmstorage. **Рост:** **~227 Mi** → **~2635 Mi** ≈ **11,6×**.
+- **`container_memory_working_set_bytes`** (vmselect) — **о чём:** WSS подов vmselect. **Рост:** **~45 Mi** → **~262 Mi** ≈ **5,8×**.
 
 
 ### 8. Алерты и объём данных
 
-- **count(ALERTS)** — от среза **~500** до **~50 000** в таблицах (рост **на порядки**).
-- **count(ALERTS_FOR_STATE)** — того же порядка, что и `ALERTS`; растёт с числом восстанавливаемых состояний.
-- **totalSeries** (через API/tsdb) — растёт с объёмом рядов `ALERTS`/`ALERTS_FOR_STATE` и служебных метрик; в раннем измерении при **~23k** алертов фиксировали **~4,79 млн** рядов — к **~50k** ожидаемо **порядка ~10 млн** (оценка по масштабу; точное значение зависит от меток и ретенции). Имеет смысл сверять с `-search.maxUniqueTimeseries` в [vmks-values.yaml](vmks-values.yaml).
+- **`count(ALERTS)`** — **о чём:** число рядов активных алертов, отдаваемых vmalert. **Рост:** по таблицам **~500** → **~50 000** ≈ **100×**.
+- **`count(ALERTS_FOR_STATE)`** — **о чём:** ряды состояния для восстановления после рестарта. **Рост:** того же порядка, что и `ALERTS`.
+- **`totalSeries`** (API/tsdb) — **о чём:** суммарное число уникальных рядов в кластере. **Рост:** с `ALERTS`/`ALERTS_FOR_STATE` и служебными рядами; при **~23k** алертов — **~4,79 млн** рядов; к **~50k** ориентир **~10 млн** (оценка; точное значение зависит от меток и ретенции) — **~2,1×** относительно того измерения; сверять с `-search.maxUniqueTimeseries` в [vmks-values.yaml](vmks-values.yaml).
 
 
 ### Как считать прирост
