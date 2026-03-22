@@ -169,14 +169,14 @@ cd alerts
 
 ### Распределение правил по ConfigMap'ам
 
-Суммарный размер `rulefiles-`*: **10 056 290 bytes (~9.59 MiB)**, средний размер ConfigMap: **~503 KB**.
-Operator упаковывает правила в ConfigMap'ы до ~499–521 KB и создаёт новый по мере роста числа `VMRule`. На текущий момент **20 ConfigMap'ов** (rulefiles-0 … rulefiles-19), последний заполнен частично.
+Суммарный размер `rulefiles-`*: **16 618 123 bytes (~15.85 MiB)**, средний размер ConfigMap: **~519 KB**.
+Operator упаковывает правила в ConfigMap'ы до ~500–530 KB и создаёт новый по мере роста числа `VMRule`. На текущий момент **32 ConfigMap'а** (rulefiles-0 … rulefiles-31), последний заполнен частично.
 
 ### Перезапуски vmalert и восстановление состояния
 
-`vmalert` остаётся в ожидаемой модели: при появлении нового ConfigMap возможен rolling restart (из-за новых `volume`/`volumeMount`), а восстановление состояния идёт через `remoteRead` по `ALERTS_FOR_STATE`. За время apply-yaml.sh зафиксировано **11 ReplicaSet'ов** (10 пересозданий). При **252 тестовых VMRule** (287 всего, включая 39 встроенных в vmks) и **20 ConfigMap'ов** система стабильна: `vmalert_execution_errors_total = 0`, `vmalert_iteration_missed_total = 0`.
+`vmalert` остаётся в ожидаемой модели: при появлении нового ConfigMap возможен rolling restart (из-за новых `volume`/`volumeMount`), а восстановление состояния идёт через `remoteRead` по `ALERTS_FOR_STATE`. За время apply-yaml.sh зафиксировано **11 ReplicaSet'ов** (10 пересозданий). На текущем срезе применено **413 тестовых VMRule** (всего **451 VMRule** в кластере) и создано **32 ConfigMap'а**.
 
-**Важное наблюдение:** `max(vmalert_iteration_duration_seconds)` достигла **13.19 сек** — значительный рост относительно ~3.46 сек при ~20 000 алертов. При этом `vm_concurrent_select_limit_reached_total` на vmselect'ах суммарно **67 583** — vmselect периодически упирается в лимит конкурентных запросов.
+**Важное наблюдение:** `max(vmalert_iteration_duration_seconds)` достигла **13.78 сек** — значительный рост относительно ~3.46 сек при ~20 000 алертов. При этом `vm_concurrent_select_limit_reached_total` на vmselect'ах суммарно **962 261** — vmselect периодически упирается в лимит конкурентных запросов. Также `vmalert_execution_errors_total = 21`, поэтому важен разбор источника ошибок (в т.ч. по логам и 5xx).
 
 Это согласуется с документацией VictoriaMetrics (`vmalert`: state restore выполняется один раз при старте процесса; hot reload не триггерит restore).
 
@@ -186,6 +186,7 @@ Operator упаковывает правила в ConfigMap'ы до ~499–521 K
 # Kubernetes: VMRule / ConfigMap / ReplicaSet
 kubectl get vmrules -A --no-headers | wc -l
 kubectl get vmrules -n vmks --no-headers | wc -l
+kubectl get vmrules -A -o json | jq '[.items[] | select(.metadata.name | test("^vmrule-"))] | length'
 kubectl get configmaps -n vmks -o json | jq '[.items[] | select(.metadata.name | test("rulefiles"))] | length'
 kubectl get replicasets -n vmks -l app.kubernetes.io/name=vmalert --no-headers | wc -l
 
@@ -320,7 +321,7 @@ vmalert настроен на запись и чтение состояния и
 | ~14 700       | 510m    | 128m      | 212m     | 32m      | 125m    | 62m      |
 | ~20 000       | 642m    | 779m      | 363m     | 37m      | 151m    | 92m      |
 | ~25 000       | 1 102m  | 1 074m    | 547m     | 49m      | 213m    | 123m     |
-| ~44 000       |         |           |          |          |         |          |
+| ~44 000       | 1 978m  | 302m      | 439m     | 83m      | 348m    | 180m     |
 
 
 #### Memory (на реплику)
@@ -333,7 +334,7 @@ vmalert настроен на запись и чтение состояния и
 | ~14 700       | 385Mi   | 1 617Mi   | 295Mi    | 158Mi    | 158Mi   | 125Mi    |
 | ~20 000       | 514Mi   | 2 201Mi   | 218Mi    | 141Mi    | 184Mi   | 157Mi    |
 | ~25 000       | 625Mi   | 2 949Mi   | 1 071Mi  | 188Mi    | 360Mi   | 185Mi    |
-| ~44 000       |         |           |          |          |         |          |
+| ~44 000       | 1 386Mi | 2 619Mi   | 305Mi    | 253Mi    | 320Mi   | 270Mi    |
 
 
 ### RPS и операционные метрики
@@ -346,20 +347,20 @@ vmalert настроен на запись и чтение состояния и
 | ~14 700       | 12.7           | 46 ms              | 88m            | 691               | 0.1                | 11.1              | 2.68 сек                    | 0                   | 0                   | 1 319                   |
 | ~20 000       | 12.7           | 57 ms              | 95m            | 890               | 0.1                | 11.1              | 3.46 сек                    | 0                   | 0                   | 1 710                   |
 | ~25 000       | 12.0           | 56 ms              | 93m            | 1 153             | 0.1                | 11.6              | 13.19 сек                   | 0                   | 0                   | 2 220                   |
-| ~44 000       |                |                    |                |                   |                    |                   |                             |                     |                     |                         |
+| ~44 000       | 13.7           | 60 ms              | 101m           | 1 866             | 0.1                | 12.6              | 13.78 сек                   | 21                  | 0                   | 1 032 805               |
 
 
 ### Объёмные метрики и состояние
 
 
-| Этап (алерты) | ALERTS  | ALERTS_FOR_STATE | vmalert_alerts_firing | totalSeries | ConfigMaps (кол-во) | ConfigMaps (размер) | vm_concurrent_select_current | scrape_body_size (vmalert) |
+| Этап (алерты) | ALERTS  | ALERTS_FOR_STATE | ALERTS{alertstate="firing"} | totalSeries | ConfigMaps (кол-во) | ConfigMaps (размер) | vm_concurrent_select_current | scrape_body_size (vmalert) |
 | ------------- | ------- | ---------------- | --------------------- | ----------- | ------------------- | ------------------- | ---------------------------- | -------------------------- |
 | ~5 000        | 5 116   | 4 153            | 2 464                 | 483 529     | 4                   | 1.74 MiB            | 0                            | 5.3 MiB                    |
 | ~10 000       | 11 340  | 9 407            | 8 844                 | 1 286 594   | 8                   | 3.76 MiB            | 0                            | 12.0 MiB                   |
 | ~14 700       | 17 888  | 14 688           | 19 748                | 2 549 698   | 12                  | 5.74 MiB            | 0                            | 18.7 MiB                   |
 | ~20 000       | 28 142  | 19 511           | 7 260                 | 4 249 444   | 16                  | 7.61 MiB            | 0                            | 24.6 MiB                   |
 | ~25 000       | 32 685  | 24 728           | 23 446                | 6 429 084   | 20                  | 9.59 MiB            | 0                            | 31.6 MiB                   |
-| ~44 000       |         |                  |                       |             |                     |                     |                              |                            |
+| ~44 000       | 45 446  | 40 955           | 35 342                | 15 718 260  | 32                  | 15.85 MiB           | 0                            | 50.6 MiB                   |
 
 
 
