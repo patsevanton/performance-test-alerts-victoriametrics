@@ -9,15 +9,6 @@
 - проверить механизм сохранения и восстановления состояния алертов через `remoteWrite`/`remoteRead`;
 - определить практические пороги масштабируемости и дать рекомендации по эксплуатации.
 
-## Быстрый обзор репозитория
-
-- `vmks-values.yaml` — основной values для `victoria-metrics-k8s-stack` (HA-конфигурация, ресурсы, ingress, лимиты поиска).
-- `victoria-logs-cluster-values.yaml` и `victoria-logs-collector-values.yaml` — деплой VictoriaLogs и сбор логов кластера.
-- `alerts/generate_alerts.py` — генератор нагрузочных `VMRule` (`500` файлов по `100` алертов каждый, детерминированный seed=42).
-- `alerts/apply-yaml.sh` — поэтапный apply всех 500 VMRule с фиксированной паузой `APPLY_TIMEOUT` (по умолчанию 30 с) между файлами.
-- `alerts/monitor-batch.sh` — сторож во время apply (OOM vmalert, ошибки в VictoriaLogs, критичные метрики VM).
-- `alerts/vmrules/` — сгенерированные YAML-файлы (`500` в репозитории на текущий момент).
-
 ## Архитектура и стенд
 
 ### Infrastructure
