@@ -115,13 +115,55 @@ cd alerts
 
 ## Текущее состояние (снимок на 2026-03-22)
 
-> **Примечание:** сгенерированные `vmrule-*` применяются в namespace **`default`**; VictoriaMetrics Operator собирает правила в ConfigMap'ы **`vmks`**. Ниже — актуальный срез стенда (команды `kubectl`, запросы к `vmselect`).
+> **Примечание:** сгенерированные `vmrule-*` применяются в namespace **`default`**; VictoriaMetrics Operator собирает правила в ConfigMap'ы **`vmks`**. Ниже — механизм распределения правил и перезапусков `vmalert`; команды для актуального среза стенда (`kubectl`, запросы к `vmselect`) — в подразделе «Как переобновлять этот срез».
 
-### Перезапуски vmalert и восстановление состояния
+### Механизм распределения алертов, перезапуски vmalert и состояние
 
-Перезапуски `vmalert` ожидаемы: при появлении нового ConfigMap с правилами под пересобирается с новыми `volume`/`volumeMount`, из‑за чего происходит rolling restart.
+Перезапуски `vmalert` ожидаемы: при появлении **нового** ConfigMap с правилами под пересобирается с новыми `volume`/`volumeMount`, из‑за чего происходит rolling restart. Если же число ConfigMap'ов не меняется, правила могут подхватываться через SIGHUP без рестарта Pod'а (см. таблицу ниже). Восстановление состояния алертов из VictoriaMetrics выполняется **один раз при старте** процесса `vmalert`; горячая перезагрузка правил (SIGHUP) **не триггерит** restore — см. [документацию](https://docs.victoriametrics.com/victoriametrics/vmalert/#alerts-state-on-restarts).
 
-Это согласуется с документацией VictoriaMetrics (`vmalert`: state restore выполняется один раз при старте процесса; hot reload не триггерит restore).
+#### Хранение правил в ConfigMap'ах
+
+VictoriaMetrics Operator хранит все правила оповещений (`VMRule`) в ConfigMap'ах с префиксом `rulefiles`. Из-за ограничения Kubernetes на размер ConfigMap (~1 MiB) при росте количества правил Operator дробит их на несколько ConfigMap'ов.
+
+Процесс работы:
+
+1. **Reconcile-цикл Operator'a** (~каждые 60 сек) собирает **все** `VMRule` из всех namespace'ов, подходящих под selector.
+2. Operator пытается упаковать правила в ConfigMap `rulefiles-0`.
+3. При превышении лимита — разбивает на несколько ConfigMap'ов:
+  ```
+   vm-vmks-victoria-metrics-k8s-stack-rulefiles-0
+   vm-vmks-victoria-metrics-k8s-stack-rulefiles-1
+   ...
+  ```
+4. Если количество ConfigMap'ов **не изменилось** — Operator обновляет содержимое ConfigMap'ов и помечает аннотацию Pod'а (`configmap-sync-lastupdate-at`), что вызывает **SIGHUP** (горячую перезагрузку) через `config-reloader` sidecar. Pod **не перезапускается**.
+5. Если создан **новый ConfigMap** — требуется добавить новый `volume` и `volumeMount` к Pod'у, что **принудительно вызывает пересоздание Pod'а**.
+
+#### Горячая перезагрузка vs перезапуск Pod'а
+
+
+| Ситуация                                     | Что происходит                                       | Даунтайм       |
+| -------------------------------------------- | ---------------------------------------------------- | -------------- |
+| Добавлена VMRule, ConfigMap'ы не переполнены | SIGHUP через config-reloader, правила перечитываются | Нет            |
+| Добавлена VMRule, требуется новый ConfigMap  | Пересоздание Pod'а с новыми volume mounts            | Есть (секунды) |
+
+
+#### Сохранение состояния (State Persistence)
+
+vmalert настроен на запись и чтение состояния из VictoriaMetrics:
+
+- **`-remoteWrite.url`** — при каждой оценке vmalert записывает ряды `ALERTS` и `ALERTS_FOR_STATE` в VMCluster (через vminsert);
+- **`-remoteRead.url`** — при **старте** процесса vmalert восстанавливает состояние, запрашивая ряды `ALERTS_FOR_STATE` (через vmselect).
+
+В нашем стенде:
+
+```
+-remoteWrite.url=http://vminsert-vmks-victoria-metrics-k8s-stack:8480/insert/0/prometheus/api/v1/write
+-remoteRead.url=http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometheus
+```
+
+**`ALERTS_FOR_STATE`** содержит полную информацию о состоянии каждого алерта (`ActiveAt`, `for` duration и т.д.), необходимую для восстановления после рестарта. При запуске vmalert однократно читает этот ряд для восстановления.
+
+Целевые RTO/RPO, сценарии отказов (рестарт vmalert, недоступность VMCluster, потеря PVC у vmstorage, потеря namespace/CRD) и правила дедупликации уведомлений при двух репликах vmalert вынесены в комментарии к [`vmks-values.yaml`](vmks-values.yaml): блок «HA / RTO / RPO» непосредственно перед секцией `vmcluster`.
 
 ### Как переобновлять этот срез
 
@@ -140,56 +182,6 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query
 curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query=max(vmalert_iteration_duration_seconds)' | jq -r '.data.result[0].value[1]'
 curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/status/tsdb' | jq -r '.data.totalSeries'
 ```
-
-## Механизм распределения алертов и перезапуски vmalert
-
-### Хранение правил в ConfigMap'ах
-
-VictoriaMetrics Operator хранит все правила оповещений (`VMRule`) в ConfigMap'ах с префиксом `rulefiles`. Из-за ограничения Kubernetes на размер ConfigMap (~1 MiB) при росте количества правил Operator дробит их на несколько ConfigMap'ов.
-
-Процесс работы:
-
-1. **Reconcile-цикл Operator'a** (~каждые 60 сек) собирает **все** `VMRule` из всех namespace'ов, подходящих под selector.
-2. Operator пытается упаковать правила в ConfigMap `rulefiles-0`.
-3. При превышении лимита — разбивает на несколько ConfigMap'ов:
-  ```
-   vm-vmks-victoria-metrics-k8s-stack-rulefiles-0
-   vm-vmks-victoria-metrics-k8s-stack-rulefiles-1
-   ...
-  ```
-4. Если количество ConfigMap'ов **не изменилось** — Operator обновляет содержимое ConfigMap'ов и помечает аннотацию Pod'а (`configmap-sync-lastupdate-at`), что вызывает **SIGHUP** (горячую перезагрузку) через `config-reloader` sidecar. Pod **не перезапускается**.
-5. Если создан **новый ConfigMap** — требуется добавить новый `volume` и `volumeMount` к Pod'у, что **принудительно вызывает пересоздание Pod'а**.
-
-### Горячая перезагрузка vs перезапуск Pod'а
-
-
-| Ситуация                                     | Что происходит                                       | Даунтайм       |
-| -------------------------------------------- | ---------------------------------------------------- | -------------- |
-| Добавлена VMRule, ConfigMap'ы не переполнены | SIGHUP через config-reloader, правила перечитываются | Нет            |
-| Добавлена VMRule, требуется новый ConfigMap  | Пересоздание Pod'а с новыми volume mounts            | Есть (секунды) |
-
-
-### Сохранение состояния (State Persistence)
-
-vmalert настроен на запись и чтение состояния из VictoriaMetrics:
-
-- **`-remoteWrite.url`** — при каждой оценке vmalert записывает ряды `ALERTS` и `ALERTS_FOR_STATE` в VMCluster (через vminsert);
-- **`-remoteRead.url`** — при **старте** процесса vmalert восстанавливает состояние, запрашивая ряды `ALERTS_FOR_STATE` (через vmselect).
-
-В нашем стенде:
-
-```
--remoteWrite.url=http://vminsert-vmks-victoria-metrics-k8s-stack:8480/insert/0/prometheus/api/v1/write
--remoteRead.url=http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometheus
-```
-
-**`ALERTS_FOR_STATE`** содержит полную информацию о состоянии каждого алерта (`ActiveAt`, `for` duration и т.д.), необходимую для восстановления после рестарта. При запуске vmalert однократно читает этот ряд для восстановления.
-
-Восстановление происходит **только при старте процесса**. Горячая перезагрузка правил (SIGHUP) **не триггерит** восстановление состояния.
-
-Подробнее: [https://docs.victoriametrics.com/victoriametrics/vmalert/#alerts-state-on-restarts](https://docs.victoriametrics.com/victoriametrics/vmalert/#alerts-state-on-restarts)
-
-Целевые RTO/RPO, сценарии отказов (рестарт vmalert, недоступность VMCluster, потеря PVC у vmstorage, потеря namespace/CRD) и правила дедупликации уведомлений при двух репликах vmalert вынесены в комментарии к [`vmks-values.yaml`](vmks-values.yaml): блок «HA / RTO / RPO» непосредственно перед секцией `vmcluster`.
 
 ## Capacity Planning
 
