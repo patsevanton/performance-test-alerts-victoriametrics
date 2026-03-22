@@ -247,7 +247,7 @@ vmalert настроен на запись и чтение состояния и
 
 ### Ресурсы подов при росте нагрузки
 
-Первая строка таблиц — базовый снимок **до** нагрузочного прогона (`apply-yaml.sh`): `kubectl top pods -n vmks` (среднее по двум подам там, где есть две реплики). Следующие строки — срезы на плато при большем `count(ALERTS)` тем же способом; прирост ресурсов ожидается пропорционален `count(ALERTS)`.
+Первая строка таблиц — базовый снимок **до** нагрузочного прогона (`apply-yaml.sh`): `kubectl top pods -n vmks` (среднее по двум подам там, где есть две реплики). Строки **5000** и **10000** — оценки по историческим рядам vmselect (см. пояснение под таблицей RPS); прирост ресурсов ожидается пропорционален `count(ALERTS)`.
 
 > **Важно:** `kubectl top` использует метрики `pod_cpu_usage_seconds_total` и `pod_memory_working_set_bytes` из эндпоинта kubelet `/metrics/resource`. При верификации этих данных через PromQL/MetricsQL необходимо использовать именно эти метрики, а **не** `container_cpu_usage_seconds_total` / `container_memory_working_set_bytes` с `sum by (pod)` — последние дублируются из двух источников (`/metrics/cadvisor` и `/metrics/resource`) и дают завышенные значения (~2x). Подробнее — в разделе [Дублирование метрик kubelet](#дублирование-метрик-kubelet-metricscadvisor-vs-metricsresource).
 
@@ -258,8 +258,8 @@ vmalert настроен на запись и чтение состояния и
 | ALERTS | vmalert | vmstorage | vmselect | vminsert | vmagent | operator |
 | ------ | ------- | --------- | -------- | -------- | ------- | -------- |
 | 455    | 16m     | 45m       | 37m      | 12m      | 31m     | 5m       |
-| 9783   | 253m    | 122m      | 149m     | 19m      | 82m     | 34m      |
-| 10299  | 272m    | 216m      | 156m     | 24m      | 67m     | 32m      |
+| 5000   | 92m     | 79m       | 88m      | 15m      | 50m     | 28m      |
+| 10000  | 162m    | 113m      | 169m     | 21m      | 78m     | 25m      |
 
 
 #### Memory (на реплику)
@@ -268,8 +268,8 @@ vmalert настроен на запись и чтение состояния и
 | ALERTS | vmalert | vmstorage | vmselect | vminsert | vmagent | operator |
 | ------ | ------- | --------- | -------- | -------- | ------- | -------- |
 | 455    | 44Mi    | 227Mi     | 45Mi     | 62Mi     | 83Mi    | 39Mi     |
-| 9783   | 246Mi   | 1011Mi    | 121Mi    | 111Mi    | 110Mi   | 92Mi     |
-| 10299  | 218Mi   | 876Mi     | 252Mi    | 125Mi    | 88Mi    | 93Mi     |
+| 5000   | 90Mi    | 587Mi     | 89Mi     | 72Mi     | 88Mi    | 66Mi     |
+| 10000  | 137Mi   | 1029Mi    | 248Mi    | 131Mi    | 96Mi    | 89Mi     |
 
 
 ### RPS и операционные метрики
@@ -278,15 +278,13 @@ vmalert настроен на запись и чтение состояния и
 >
 > **vmalert remotewrite_req:** `sum(rate(vmalert_remotewrite_total[5m]))` (запросов remote write в секунду). HTTP RPS по компонентам: `sum(rate(vm_http_requests_total{job=~"...-vmks-victoria-metrics-k8s-stack"}[5m]))` с соответствующим `job` (`vmselect-…`, `vmstorage-…`, `vminsert-…`).
 
-Строка **9783** в этой таблице относится к тому же срезу, что и строка **9783** в таблицах ресурсов подов выше: в одном сеансе — `count(ALERTS)`, `kubectl top pods -n vmks`, затем запросы к vmselect для столбцов ниже.
-
-Строка **10299** — оценка по историческим рядам vmselect: взят момент с `count(ALERTS)=9887` (ближайший доступный плато‑срез в хранимой истории), показатели с `rate(...[5m])` масштабированы коэффициентом **10299/9887** (API RPS, CPU apiserver, HTTP RPS по `vmselect`/`vminsert`, `sum(rate(vmalert_remotewrite_total[5m]))`); `max(vmalert_iteration_duration_seconds)` масштабирован тем же коэффициентом (исходное значение **1.4066** с → **1.47** с). p99 latency apiserver, vmstorage RPS и счётчики ошибок/пропусков — без масштабирования, как в исходном срезе.
+Строки **5000** и **10000** — оценки по историческим рядам vmselect на **2026-03-22** (интервал нагрузочного прогона по `query_range(count(ALERTS), step=5m)`). Ближайшие к целевым значениям срезы: **08:35 UTC** (`count(ALERTS)=5149`) и **08:55 UTC** (`count(ALERTS)=9733`). Для столбцов таблицы выполнены instant-запросы (`/api/v1/query` с `time=…`) к tenant `0`; показатели с `rate(...[5m])` и ресурсы подов (`rate(pod_cpu_usage_seconds_total{namespace="vmks"}[1m])`, `pod_memory_working_set_bytes{namespace="vmks"}`) **масштабированы** коэффициентами **5000/5149** и **10000/9733** соответственно (API RPS, CPU apiserver, HTTP RPS по `vmselect`/`vminsert`, `sum(rate(vmalert_remotewrite_total[5m]))`, средние CPU/Mi по подам компонентов). **Без масштабирования:** p99 latency apiserver (не-WATCH), `vmstorage` HTTP RPS, `sum(vmalert_execution_errors_total)`, `sum(vmalert_iteration_missed_total)`.
 
 | ALERTS | API Server RPS | API Server p99 lat | API Server CPU | vmselect HTTP RPS | vmstorage HTTP RPS | vminsert HTTP RPS | vmalert iter_duration (max) | vmalert exec_errors | vmalert iter_missed | vmalert remotewrite_req |
 | ------ | -------------- | ------------------ | -------------- | ----------------- | ------------------ | ----------------- | --------------------------- | ------------------- | ------------------- | ----------------------- |
 | 455    | 11.4           | 34 ms              | 70m            | 23.2              | 0.1                | 8.0               | 1.01 сек                    | 2 189               | 0                   | 144                     |
-| 9783   | 13.0           | 46 ms              | 86m            | 395.6             | 0.1                | 10.8              | 1.37 сек                    | 0                   | 0                   | 1505                    |
-| 10299  | 13.0           | 46 ms              | 88m            | 405               | 0.1                | 11.2              | 1.47 сек                    | 0                   | 0                   | 827                     |
+| 5000   | 11.9           | 47 ms              | 82m            | 207               | 0.1                | 10.2              | 0.83 сек                    | 0                   | 0                   | 854                     |
+| 10000  | 13.4           | 46 ms              | 89m            | 404               | 0.1                | 11.1              | 1.33 сек                    | 0                   | 0                   | 1535                    |
 
 ## Рекомендации по повышению устойчивости
 
@@ -510,7 +508,7 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query
 
 ## Заключение и выводы
 
-> Выводы ниже основаны на предыдущем прогоне теста (до ~44 000 алертов). Срез «до» нагрузки и плато **9783** / **10299** — в таблицах [Capacity Planning](#capacity-planning); текущий срез кластера (частично применённые `vmrule-*`) — в [Текущее состояние](#текущее-состояние-снимок-на-2026-03-22).
+> Выводы ниже основаны на предыдущем прогоне теста (до ~44 000 алертов). Срез «до» нагрузки и оценки **5000** / **10000** `ALERTS` — в таблицах [Capacity Planning](#capacity-planning); текущий срез кластера (частично применённые `vmrule-*`) — в [Текущее состояние](#текущее-состояние-снимок-на-2026-03-22).
 
 Проведённое нагрузочное тестирование VictoriaMetrics stack большим количеством VMRule подтвердило заявленные цели и позволило сформулировать практические выводы.
 
