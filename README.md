@@ -175,26 +175,6 @@ cd alerts
 
 > **Примечание:** тест в процессе (`apply-yaml.sh` запущен). Ниже — актуальный срез, собранный командами `kubectl` и запросами к `vmselect`.
 
-### Общие цифры
-
-
-| Метрика                                  | Значение                                    |
-| ---------------------------------------- | ------------------------------------------- |
-| VMRule в кластере (всего)                | **234** (196 тестовых + 39 встроенных)       |
-| VMRule в namespace `vmks`                | **39**                                      |
-| VMRule в namespace `default` (тестовые)  | **196**                                     |
-| Целевое количество алертов               | **~50 000** (`500` VMRule × `100` алертов)   |
-| Активные алерты (ALERTS)                 | **28 142**                                  |
-| ALERTS_FOR_STATE                         | **19 511**                                  |
-| sum(vmalert_alerts_firing)               | **7 260**                                   |
-| Временные ряды (totalSeries)             | **4 249 444**                               |
-| ConfigMap'ов с правилами (`rulefiles-`*) | **16**                                      |
-| Суммарный размер ConfigMap'ов            | **7 980 440 bytes (~7.61 MiB)**             |
-| ReplicaSet'ов vmalert                    | **11**                                      |
-| sum(vmalert_execution_errors_total)      | **0**                                       |
-| sum(vmalert_iteration_missed_total)      | **0**                                       |
-| max(vmalert_iteration_duration_seconds)  | **3.46 сек**                                |
-
 
 ### Распределение правил по ConfigMap'ам
 
