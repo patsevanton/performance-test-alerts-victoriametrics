@@ -1,3 +1,8 @@
+# Краткосрочные рекомендации (срезы нагрузки, см. README):
+# - vmalert: при ~25k алертов ~875m CPU/реплика (~78% до лимита 4 CPU) — отслеживать рост; /metrics ~31.6 MiB — не приближаться к promscrape.maxScrapeSize (128 Mi).
+# - Критично: vmalert_iteration_duration_seconds до ~22.77s при ~45k ALERTS (76% интервала при interval=30s, 38% при 60s); следить vmalert_iteration_missed_total (в срезах 0).
+# - vmstorage: ~2.3 Gi/реплика при ~25k алертов (~40% до лимита 4 Gi).
+# - vmselect: ~390 Mi → ~559 Mi (20k→25k ALERTS); vm_concurrent_select_limit_reached_total суммарно высокий — при необходимости поднять search.maxConcurrentRequests (см. vmselect.extraArgs).
 grafana:
   ingress:
     ingressClassName: nginx

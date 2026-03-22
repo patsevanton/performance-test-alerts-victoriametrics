@@ -48,10 +48,6 @@ QUERIES = {
     "vmselect_rps": 'sum(rate(vm_http_requests_total{job="vmselect-vmks-victoria-metrics-k8s-stack"}[5m]))',
     "vmstorage_rps": 'sum(rate(vm_http_requests_total{job="vmstorage-vmks-victoria-metrics-k8s-stack"}[5m]))',
     "vminsert_rps": 'sum(rate(vm_http_requests_total{job="vminsert-vmks-victoria-metrics-k8s-stack"}[5m]))',
-    "vmalert_iter_max": "max(vmalert_iteration_duration_seconds)",
-    "vmalert_exec_err": "sum(vmalert_execution_errors_total)",
-    "vmalert_iter_miss": "sum(vmalert_iteration_missed_total)",
-    "vmalert_rw_rps": "sum(rate(vmalert_remotewrite_total[5m]))",
 }
 
 
@@ -98,12 +94,6 @@ def fmt_p99_sec(x: float | None) -> str:
     return f"{round(ms)} ms"
 
 
-def fmt_iter(x: float | None) -> str:
-    if x is None:
-        return "—"
-    return f"{x:.2f} сек"
-
-
 def main() -> None:
     rows = []
     for label in sorted(TARGETS.keys()):
@@ -142,10 +132,6 @@ def main() -> None:
             fmt_rps(m["vmselect_rps"]),
             fmt_rps(m["vmstorage_rps"], 1),
             fmt_rps(m["vminsert_rps"]),
-            fmt_iter(m["vmalert_iter_max"]),
-            f"{int(m['vmalert_exec_err']) if m['vmalert_exec_err'] is not None else '—'}",
-            f"{int(m['vmalert_iter_miss']) if m['vmalert_iter_miss'] is not None else '—'}",
-            fmt_rps(m["vmalert_rw_rps"], 1),
         )
         print()
 
