@@ -1,13 +1,3 @@
-# Helm: vm/victoria-metrics-k8s-stack 0.72.5 (VictoriaMetrics v1.138.0) — см. README.
-# Шкала нагрузки (ориентир при выборе ресурсов):
-#   ~5k алертов     — порог: дефолтные alertmanager/vmalert дают throttling/OOM.
-#   ~15k алертов    — vmstorage ~800–870Mi, vmalert ~930m CPU / ~570Mi, operator ~198m CPU.
-#   ~20k+ алертов   — vmstorage ~1140–1150Mi; vmselect при 1Gi — риск OOM.
-#   ~26k+ алертов   — vmselect OOM при лимите 1Gi; operator при 512Mi — OOM.
-#   ~31k+ алертов   — /metrics vmalert превышает 16 MiB, нужен promscrape.maxScrapeSize.
-#   ~100k алертов   — ориентир: vmalert ~3-4 CPU и ~3Gi RAM на реплику, + шардирование vmalert и масштабирование vmselect/vmstorage.
-# Ниже значения с увеличенным запасом (нагрузка + ноутбук/длительные apply); подробности и трекинг порогов — в README.
-
 grafana:
   ingress:
     ingressClassName: nginx
