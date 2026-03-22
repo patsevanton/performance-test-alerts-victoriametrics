@@ -132,7 +132,7 @@ cd alerts
 
 Исходный код: [alerts/apply-yaml.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml.sh).
 
-**Мониторинг ошибок:** в отдельном терминале (из `alerts`) запустите `./monitor-batch.sh`. При первой проблеме скрипт пишет текст в **stdout** и в `alerts/first-error-batch.txt` (путь задаётся `RESULT_FILE`). Проверяются логи VictoriaLogs (широкий фильтр ошибок), OOM vmalert, счётчики ошибок и 5xx по компонентам VictoriaMetrics — полный запрос, метрики и параметры (`INTERVAL`, `VL_LOG_LIMIT`, …) заданы в начале [monitor-batch.sh](alerts/monitor-batch.sh).
+**Мониторинг ошибок:** в отдельном терминале (из `alerts`) запустите `./monitor-batch.sh`. Проверяются логи VictoriaLogs (широкий фильтр ошибок), OOM vmalert, счётчики ошибок и 5xx по компонентам VictoriaMetrics.
 
 Исходный код: [alerts/monitor-batch.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/monitor-batch.sh).
 
