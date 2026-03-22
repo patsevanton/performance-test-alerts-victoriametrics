@@ -24,7 +24,8 @@ TARGETS = {
     35000: 1774176015,
     40000: 1774178280,
     45000: 1774179990,
-    50000: 1774179705,
+    # count(ALERTS)≈50k; момент согласован с ростом vmalert/vmselect (см. README Capacity Planning)
+    50000: 1774181250,
 }
 
 QUERIES = {

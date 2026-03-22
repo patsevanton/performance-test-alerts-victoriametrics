@@ -181,7 +181,7 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/status/tsdb
 
 Первая строка таблиц — базовый снимок **до** нагрузочного прогона (`apply-yaml.sh`): `kubectl top pods -n vmks` (среднее по двум подам там, где есть две реплики). Строки **5000–50000** — срезы из VictoriaMetrics в моменты времени, когда `count(ALERTS)` ближе всего к целевому уровню: `query_range` с шагом **15 секунд** по истории прогона **2026-03-22** (UTC), затем instant `query` с параметром `time` для метрик подов (`pod_cpu_usage_seconds_total` / `pod_memory_working_set_bytes`, `namespace=vmks`, среднее по репликам компонента) и операционных метрик; отклонение |`count(ALERTS)` − N| ≤ **150** для каждого уровня N. Для всех перечисленных N (включая **35000–50000**) в истории метрик такие срезы **есть**. На высоких уровнях `count(ALERTS)` заметно флуктуирует, поэтому моменты времени соседних строк не обязаны идти строго по календарю (например, срез ~50 000 может быть раньше среза ~45 000). Прирост ресурсов ожидается пропорционален `count(ALERTS)`.
 
-> **Метрики для таблиц ниже:** таблицы **CPU** и **Memory** — `avg(rate(pod_cpu_usage_seconds_total{namespace="vmks", pod=~"<компонент>-..."}[2m])) * 1000` (милликоры на реплику) и `avg(pod_memory_working_set_bytes{...}) / 1024 / 1024` (MiB); первая строка (455) согласована с `kubectl top pods` (те же `pod_*` с kubelet `/metrics/resource`). Таблица **RPS и операционные метрики** — `apiserver_request_total`, `apiserver_request_duration_seconds_bucket` (p99), `process_cpu_seconds_total` (CPU kube-apiserver), `vm_http_requests_total` по `job` для vmselect/vmstorage/vminsert, `vmalert_iteration_duration_seconds`, `vmalert_execution_errors_total`, `vmalert_iteration_missed_total`, `vmalert_remotewrite_total`. Полные запросы — в [scripts/fetch_capacity_snapshots.py](scripts/fetch_capacity_snapshots.py).
+> **Метрики для таблиц ниже:** таблицы **CPU** и **Memory** — `avg(rate(pod_cpu_usage_seconds_total{namespace="vmks", pod=~"<компонент>-..."}[2m])) * 1000` (милликоры на реплику) и `avg(pod_memory_working_set_bytes{...}) / 1024 / 1024` (MiB); первая строка (**~500**) согласована с `kubectl top pods` (те же `pod_*` с kubelet `/metrics/resource`). Таблица **RPS и операционные метрики** — `apiserver_request_total`, `apiserver_request_duration_seconds_bucket` (p99), `process_cpu_seconds_total` (CPU kube-apiserver), `vm_http_requests_total` по `job` для vmselect/vmstorage/vminsert, `vmalert_iteration_duration_seconds`, `vmalert_execution_errors_total`, `vmalert_iteration_missed_total`, `vmalert_remotewrite_total`. Полные запросы — в [scripts/fetch_capacity_snapshots.py](scripts/fetch_capacity_snapshots.py).
 
 
 #### CPU (на реплику)
@@ -189,17 +189,17 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/status/tsdb
 
 | ALERTS | vmalert | vmstorage | vmselect | vminsert | vmagent | operator |
 | ------ | ------- | --------- | -------- | -------- | ------- | -------- |
-| 455    | 16m     | 45m       | 37m      | 12m      | 31m     | 5m       |
-| 5000   | 151m    | 118m      | 109m     | 15m      | 54m     | 16m      |
-| 10000  | 251m    | 96m       | 127m     | 19m      | 75m     | 34m      |
-| 15000  | 464m    | 344m      | 236m     | 30m      | 115m    | 62m      |
-| 20000  | 609m    | 156m      | 276m     | 33m      | 145m    | 67m      |
-| 25000  | 875m    | 240m      | 294m     | 38m      | 160m    | 100m     |
-| 30000  | 827m    | 210m      | 293m     | 41m      | 168m    | 95m      |
-| 35000  | 1063m   | 209m      | 333m     | 42m      | 249m    | 127m     |
-| 40000  | 1364m   | 484m      | 337m     | 63m      | 284m    | 138m     |
-| 45000  | 1510m   | 232m      | 349m     | 65m      | 289m    | 160m     |
-| 50000  | 1551m   | 210m      | 277m     | 56m      | 297m    | 158m     |
+| ~500   | 16m     | 45m       | 37m      | 12m      | 31m     | 5m       |
+| ~5000  | 151m    | 118m      | 109m     | 15m      | 54m     | 16m      |
+| ~10000 | 251m    | 96m       | 127m     | 19m      | 75m     | 34m      |
+| ~15000 | 464m    | 344m      | 236m     | 30m      | 115m    | 62m      |
+| ~20000 | 609m    | 156m      | 276m     | 33m      | 145m    | 67m      |
+| ~25000 | 875m    | 240m      | 294m     | 38m      | 160m    | 100m     |
+| ~30000 | 827m    | 210m      | 293m     | 41m      | 168m    | 95m      |
+| ~35000 | 1063m   | 209m      | 333m     | 42m      | 249m    | 127m     |
+| ~40000 | 1364m   | 484m      | 337m     | 63m      | 284m    | 138m     |
+| ~45000 | 1510m   | 232m      | 349m     | 65m      | 289m    | 160m     |
+| ~50000 | 1379m   | 238m      | 335m     | 75m      | 306m    | 169m     |
 
 
 #### Memory (на реплику)
@@ -207,36 +207,36 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/status/tsdb
 
 | ALERTS | vmalert | vmstorage | vmselect | vminsert | vmagent | operator |
 | ------ | ------- | --------- | -------- | -------- | ------- | -------- |
-| 455    | 44Mi    | 227Mi     | 45Mi     | 62Mi     | 83Mi    | 39Mi     |
-| 5000   | 136Mi   | 601Mi     | 156Mi    | 64Mi     | 96Mi    | 70Mi     |
-| 10000  | 108Mi   | 744Mi     | 150Mi    | 91Mi     | 107Mi   | 85Mi     |
-| 15000  | 314Mi   | 1390Mi    | 395Mi    | 144Mi    | 135Mi   | 116Mi    |
-| 20000  | 456Mi   | 2057Mi    | 390Mi    | 128Mi    | 168Mi   | 148Mi    |
-| 25000  | 728Mi   | 2334Mi    | 559Mi    | 135Mi    | 204Mi   | 173Mi    |
-| 30000  | 167Mi   | 2093Mi    | 370Mi    | 158Mi    | 209Mi   | 174Mi    |
-| 35000  | 603Mi   | 2053Mi    | 553Mi    | 148Mi    | 246Mi   | 212Mi    |
-| 40000  | 1012Mi  | 2884Mi    | 237Mi    | 189Mi    | 318Mi   | 264Mi    |
-| 45000  | 1080Mi  | 2538Mi    | 239Mi    | 152Mi    | 294Mi   | 177Mi    |
-| 50000  | 1139Mi  | 2353Mi    | 247Mi    | 192Mi    | 359Mi   | 286Mi    |
+| ~500   | 44Mi    | 227Mi     | 45Mi     | 62Mi     | 83Mi    | 39Mi     |
+| ~5000  | 136Mi   | 601Mi     | 156Mi    | 64Mi     | 96Mi    | 70Mi     |
+| ~10000 | 108Mi   | 744Mi     | 150Mi    | 91Mi     | 107Mi   | 85Mi     |
+| ~15000 | 314Mi   | 1390Mi    | 395Mi    | 144Mi    | 135Mi   | 116Mi    |
+| ~20000 | 456Mi   | 2057Mi    | 390Mi    | 128Mi    | 168Mi   | 148Mi    |
+| ~25000 | 728Mi   | 2334Mi    | 559Mi    | 135Mi    | 204Mi   | 173Mi    |
+| ~30000 | 167Mi   | 2093Mi    | 370Mi    | 158Mi    | 209Mi   | 174Mi    |
+| ~35000 | 603Mi   | 2053Mi    | 553Mi    | 148Mi    | 246Mi   | 212Mi    |
+| ~40000 | 1012Mi  | 2884Mi    | 237Mi    | 189Mi    | 318Mi   | 264Mi    |
+| ~45000 | 1080Mi  | 2538Mi    | 239Mi    | 152Mi    | 294Mi   | 177Mi    |
+| ~50000 | 1202Mi  | 2635Mi    | 262Mi    | 188Mi    | 312Mi   | 306Mi    |
 
 
 ### RPS и операционные метрики
 
 | ALERTS | API Server RPS | API Server p99 lat | API Server CPU | vmselect HTTP RPS | vmstorage HTTP RPS | vminsert HTTP RPS | vmalert iter_duration (max) | vmalert exec_errors | vmalert iter_missed | vmalert remotewrite_req |
 | ------ | -------------- | ------------------ | -------------- | ----------------- | ------------------ | ----------------- | --------------------------- | ------------------- | ------------------- | ----------------------- |
-| 455    | 11.4           | 34 ms              | 70m            | 23.2              | 0.1                | 8.0               | 1.01 сек                    | 2 189               | 0                   | 144                     |
-| 5000   | 12.3           | 48 ms              | 84m            | 206               | 0.1                | 10.5              | 0.85 сек                    | 0                   | 0                   | 861                     |
-| 10000  | 12.3           | 47 ms              | 83m            | 339               | 0.1                | 10.7              | 0.90 сек                    | 0                   | 0                   | 697                     |
-| 15000  | 12.6           | 44 ms              | 86m            | 630               | 0.1                | 11.1              | 2.42 сек                    | 0                   | 0                   | 2374                    |
-| 20000  | 12.8           | 76 ms              | 88m            | 796               | 0.1                | 11.3              | 3.00 сек                    | 0                   | 0                   | 2961                    |
-| 25000  | 13.1           | 83 ms              | 92m            | 1027              | 0.1                | 11.6              | 5.39 сек                    | 0                   | 0                   | 3784                    |
-| 30000  | 13.7           | 78 ms              | 97m            | 1056              | 0.1                | 11.8              | 1.01 сек                    | 0                   | 0                   | 2081                    |
-| 35000  | 12.8           | 96 ms              | 94m            | 1143              | 0.1                | 11.8              | 5.22 сек                    | 0                   | 0                   | 2423                    |
-| 40000  | 14.3           | 95 ms              | 104m           | 1645              | 0.1                | 12.3              | 16.25 сек                   | 9                   | 0                   | 6031                    |
-| 45000  | 13.9           | 153 ms             | 108m           | 1871              | 0.1                | 12.5              | 22.77 сек                   | 17                  | 0                   | 6800                    |
-| 50000  | 13.1           | 50 ms              | 99m            | 1596              | 0.1                | 12.6              | 1.77 сек                    | 25                  | 0                   | 3359                    |
+| ~500   | 11.4           | 34 ms              | 70m            | 23.2              | 0.1                | 8.0               | 1.01 сек                    | 2 189               | 0                   | 144                     |
+| ~5000  | 12.3           | 48 ms              | 84m            | 206               | 0.1                | 10.5              | 0.85 сек                    | 0                   | 0                   | 861                     |
+| ~10000 | 12.3           | 47 ms              | 83m            | 339               | 0.1                | 10.7              | 0.90 сек                    | 0                   | 0                   | 697                     |
+| ~15000 | 12.6           | 44 ms              | 86m            | 630               | 0.1                | 11.1              | 2.42 сек                    | 0                   | 0                   | 2374                    |
+| ~20000 | 12.8           | 76 ms              | 88m            | 796               | 0.1                | 11.3              | 3.00 сек                    | 0                   | 0                   | 2961                    |
+| ~25000 | 13.1           | 83 ms              | 92m            | 1027              | 0.1                | 11.6              | 5.39 сек                    | 0                   | 0                   | 3784                    |
+| ~30000 | 13.7           | 78 ms              | 97m            | 1056              | 0.1                | 11.8              | 1.01 сек                    | 0                   | 0                   | 2081                    |
+| ~35000 | 12.8           | 96 ms              | 94m            | 1143              | 0.1                | 11.8              | 5.22 сек                    | 0                   | 0                   | 2423                    |
+| ~40000 | 14.3           | 95 ms              | 104m           | 1645              | 0.1                | 12.3              | 16.25 сек                   | 9                   | 0                   | 6031                    |
+| ~45000 | 13.9           | 153 ms             | 108m           | 1871              | 0.1                | 12.5              | 22.77 сек                   | 17                  | 0                   | 6800                    |
+| ~50000 | 14.3           | 119 ms             | 110m           | 2021              | 0.1                | 12.9              | 9.14 сек                    | 16                  | 0                   | 5552                    |
 
-Колонка **vmalert remotewrite_req** — `sum(rate(vmalert_remotewrite_total[5m]))` (RPS remoteWrite). Воспроизведение строк таблицы: [scripts/fetch_capacity_snapshots.py](scripts/fetch_capacity_snapshots.py).
+Колонка **vmalert remotewrite_req** — `sum(rate(vmalert_remotewrite_total[5m]))` (RPS remoteWrite: запись рядов `ALERTS` и `ALERTS_FOR_STATE` в VM при каждой итерации; при большом числе алертов хорошо коррелирует с нагрузкой на vminsert/vmselect). В паре с **max(vmalert_iteration_duration_seconds)** это информативнее мгновенного p99 apiserver в одном срезе, если `count(ALERTS)` сильно флуктуирует. Воспроизведение строк таблицы: [scripts/fetch_capacity_snapshots.py](scripts/fetch_capacity_snapshots.py). Строка **~50000** — срез `time=1774181250` (UTC), `count(ALERTS)`≈50.5k (|Δ|≤500 к целевому уровню); ранее использованный момент давал заниженный p99 apiserver и низкую длительность итерации при том же целевом N из‑за несовпадения моментов по времени и флуктуаций.
 
 ## Рекомендации по повышению устойчивости
 
@@ -402,7 +402,7 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query
 
 - **Отказоустойчивость:** Механизм remoteWrite/remoteRead (`ALERTS`, `ALERTS_FOR_STATE`) работает корректно: после рестарта vmalert восстанавливает состояние алертов из VictoriaMetrics, счётчики `for` не сбрасываются, потери алертов не происходят. `vmalert_execution_errors_total = 0` и `vmalert_iteration_missed_total = 0` подтверждают стабильную работу. Временное падение `sum(ALERTS)` во время рестарта — следствие задержки первой итерации, а не потери данных. **Перезапуски vmalert:** каждое появление нового ConfigMap приводит к пересозданию Pod'а (из-за volume/volumeMount); интервал между рестартами ~13–15 мин, за тест — 15 ReplicaSet'ов (14 пересозданий). Горячая перезагрузка (SIGHUP) — только при обновлении существующих ConfigMap'ов без новых.
 - **Потребление ресурсов и масштабируемость:** При ~23 000 алертов (~4,79 млн рядов) vmalert потребляет ~723m CPU и ~676Mi памяти на реплику — в пределах лимитов (4 CPU / 4 Gi). VM Operator — ~52m CPU. `max(vmalert_iteration_duration_seconds)` достигла 3.84 сек — важный индикатор при интервалах 30s. Экстраполяция к ~100 000 алертов указывает на шардирование vmalert и масштабирование VMCluster. **Распределение по ConfigMap'ам:** Operator стабильно дробит правила у лимита ~1 MiB (~505–509 KB на ConfigMap); при ~23 000 алертов — 17 ConfigMap'ов (~8,5 MB суммарно), механизм предсказуем.
-- **Нагрузка на API server:** По срезам Capacity Planning рост `count(ALERTS)` с ~455 до ~35 000 сопровождался умеренным ростом RPS API server (порядка **11–14** req/s в среднем по окнам), p99 задержки **34–85 ms**, CPU kube-apiserver **~70–100m** — нагрузка на control plane заметна, но не доминирует над узкими местами по vmalert/vmselect/vmstorage в этом прогоне.
+- **Нагрузка на API server:** По срезам Capacity Planning рост `count(ALERTS)` с ~500 до ~35 000 сопровождался умеренным ростом RPS API server (порядка **11–14** req/s в среднем по окнам), p99 задержки **34–119 ms** (в верхнем диапазоне — в том числе срез **~50000**), CPU kube-apiserver **~70–110m** — нагрузка на control plane заметна, но не доминирует над узкими местами по vmalert/vmselect/vmstorage в этом прогоне.
 
 ### Основные выводы
 
