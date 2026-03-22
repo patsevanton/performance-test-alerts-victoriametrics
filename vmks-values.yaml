@@ -23,6 +23,15 @@ defaultDatasources:
 vmsingle:
   enabled: false # было true по умолчанию
 
+# HA / RTO / RPO (сжато). Реплики и PDB по компонентам — таблица «Компоненты» в README.
+# RTO: vmalert ≤60s; VMCluster ≤5m; Alertmanager ≤60s; VM Operator ≤2m.
+# RPO: vmalert 0 при remoteRead; VMCluster 0 при потере 1 vmstorage (RF=2); AM — silences/inhibitions в PVC; operator stateless (CRD).
+# Сценарии: (1) pod vmalert — пересоздание K8s, remoteRead/ALERTS_FOR_STATE, вторая реплика без даунтайма пайплайна;
+# (2) недоступен VMCluster — растёт vmalert_execution_errors_total, firing в памяти до восстановления;
+# (3) потеря 1 PVC vmstorage — сервис при RF=2; оба PVC — потеря метрик и ALERTS_FOR_STATE, for>0 с нуля;
+# (4) namespace/CRD — Helm + VMRule из Git, GitOps ~5 мин.
+# Дедуп при 2×vmalert: одинаковые labels (без per-replica -external.label); Alertmanager cluster (2 repl); один endpoint AM. Иначе — шард правил.
+
 vmcluster:
   enabled: true # было false по умолчанию
   spec:
@@ -113,7 +122,7 @@ alertmanager:
 vmalert:
   spec:
     # HA для оценки правил: 2 реплики, чтобы падение pod/ноды не останавливал оценку.
-    # Чтобы НЕ получить двойные нотификации, см. раздел в README: у реплик должны быть одинаковые labels алертов.
+    # Чтобы НЕ получить двойные нотификации, см. блок «HA / RTO / RPO» выше (перед vmcluster).
     replicaCount: 2
     # Защита от disruption'ов (drain/upgrade): минимум 1 pod должен оставаться.
     podDisruptionBudget:
