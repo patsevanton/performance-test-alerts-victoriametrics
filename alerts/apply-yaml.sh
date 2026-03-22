@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VMRULES_SUBDIR="vmrules"
 VMRULES_DIR="${SCRIPT_DIR}/${VMRULES_SUBDIR}"
 # Таймаут между применением apply (секунды)
-APPLY_TIMEOUT=65
+APPLY_TIMEOUT=30
 # Скрипт завершается с ошибкой, если число файлов отличается от ожидаемого
 EXPECTED_COUNT=500
 

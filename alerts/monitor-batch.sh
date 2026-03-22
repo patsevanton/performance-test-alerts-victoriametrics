@@ -18,7 +18,7 @@ INTERVAL=15
 VMALERT_NAMESPACE="vmks"
 CURL_OPTS="-s --max-time 15"
 # Максимум строк логов из VictoriaLogs за один запрос
-VL_LOG_LIMIT=20
+VL_LOG_LIMIT=200
 # Ширина окна поиска логов (минуты назад от текущего момента)
 VL_WINDOW_MIN=2
 
