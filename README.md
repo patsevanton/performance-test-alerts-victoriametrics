@@ -139,19 +139,16 @@ cd alerts
 
 ## Текущее состояние (снимок на 2026-03-22)
 
-> **Примечание:** тест в процессе (`apply-yaml.sh` запущен). Ниже — актуальный срез, собранный командами `kubectl` и запросами к `vmselect`.
+> **Примечание:** база **до** нагрузочного прогона (`apply-yaml.sh` с тестовыми `vmrule-*` ещё не запускался). Ниже — срез спокойного стенда (команды `kubectl`, запросы к `vmselect`).
 
 
 ### Распределение правил по ConfigMap'ам
 
-Суммарный размер `rulefiles-`*: **16 618 123 bytes (~15.85 MiB)**, средний размер ConfigMap: **~519 KB**.
-Operator упаковывает правила в ConfigMap'ы до ~500–530 KB и создаёт новый по мере роста числа `VMRule`. На текущий момент **32 ConfigMap'а** (rulefiles-0 … rulefiles-31), последний заполнен частично.
+Суммарный размер `rulefiles-*`: **154 287 bytes (~0.15 MiB)**. Сейчас **1** ConfigMap с префиксом `rulefiles` (все правила помещаются в один объект).
 
 ### Перезапуски vmalert и восстановление состояния
 
-`vmalert` остаётся в ожидаемой модели: при появлении нового ConfigMap возможен rolling restart (из-за новых `volume`/`volumeMount`), а восстановление состояния идёт через `remoteRead` по `ALERTS_FOR_STATE`. За время apply-yaml.sh зафиксировано **11 ReplicaSet'ов** (10 пересозданий). На текущем срезе применено **413 тестовых VMRule** (всего **451 VMRule** в кластере) и создано **32 ConfigMap'а**.
-
-**Важное наблюдение:** `max(vmalert_iteration_duration_seconds)` достигла **13.78 сек** — значительный рост относительно ~3.46 сек при ~20 000 алертов. При этом `vm_concurrent_select_limit_reached_total` на vmselect'ах суммарно **962 261** — vmselect периодически упирается в лимит конкурентных запросов. Также `vmalert_execution_errors_total = 21`, поэтому важен разбор источника ошибок (в т.ч. по логам и 5xx).
+`vmalert` в ожидаемой модели: при появлении нового ConfigMap возможен rolling restart (новые `volume`/`volumeMount`), восстановление состояния — через `remoteRead` по `ALERTS_FOR_STATE`. На срезе: **1** ReplicaSet у `vmalert` (без серии пересозданий из-за дробления правил). В namespace **vmks** — **39** `VMRule` (генерируемых `vmrule-*` нет). `count(ALERTS)` ≈ **455**, `max(vmalert_iteration_duration_seconds)` ≈ **1.01 с**, `sum(vmalert_execution_errors_total)` = **2 189** (накопленный счётчик; при необходимости разбор по логам vmalert).
 
 Это согласуется с документацией VictoriaMetrics (`vmalert`: state restore выполняется один раз при старте процесса; hot reload не триггерит restore).
 
@@ -279,7 +276,7 @@ vmalert настроен на запись и чтение состояния и
 
 ### Ресурсы подов при росте нагрузки
 
-Данные собраны командой `kubectl top pods -n vmks` на разных этапах теста. Прирост ресурсов пропорционален числу алертов.
+Первая строка таблиц — базовый снимок **до** нагрузочного прогона (`apply-yaml.sh`): `kubectl top pods -n vmks` (среднее по двум подам там, где есть две реплики). Дальнейшие строки будут дополняться по мере роста числа алертов; прирост ресурсов ожидается пропорционален `count(ALERTS)`.
 
 > **Важно:** `kubectl top` использует метрики `pod_cpu_usage_seconds_total` и `pod_memory_working_set_bytes` из эндпоинта kubelet `/metrics/resource`. При верификации этих данных через PromQL/MetricsQL необходимо использовать именно эти метрики, а **не** `container_cpu_usage_seconds_total` / `container_memory_working_set_bytes` с `sum by (pod)` — последние дублируются из двух источников (`/metrics/cadvisor` и `/metrics/resource`) и дают завышенные значения (~2x). Подробнее — в разделе [Дублирование метрик kubelet](#дублирование-метрик-kubelet-metricscadvisor-vs-metricsresource).
 
@@ -289,12 +286,7 @@ vmalert настроен на запись и чтение состояния и
 
 | ALERTS | vmalert | vmstorage | vmselect | vminsert | vmagent | operator |
 | ------ | ------- | --------- | -------- | -------- | ------- | -------- |
-| 5 116  | 139m    | 93m       | 87m      | 18m      | 50m     | 20m      |
-| 11 340 | 281m    | 152m      | 161m     | 22m      | 79m     | 50m      |
-| 17 888 | 510m    | 128m      | 212m     | 32m      | 125m    | 62m      |
-| 28 142 | 642m    | 779m      | 363m     | 37m      | 151m    | 92m      |
-| 32 685 | 1 102m  | 1 074m    | 547m     | 49m      | 213m    | 123m     |
-| 45 446 | 1 978m  | 302m      | 439m     | 83m      | 348m    | 180m     |
+| 455    | 16m     | 45m       | 37m      | 12m      | 31m     | 5m       |
 
 
 #### Memory (на реплику)
@@ -302,38 +294,27 @@ vmalert настроен на запись и чтение состояния и
 
 | ALERTS | vmalert | vmstorage | vmselect | vminsert | vmagent | operator |
 | ------ | ------- | --------- | -------- | -------- | ------- | -------- |
-| 5 116  | 121Mi   | 652Mi     | 112Mi    | 99Mi     | 85Mi    | 66Mi     |
-| 11 340 | 265Mi   | 1 329Mi   | 146Mi    | 108Mi    | 141Mi   | 97Mi     |
-| 17 888 | 385Mi   | 1 617Mi   | 295Mi    | 158Mi    | 158Mi   | 125Mi    |
-| 28 142 | 514Mi   | 2 201Mi   | 218Mi    | 141Mi    | 184Mi   | 157Mi    |
-| 32 685 | 625Mi   | 2 949Mi   | 1 071Mi  | 188Mi    | 360Mi   | 185Mi    |
-| 45 446 | 1 386Mi | 2 619Mi   | 305Mi    | 253Mi    | 320Mi   | 270Mi    |
+| 455    | 44Mi    | 227Mi     | 45Mi     | 62Mi     | 83Mi    | 39Mi     |
 
 
 ### RPS и операционные метрики
 
+> **API Server p99:** для `apiserver_request_duration_seconds` без фильтра по `verb` в гистограмму попадают долгие **WATCH** и квантиль может упираться в верхнюю границу (десятки секунд). В таблице — **p99 для не-WATCH** запросов: `histogram_quantile(0.99, sum(rate(apiserver_request_duration_seconds_bucket{job="apiserver", verb!~"WATCH|WATCHLIST|CONNECT"}[5m])) by (le))`, результат в секундах → миллисекунды.
+>
+> **vmalert remotewrite_req:** `sum(rate(vmalert_remotewrite_total[5m]))` (запросов remote write в секунду). HTTP RPS по компонентам: `sum(rate(vm_http_requests_total{job=~"...-vmks-victoria-metrics-k8s-stack"}[5m]))` с соответствующим `job` (`vmselect-…`, `vmstorage-…`, `vminsert-…`).
 
 | ALERTS | API Server RPS | API Server p99 lat | API Server CPU | vmselect HTTP RPS | vmstorage HTTP RPS | vminsert HTTP RPS | vmalert iter_duration (max) | vmalert exec_errors | vmalert iter_missed | vmalert remotewrite_req |
 | ------ | -------------- | ------------------ | -------------- | ----------------- | ------------------ | ----------------- | --------------------------- | ------------------- | ------------------- | ----------------------- |
-| 5 116  | 12.3           | 48 ms              | 81m            | 201               | 0.1                | 10.4              | 0.87 сек                    | 0                   | 0                   | 860                     |
-| 11 340 | 12.6           | 49 ms              | 81m            | 460               | 0.1                | 10.8              | 1.48 сек                    | 0                   | 0                   | 1 309                   |
-| 17 888 | 12.7           | 46 ms              | 88m            | 691               | 0.1                | 11.1              | 2.68 сек                    | 0                   | 0                   | 1 319                   |
-| 28 142 | 12.7           | 57 ms              | 95m            | 890               | 0.1                | 11.1              | 3.46 сек                    | 0                   | 0                   | 1 710                   |
-| 32 685 | 12.0           | 56 ms              | 93m            | 1 153             | 0.1                | 11.6              | 13.19 сек                   | 0                   | 0                   | 2 220                   |
-| 45 446 | 13.7           | 60 ms              | 101m           | 1 866             | 0.1                | 12.6              | 13.78 сек                   | 21                  | 0                   | 1 032 805               |
+| 455    | 11.4           | 34 ms              | 70m            | 23.2              | 0.1                | 8.0               | 1.01 сек                    | 2 189               | 0                   | 144                     |
 
 
 ### Объёмные метрики и состояние
 
+> Размер ответа скрапа vmalert: `max(scrape_response_size_bytes{job=~"vmalert-.*"})` (размер тела ответа `/metrics` у цели vmagent; в Grafana/PromQL имя может совпадать с прежним «scrape body size»).
 
 | ALERTS | ALERTS_FOR_STATE | ConfigMaps (кол-во) | ConfigMaps (размер) | scrape_body_size (vmalert) |
 | ------ | ---------------- | ------------------- | ------------------- | -------------------------- |
-| 5 116  | 4 153            | 4                   | 1.74 MiB            | 5.3 MiB                    |
-| 11 340 | 9 407            | 8                   | 3.76 MiB            | 12.0 MiB                   |
-| 17 888 | 14 688           | 12                  | 5.74 MiB            | 18.7 MiB                   |
-| 28 142 | 19 511           | 16                  | 7.61 MiB            | 24.6 MiB                   |
-| 32 685 | 24 728           | 20                  | 9.59 MiB            | 31.6 MiB                   |
-| 45 446 | 40 955           | 32                  | 15.85 MiB           | 50.6 MiB                   |
+| 455    | 455              | 1                   | 0.15 MiB            | 0.38 MiB                   |
 
 
 
@@ -488,7 +469,7 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query
 
 ## Метрики, выросшие при нагрузке (VictoriaMetrics stack)
 
-> Данные ниже собраны в предыдущем прогоне теста (до ~23 000 алертов). Текущий тест в процессе — свежие данные см. в таблицах раздела [Capacity Planning](#capacity-planning).
+> Данные ниже — обобщение **прошлых** прогонов (до ~23 000 алертов). Базовый снимок текущего эксперимента и последующие этапы — в таблицах раздела [Capacity Planning](#capacity-planning).
 
 Оценки даны для роста от малой нагрузки до **~23 000 алертов** (~252 VMRule, ~4,79 млн рядов). Базовый URL запросов: `http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometheus`.
 
@@ -566,7 +547,7 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query
 
 ## Заключение и выводы
 
-> Выводы ниже основаны на предыдущем прогоне теста (до ~44 000 алертов). Текущий тест запущен 2026-03-22 — актуальные данные в разделе [Текущее состояние](#текущее-состояние-снимок-на-2026-03-22) и таблицах [Capacity Planning](#capacity-planning).
+> Выводы ниже основаны на предыдущем прогоне теста (до ~44 000 алертов). Актуальный срез стенда (2026-03-22, линия «до» нагрузки) — в разделе [Текущее состояние](#текущее-состояние-снимок-на-2026-03-22) и первой строке таблиц [Capacity Planning](#capacity-planning).
 
 Проведённое нагрузочное тестирование VictoriaMetrics stack большим количеством VMRule подтвердило заявленные цели и позволило сформулировать практические выводы.
 
