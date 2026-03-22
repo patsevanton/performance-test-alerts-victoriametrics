@@ -128,7 +128,7 @@ cd alerts
 
 Исходный код: [alerts/apply-yaml.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml.sh).
 
-**Мониторинг ошибок:** в отдельном терминале запустите `./monitor-batch.sh` — при первой проблеме скрипт **печатает в stdout** текст (строки логов из VictoriaLogs с префиксом namespace/pod/container или ненулевые метрики). Момент и детали пишутся в `alerts/first-error-batch.txt` (`RESULT_FILE=...`). Проверяются: OOM vmalert; **LogsQL** по широкому OR (`i(error)`, fatal, panic, failed, exception, unreachable, critical, `log.level:(error|fatal|panic|critical)`, `"level=error"`, HTTP 5xx/422, timeout, OOM в тексте и т.д., см. `VL_LOGSQL_QUERY` в скрипте); метрики `vmalert_execution_errors_total`, `vm_concurrent_select_limit_reached_total`, суммарный rate **5xx** по `vmselect|vmstorage|vminsert`. Константы: `INTERVAL` (15 с), `VL_LOG_LIMIT` (200), `VL_WINDOW_MIN` (2), `VL_LOGSQL_QUERY`, `CURL_OPTS` (`-s --max-time 15`).
+**Мониторинг ошибок:** в отдельном терминале (из `alerts`) запустите `./monitor-batch.sh`. При первой проблеме скрипт пишет текст в **stdout** и в `alerts/first-error-batch.txt` (путь задаётся `RESULT_FILE`). Проверяются логи VictoriaLogs (широкий фильтр ошибок), OOM vmalert, счётчики ошибок и 5xx по компонентам VictoriaMetrics — полный запрос, метрики и параметры (`INTERVAL`, `VL_LOG_LIMIT`, …) заданы в начале [monitor-batch.sh](alerts/monitor-batch.sh).
 
 Исходный код: [alerts/monitor-batch.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/monitor-batch.sh).
 
