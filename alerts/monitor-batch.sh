@@ -8,23 +8,22 @@
 
 _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Эндпоинты VictoriaLogs и VictoriaMetrics (vmselect)
-VL_URL="${VL_URL:-https://victorialogs.apatsev.org.ru}"
-VM_URL="${VM_URL:-https://vmselect.apatsev.org.ru}"
+VL_URL="https://victorialogs.apatsev.org.ru"
+VM_URL="https://vmselect.apatsev.org.ru"
 # Файл, в который записывается первая обнаруженная проблема
-RESULT_FILE="${RESULT_FILE:-${_SCRIPT_DIR}/first-error-batch.txt}"
+RESULT_FILE="${_SCRIPT_DIR}/first-error-batch.txt"
 # Период опроса (секунды)
-INTERVAL="${INTERVAL:-30}"
+INTERVAL=30
 # Namespace, в котором ищем поды vmalert для проверки OOM
-VMALERT_NAMESPACE="${VMALERT_NAMESPACE:-vmks}"
-CURL_OPTS="${CURL_OPTS:--s --max-time 15}"
+VMALERT_NAMESPACE="vmks"
+CURL_OPTS="-s --max-time 15"
 # Максимум строк логов из VictoriaLogs за один запрос
-VL_LOG_LIMIT="${VL_LOG_LIMIT:-20}"
+VL_LOG_LIMIT=20
 # Ширина окна поиска логов (минуты назад от текущего момента)
-VL_WINDOW_MIN="${VL_WINDOW_MIN:-2}"
+VL_WINDOW_MIN=2
 
-# Дефолтный LogsQL: широкий OR по признакам ошибок (окно времени задаётся start/end в API).
-_DEFAULT_VL_LOGSQL='(_error OR i(error) OR fatal OR panic OR failed OR exception OR unreachable OR critical OR level:error OR log.level:(error OR fatal OR panic OR critical) OR "level=error" OR 503 OR 502 OR 504 OR 422 OR timeout OR OOM OR OOMKilled)'
-VL_LOGSQL_QUERY="${VL_LOGSQL_QUERY:-${_DEFAULT_VL_LOGSQL}}"
+# LogsQL: широкий OR по признакам ошибок (окно времени задаётся start/end в API).
+VL_LOGSQL_QUERY='(_error OR i(error) OR fatal OR panic OR failed OR exception OR unreachable OR critical OR level:error OR log.level:(error OR fatal OR panic OR critical) OR "level=error" OR 503 OR 502 OR 504 OR 422 OR timeout OR OOM OR OOMKilled)'
 
 # Запоминаем момент старта для записи в отчёт
 START_TS=$(date -Iseconds)

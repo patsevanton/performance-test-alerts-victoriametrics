@@ -5,10 +5,10 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VMRULES_SUBDIR="${VMRULES_SUBDIR:-vmrules}"
+VMRULES_SUBDIR="vmrules"
 VMRULES_DIR="${SCRIPT_DIR}/${VMRULES_SUBDIR}"
-# Общая длительность этапа, по умолчанию 9 часов
-STAGE_DURATION_SEC="${STAGE_DURATION_SEC:-$((9 * 3600))}"
+# Общая длительность этапа (9 часов)
+STAGE_DURATION_SEC=$((9 * 3600))
 # Скрипт завершается с ошибкой, если число файлов отличается от ожидаемого
 EXPECTED_COUNT=500
 
