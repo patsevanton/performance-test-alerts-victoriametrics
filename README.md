@@ -127,13 +127,6 @@ VictoriaMetrics Operator хранит все правила оповещений
    vm-vmks-victoria-metrics-k8s-stack-rulefiles-1
    ...
   ```
-4. **Число** ConfigMap'ов **не меняется** — обновляется содержимое, аннотация Pod'а (`configmap-sync-lastupdate-at`) → **SIGHUP** (`config-reloader`), рестарта нет.
-5. **Новый** ConfigMap — нужны новые `volume`/`volumeMount` → **пересоздание Pod'а**.
-
-| Условие | Результат | Даунтайм |
-| --- | --- | --- |
-| VMRule без нового ConfigMap'а (лимит не исчерпан) | SIGHUP, правила перечитываются | Нет |
-| Нужен ещё один ConfigMap (split) | Новый Pod | Секунды |
 
 #### Сохранение состояния (State Persistence)
 
@@ -142,12 +135,6 @@ vmalert настроен на запись и чтение состояния и
 - **`-remoteWrite.url`** — при каждой оценке vmalert записывает ряды `ALERTS` и `ALERTS_FOR_STATE` в VMCluster (через vminsert);
 - **`-remoteRead.url`** — при **старте** процесса vmalert восстанавливает состояние, запрашивая ряды `ALERTS_FOR_STATE` (через vmselect).
 
-В нашем стенде:
-
-```
--remoteWrite.url=http://vminsert-vmks-victoria-metrics-k8s-stack:8480/insert/0/prometheus/api/v1/write
--remoteRead.url=http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometheus
-```
 
 **`ALERTS_FOR_STATE`** содержит полную информацию о состоянии каждого алерта (`ActiveAt`, `for` duration и т.д.), необходимую для восстановления после рестарта. При запуске vmalert однократно читает этот ряд для восстановления.
 
@@ -155,9 +142,7 @@ vmalert настроен на запись и чтение состояния и
 
 ### Скрипт `scripts/fetch_capacity_snapshots.py`
 
-**Что делает:** для каждого целевого уровня активных алертов (`count(ALERTS)` ≈ 5000, 10000, …, 50000) выполняет **instant**-запросы к Prometheus API VictoriaMetrics (`GET …/api/v1/query` с параметром `time`) в заранее выбранные моменты нагрузочного прогона (Unix time заданы в словаре `TARGETS` в коде). Запросы те же, что используются для таблиц ниже: средние CPU и память по репликам компонентов в `namespace=vmks` (vmalert, vmstorage, vmselect, vminsert, vmagent, operator), RPS и p99 задержка kube-apiserver, CPU apiserver, HTTP RPS vmselect/vmstorage/vminsert. Запросы к API выполняются параллельно (до 16 потоков). Вывод — текстовые блоки по каждому уровню (`ALERTS~N`), строки **CPU**, **MEM**, **RPS** в порядке колонок, совместимом с таблицами в этом README. Проверка TLS для внешнего ingress отключена (аналог `curl -sk`).
-
-**Ограничение:** базовый URL vmselect и метки времени **зашиты** под конкретный стенд и прогон; для другого кластера или даты нужно изменить константу `BASE` и словарь `TARGETS` в скрипте.
+**Что делает:** в моменты из словаря `TARGETS` (Unix time) делает **instant**-запросы к Prometheus API vmselect (`/api/v1/query`) для уровней нагрузки ~5000…50000 активных алертов. Метрики те же, что в таблицах ниже: CPU/MEM подов в `namespace=vmks`, kube-apiserver (RPS, p99, CPU), HTTP RPS vmselect/vmstorage/vminsert. До 16 параллельных запросов. На выходе — блоки `ALERTS~N` со строками **CPU**, **MEM**, **RPS** в формате таблиц ниже. TLS для ingress не проверяется (как `curl -sk`).
 
 **Как запустить** (только стандартная библиотека Python 3, зависимости не устанавливаются):
 
@@ -169,7 +154,7 @@ python3 scripts/fetch_capacity_snapshots.py
 
 ### Ресурсы подов при росте нагрузки
 
-#### CPU (на реплику)
+#### CPU (в среднем на pod)
 
 
 | ALERTS | vmalert | vmstorage | vmselect | vminsert | vmagent | operator |
@@ -187,7 +172,7 @@ python3 scripts/fetch_capacity_snapshots.py
 | ~50000 | 1379m   | 238m      | 335m     | 75m      | 306m    | 169m     |
 
 
-#### Memory (на реплику)
+#### Memory (в среднем на pod)
 
 
 | ALERTS | vmalert | vmstorage | vmselect | vminsert | vmagent | operator |
@@ -221,8 +206,6 @@ python3 scripts/fetch_capacity_snapshots.py
 | ~45000 | 13.9           | 153 ms             | 108m           | 1871              | 0.1                | 12.5              |
 | ~50000 | 14.3           | 119 ms             | 110m           | 2021              | 0.1                | 12.9              |
 
-Воспроизведение строк таблицы: [scripts/fetch_capacity_snapshots.py](scripts/fetch_capacity_snapshots.py). Строка **~50000** — срез `time=1774181250` (UTC), `count(ALERTS)`≈50.5k (|Δ|≤500 к целевому уровню); ранее использованный момент давал заниженный p99 apiserver при том же целевом N из‑за несовпадения моментов по времени и флуктуаций.
-## Рекомендации по повышению устойчивости
 
 ## Полезные команды для мониторинга
 
