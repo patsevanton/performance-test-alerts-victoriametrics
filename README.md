@@ -233,12 +233,6 @@ python3 scripts/fetch_capacity_snapshots.py
 | `container_cpu_usage_seconds_total` (pod vmstorage) | CPU на слияние и обслуживание данных | **~3,9 m** CPU на 1000 `ALERTS` |
 | `vm_rows` / `vm_rows_inserted_total`, `vm_storage_blocks` | Объём рядов и данных на диске | Рост на порядки по мере заполнения стенда |
 
-### vminsert
-
-| Метрика | Зачем смотреть | Порядок роста (прогон) |
-| --- | --- | --- |
-| `vm_http_requests_total{job="vminsert"}` | Поток remote write (в т.ч. от vmalert) | **~0,1** req/s на 1000 `ALERTS` — умеренно относительно select |
-
 ### vmagent (скрейп vmalert)
 
 | Метрика | Зачем смотреть | Порядок роста (прогон) |
