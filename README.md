@@ -209,12 +209,14 @@ python3 scripts/fetch_capacity_snapshots.py
 
 Ниже — только те показатели, которые в этом сценарии **реально растут** вместе с числом активных `ALERTS` и на которые **имеет смысл смотреть в первую очередь** при планировании ёмкости и отладке. Сравнение **~500** → **~50 000** `ALERTS` — по [таблицам Capacity Planning](#ресурсы-подов-при-росте-нагрузки) и [RPS](#rps-и-операционные-метрики). Метрики, которые в успешном прогоне остаются нулевыми или почти не меняются (ошибки eval, RPS к vmstorage), сюда не включены.
 
+В столбце **«Порядок роста (прогон)»** для CPU и памяти указан **прирост на 1000 активных `ALERTS`** (линейная оценка по разнице между срезами ~50k и ~500, делённая на 49,5 тыс.): милликоры (**m**) и мебибайты (**MiB**). Рядом в скобках — абсолютные значения на под в начале и конце диапазона (и множитель, где уместно). Для RPS и прочих величин — свои единицы на 1000 `ALERTS` или качественное описание.
+
 ### vmalert
 
 | Метрика | Зачем смотреть | Порядок роста (прогон) |
 | --- | --- | --- |
-| `container_cpu_usage_seconds_total` (pod vmalert) | Главный индикатор вычислительной нагрузки на оценку правил | **~16m** → **~1379m** CPU на под ≈ **86×** |
-| `container_memory_working_set_bytes` (pod vmalert) | Память под реестр алертов и экспорт метрик | **~44 Mi** → **~1202 Mi** ≈ **27×** |
+| `container_cpu_usage_seconds_total` (pod vmalert) | Главный индикатор вычислительной нагрузки на оценку правил | **~28 m** CPU на 1000 `ALERTS` (**~16m** → **~1379m** на под, ≈ **86×**) |
+| `container_memory_working_set_bytes` (pod vmalert) | Память под реестр алертов и экспорт метрик | **~23 MiB** на 1000 `ALERTS` (**~44 Mi** → **~1202 Mi** на под, ≈ **27×**) |
 | `vmalert_iteration_duration_seconds` | Насколько итерация близко к `interval` группы (риск пропусков при росте) | До **~3,8 с** max при ~23k алертов ([заключение](#заключение-и-выводы)); смотреть перцентили |
 | `vmalert_remotewrite_requests_total` | Запись `ALERTS` / `ALERTS_FOR_STATE` в кластер | Растёт с числом групп и итераций; `rate()` |
 | `vmalert_alerts_firing` / `vmalert_alerts_pending` | Фактическая нагрузка по срабатывающим правилам | Масштабируется с объёмом firing/pending; при агрегации — `max`/`avg by`, не голый `sum` по репликам |
@@ -223,7 +225,7 @@ python3 scripts/fetch_capacity_snapshots.py
 
 | Метрика | Зачем смотреть | Порядок роста (прогон) |
 | --- | --- | --- |
-| `vm_http_requests_total{job="vmselect"}` | Основной поток чтения при eval и запросах правил | **~23** → **~2021** req/s ≈ **87×** |
+| `vm_http_requests_total{job="vmselect"}` | Основной поток чтения при eval и запросах правил | **~40** req/s на 1000 `ALERTS` (**~23** → **~2021** req/s, ≈ **87×**) |
 | `vm_concurrent_select_current` | Параллельная нагрузка на select | Заметно растёт с RPS vmselect (без фиксированного множителя в таблицах) |
 | `vm_select_request_duration_seconds` | Хвост латентности при тяжёлых запросах (в т.ч. `ALERTS_FOR_STATE`) | Смотреть p95/p99 на графике |
 
@@ -231,15 +233,15 @@ python3 scripts/fetch_capacity_snapshots.py
 
 | Метрика | Зачем смотреть | Порядок роста (прогон) |
 | --- | --- | --- |
-| `container_memory_working_set_bytes` (pod vmstorage) | RAM под кэш и данные; типичное узкое место по памяти | **~227 Mi** → **~2635 Mi** ≈ **11,6×** |
-| `container_cpu_usage_seconds_total` (pod vmstorage) | CPU на слияние и обслуживание данных | **~45m** → **~238m** ≈ **5,3×** |
+| `container_memory_working_set_bytes` (pod vmstorage) | RAM под кэш и данные; типичное узкое место по памяти | **~49 MiB** на 1000 `ALERTS` (**~227 Mi** → **~2635 Mi** на под, ≈ **11,6×**) |
+| `container_cpu_usage_seconds_total` (pod vmstorage) | CPU на слияние и обслуживание данных | **~3,9 m** CPU на 1000 `ALERTS` (**~45m** → **~238m** на под, ≈ **5,3×**) |
 | `vm_rows` / `vm_rows_inserted_total`, `vm_storage_blocks` | Объём рядов и данных на диске | Рост на порядки по мере заполнения стенда |
 
 ### vminsert
 
 | Метрика | Зачем смотреть | Порядок роста (прогон) |
 | --- | --- | --- |
-| `vm_http_requests_total{job="vminsert"}` | Поток remote write (в т.ч. от vmalert) | **~8** → **~13** req/s ≈ **1,6×** — умеренно относительно select |
+| `vm_http_requests_total{job="vminsert"}` | Поток remote write (в т.ч. от vmalert) | **~0,1** req/s на 1000 `ALERTS` (**~8** → **~13** req/s, ≈ **1,6×**) — умеренно относительно select |
 
 ### vmagent (скрейп vmalert)
 
@@ -251,8 +253,8 @@ python3 scripts/fetch_capacity_snapshots.py
 
 | Метрика | Зачем смотреть | Порядок роста (прогон) |
 | --- | --- | --- |
-| `process_cpu_seconds_total` / CPU пода operator | Reconcile большого числа `VMRule` и ConfigMap'ов | **~5m** → **~169m** ≈ **34×** |
-| `process_resident_memory_bytes` / память пода | Рост модели правил в памяти процесса | **~39 Mi** → **~306 Mi** ≈ **7,8×** |
+| `process_cpu_seconds_total` / CPU пода operator | Reconcile большого числа `VMRule` и ConfigMap'ов | **~3,3 m** CPU на 1000 `ALERTS` (**~5m** → **~169m** на под, ≈ **34×**) |
+| `process_resident_memory_bytes` / память пода | Рост модели правил в памяти процесса | **~5,4 MiB** на 1000 `ALERTS` (**~39 Mi** → **~306 Mi** на под, ≈ **7,8×**) |
 
 ### Объём рядов и control plane
 
@@ -267,6 +269,7 @@ python3 scripts/fetch_capacity_snapshots.py
 - Счётчики: `increase(metric[1h])` или сравнение окон «до» и «после».
 - Gauge (CPU, память, длительность): средние и перцентили по одинаковому окну.
 - Имена: `GET /api/v1/label/__name__/values` и фильтр по префиксу; ресурсы подов: `kubectl top pods -n vmks`.
+- **На 1000 `ALERTS`:** `(значение@~50k − значение@~500) / 49 500 × 1000` — оценка среднего прироста на тысячу алертов по прогону (для экстраполяции; нелинейность всё равно смотреть на графике).
 
 
 ## Заключение и выводы
