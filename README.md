@@ -312,16 +312,6 @@ vmalert настроен на запись и чтение состояния и
 | 9783   | 13.0           | 46 ms              | 86m            | 395.6             | 0.1                | 10.8              | 1.37 сек                    | 0                   | 0                   | 1505                    |
 
 
-### Объёмные метрики и состояние
-
-> Размер ответа скрапа vmalert: `max(scrape_response_size_bytes{job=~"vmalert-.*"})` (размер тела ответа `/metrics` у цели vmagent; в Grafana/PromQL имя может совпадать с прежним «scrape body size»).
-
-| ALERTS | ALERTS_FOR_STATE | ConfigMaps (кол-во) | ConfigMaps (размер) | scrape_body_size (vmalert) |
-| ------ | ---------------- | ------------------- | ------------------- | -------------------------- |
-| 455    | 455              | 1                   | 0.15 MiB            | 0.38 MiB                   |
-
-
-
 ### Рекомендации по масштабированию
 
 Конфигурация лимитов и запросов в Helm — [vmks-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/vmks-values.yaml). Краткие ориентиры по росту числа алертов:
