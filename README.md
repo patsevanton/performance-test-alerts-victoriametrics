@@ -213,8 +213,8 @@ python3 scripts/fetch_capacity_snapshots.py
 
 | Метрика | Чем грозит рост метрики | Порядок роста (прогон) |
 | --- | --- | --- |
-| `container_cpu_usage_seconds_total` (pod vmalert) | Исчерпание CPU и задержки оценки правил вплоть до пропусков итераций при приближении к лимитам, но при увеличении **~28 m** CPU на 1000 `ALERTS` риск перегрузки CPU маловероятен | **~28 m** CPU на 1000 `ALERTS` |
-| `container_memory_working_set_bytes` (pod vmalert) | Возможен OOM при нехватке лимита памяти под реестр алертов и крупный `/metrics`, но при увеличении **~23 MiB** на 1000 `ALERTS` риск OOM маловероятен | **~23 MiB** на 1000 `ALERTS` |
+| `container_cpu_usage_seconds_total` (pod vmalert) | Тротлинг, но при увеличении **~28 m** CPU на 1000 `ALERTS` риск тротлинга маловероятен | **~28 m** CPU на 1000 `ALERTS` |
+| `container_memory_working_set_bytes` (pod vmalert) | Возможен OOM, но при увеличении **~23 MiB** на 1000 `ALERTS` риск OOM маловероятен | **~23 MiB** на 1000 `ALERTS` |
 | `vmalert_iteration_duration_seconds` | Пока **~3,8 с ≪ 30 с** проблем нет. | До **~3,8 с** |
 
 ### vmselect и запросы к TSDB
@@ -229,8 +229,8 @@ python3 scripts/fetch_capacity_snapshots.py
 
 | Метрика | Чем грозит рост метрики | Порядок роста (прогон) |
 | --- | --- | --- |
-| `container_memory_working_set_bytes` (pod vmstorage) | OOM или давление на ноду при нехватке RAM под кэш и данные; типичное узкое место | **~49 MiB** на 1000 `ALERTS` |
-| `container_cpu_usage_seconds_total` (pod vmstorage) | Замедление слияния и обслуживания данных, рост латентности записи/чтения | **~3,9 m** CPU на 1000 `ALERTS` |
+| `container_memory_working_set_bytes` (pod vmstorage) | OOM, но при увеличении **~49 MiB** на 1000 `ALERTS` риск OOM маловероятен | **~49 MiB** на 1000 `ALERTS` |
+| `container_cpu_usage_seconds_total` (pod vmstorage) |  Тротлинг, но при увеличении **~3,9 m** CPU на 1000 `ALERTS` риск тротлинга маловероятен | **~3,9 m** CPU на 1000 `ALERTS` |
 | `vm_rows` / `vm_rows_inserted_total`, `vm_storage_blocks` | Рост диска, I/O и времени бэкапов и прочих операций обслуживания | Рост на порядки по мере заполнения стенда |
 
 ### vmagent (скрейп vmalert)
@@ -244,7 +244,7 @@ python3 scripts/fetch_capacity_snapshots.py
 | Метрика | Чем грозит рост метрики | Порядок роста (прогон) |
 | --- | --- | --- |
 | `process_cpu_seconds_total` / CPU пода operator | Задержки reconcile и отставание применения конфигурации при перегрузке CPU | **~3,3 m** CPU на 1000 `ALERTS` |
-| `process_resident_memory_bytes` / память пода | OOM или рестарты оператора при нехватке памяти под модель правил | **~5,4 MiB** на 1000 `ALERTS` |
+| `process_resident_memory_bytes` / память пода | OOM или рестарты оператора при нехватке памяти под модель правил, но при увеличении **~5,4 MiB** на 1000 `ALERTS` риск OOM маловероятен | **~5,4 MiB** на 1000 `ALERTS` |
 
 ## Заключение и выводы
 
