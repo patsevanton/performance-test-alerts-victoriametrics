@@ -216,8 +216,6 @@ python3 scripts/fetch_capacity_snapshots.py
 | `container_cpu_usage_seconds_total` (pod vmalert) | Главный индикатор вычислительной нагрузки на оценку правил | **~28 m** CPU на 1000 `ALERTS` |
 | `container_memory_working_set_bytes` (pod vmalert) | Память под реестр алертов и экспорт метрик | **~23 MiB** на 1000 `ALERTS` |
 | `vmalert_iteration_duration_seconds` | Насколько итерация близко к `interval` группы (риск пропусков при росте) | До **~3,8 с** max при ~23k алертов ([заключение](#заключение-и-выводы)); смотреть перцентили |
-| `vmalert_remotewrite_requests_total` | Запись `ALERTS` / `ALERTS_FOR_STATE` в кластер | Растёт с числом групп и итераций; `rate()` |
-| `vmalert_alerts_firing` / `vmalert_alerts_pending` | Фактическая нагрузка по срабатывающим правилам | Масштабируется с объёмом firing/pending; при агрегации — `max`/`avg by`, не голый `sum` по репликам |
 
 ### vmselect и запросы к TSDB
 
