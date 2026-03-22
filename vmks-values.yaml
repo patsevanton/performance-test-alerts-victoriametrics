@@ -50,8 +50,8 @@ vmcluster:
         search.maxQueueDuration: "60s"
         # С v1.105.0 лимит auto-calculated и может быть слишком мал при 16 concurrent + 4Gi;
         # фиксируем явно, чтобы query вроде topk(5, sum(vmalert_alerts_firing{…}) by(…)) не падал с 422.
-        # vmalert_alerting_rules_last_evaluation_samples — по ряду на правило; при ~300k+ правил/лейблов 300k мало.
-        search.maxUniqueTimeseries: "1000000"
+        # vmalert_alerting_rules_last_evaluation_samples — по ряду на правило; при >1M правил 1M мало (422 TooManyTimeseries).
+        search.maxUniqueTimeseries: "5000000"
         # У vmstorage нет флага search.maxQueryDuration (только у vmselect); см. vmselect.extraArgs выше.
       # Запас по памяти выше прежних 2Gi под длительную нагрузку и пики записи.
       # CPU: при лимите 1 было заметное throttling на поисковых запросах.
@@ -75,6 +75,8 @@ vmcluster:
         # Согласовать с queryTimeout в defaultDatasources (иначе vmselect обрежет раньше Grafana).
         search.maxQueryDuration: 300s
         search.maxLabelsAPIDuration: 120s
+        # Согласовать с vmstorage: иначе тяжёлые запросы по vmalert_* могут резаться на одном из слоёв.
+        search.maxUniqueTimeseries: "5000000"
       resources:
         limits:
           cpu: "2"
