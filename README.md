@@ -142,14 +142,9 @@ cd alerts
 
 > **Примечание:** сгенерированные `vmrule-*` применяются в namespace **`default`**; VictoriaMetrics Operator собирает правила в ConfigMap'ы **`vmks`**. Ниже — актуальный срез стенда (команды `kubectl`, запросы к `vmselect`).
 
-
-### Распределение правил по ConfigMap'ам
-
-Суммарный размер данных в `rulefiles-*` (сумма полей `data`): **6 538 787 bytes (~6.24 MiB)**. Сейчас **13** ConfigMap'ов с префиксом `rulefiles` (правила дробятся из‑за лимита ~1 MiB на объект).
-
 ### Перезапуски vmalert и восстановление состояния
 
-`vmalert` в ожидаемой модели: при появлении нового ConfigMap возможен rolling restart (новые `volume`/`volumeMount`), восстановление состояния — через `remoteRead` по `ALERTS_FOR_STATE`. На срезе: **11** ReplicaSet'ов у `vmalert` (серия пересозданий при добавлении ConfigMap'ов с правилами). Всего **201** `VMRule` в кластере, из них **162** с именами `vmrule-*` в **`default`**; в **`vmks`** — **39** «штатных» правил stack’а без префикса `vmrule-`. `count(ALERTS)` ≈ **19 400**, `count(ALERTS_FOR_STATE)` ≈ **16 000**, `totalSeries` (TSDB) ≈ **2,93 млн**, `max(vmalert_iteration_duration_seconds)` ≈ **4.55 с**, `sum(vmalert_execution_errors_total)` = **0** (текущее значение счётчика; при сбоях storage/select счётчик растёт).
+Перезапуски `vmalert` ожидаемы: при появлении нового ConfigMap с правилами под пересобирается с новыми `volume`/`volumeMount`, из‑за чего происходит rolling restart.
 
 Это согласуется с документацией VictoriaMetrics (`vmalert`: state restore выполняется один раз при старте процесса; hot reload не триггерит restore).
 
