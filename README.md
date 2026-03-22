@@ -171,37 +171,39 @@ cd alerts
 
 После батча можно анализировать графики нагрузки на vmalert, vmselect, operator.
 
-## Текущее состояние (снимок на 2026-03-21)
+## Текущее состояние (снимок на 2026-03-22)
 
-> **Примечание:** тест продолжается. Ниже — актуальный срез, собранный командами `kubectl`, запросами к `vmselect` и проверкой через MCP.
+> **Примечание:** тест в процессе (`apply-yaml.sh` запущен). Ниже — актуальный срез, собранный командами `kubectl` и запросами к `vmselect`.
 
 ### Общие цифры
 
 
-| Метрика                                  | Значение                                  |
-| ---------------------------------------- | ----------------------------------------- |
-| VMRule в кластере (всего)                | **434**                                   |
-| VMRule в namespace `vmks`                | **39**                                    |
-| Целевое количество алертов               | **~50 000** (`500` VMRule × `100` алертов) |
-| Активные алерты (ALERTS)                 | **43 823**                                |
-| ALERTS_FOR_STATE                         | **39 415**                                |
-| sum(vmalert_alerts_firing)               | **422** (`matching timeseries > 1000000`) |
-| Временные ряды (totalSeries)             | **14 838 042**                            |
-| ConfigMap'ов с правилами (`rulefiles-`*) | **31**                                    |
-| ReplicaSet'ов vmalert                    | **11**                                    |
-| sum(vmalert_execution_errors_total)      | **30**                                    |
-| sum(vmalert_iteration_missed_total)      | **0**                                     |
-| max(vmalert_iteration_duration_seconds)  | **1.95 сек**                              |
+| Метрика                                  | Значение                                   |
+| ---------------------------------------- | ------------------------------------------ |
+| VMRule в кластере (всего)                | **81** (42 тестовых + 39 встроенных)        |
+| VMRule в namespace `vmks`                | **39**                                     |
+| VMRule в namespace `default` (тестовые)  | **42**                                     |
+| Целевое количество алертов               | **~50 000** (`500` VMRule × `100` алертов)  |
+| Активные алерты (ALERTS)                 | **5 116**                                  |
+| ALERTS_FOR_STATE                         | **4 153**                                  |
+| sum(vmalert_alerts_firing)               | **2 464**                                  |
+| Временные ряды (totalSeries)             | **483 529**                                |
+| ConfigMap'ов с правилами (`rulefiles-`*) | **4**                                      |
+| Суммарный размер ConfigMap'ов            | **1 826 891 bytes (~1.74 MiB)**            |
+| ReplicaSet'ов vmalert                    | **4**                                      |
+| sum(vmalert_execution_errors_total)      | **0**                                      |
+| sum(vmalert_iteration_missed_total)      | **0**                                      |
+| max(vmalert_iteration_duration_seconds)  | **0.87 сек**                               |
 
 
 ### Распределение правил по ConfigMap'ам
 
-Суммарный размер `rulefiles-`*: **15 937 038 bytes (~15.20 MiB)**, средний размер ConfigMap: **~514 KB**.  
-Operator по-прежнему упаковывает большинство ConfigMap'ов около ~505–511 KB и создаёт новый по мере роста числа `VMRule`.
+Суммарный размер `rulefiles-`*: **1 826 891 bytes (~1.74 MiB)**, средний размер ConfigMap: **~457 KB**.
+Operator упаковывает правила в ConfigMap'ы до ~505–511 KB и создаёт новый по мере роста числа `VMRule`. На текущий момент 4 ConfigMap'а.
 
 ### Перезапуски vmalert и восстановление состояния
 
-`vmalert` остаётся в ожидаемой модели: при появлении нового ConfigMap возможен rolling restart (из-за новых `volume`/`volumeMount`), а восстановление состояния идёт через `remoteRead` по `ALERTS_FOR_STATE`.
+`vmalert` остаётся в ожидаемой модели: при появлении нового ConfigMap возможен rolling restart (из-за новых `volume`/`volumeMount`), а восстановление состояния идёт через `remoteRead` по `ALERTS_FOR_STATE`. За время apply-yaml.sh зафиксировано 4 ReplicaSet'а (3 пересоздания).
 
 Это согласуется с документацией VictoriaMetrics (`vmalert`: state restore выполняется один раз при старте процесса; hot reload не триггерит restore).
 
@@ -335,7 +337,7 @@ vmalert настроен на запись и чтение состояния и
 
 | Этап (алерты) | vmalert | vmstorage | vmselect | vminsert | vmagent | operator |
 | ------------- | ------- | --------- | -------- | -------- | ------- | -------- |
-| baseline      |         |           |          |          |         |          |
+| ~5 000        | 139m    | 93m       | 87m      | 18m      | 50m     | 20m      |
 | ~13 500       |         |           |          |          |         |          |
 | ~17 000       |         |           |          |          |         |          |
 | ~23 000       |         |           |          |          |         |          |
@@ -347,7 +349,7 @@ vmalert настроен на запись и чтение состояния и
 
 | Этап (алерты) | vmalert | vmstorage | vmselect | vminsert | vmagent | operator |
 | ------------- | ------- | --------- | -------- | -------- | ------- | -------- |
-| baseline      |         |           |          |          |         |          |
+| ~5 000        | 121Mi   | 652Mi     | 112Mi    | 99Mi     | 85Mi    | 66Mi     |
 | ~13 500       |         |           |          |          |         |          |
 | ~17 000       |         |           |          |          |         |          |
 | ~23 000       |         |           |          |          |         |          |
@@ -359,7 +361,7 @@ vmalert настроен на запись и чтение состояния и
 
 | Этап (алерты) | API Server RPS | API Server p99 lat | API Server CPU | vmselect HTTP RPS | vmstorage HTTP RPS | vminsert HTTP RPS | vmalert iter_duration (max) | vmalert exec_errors | vmalert iter_missed | vmalert remotewrite_req |
 | ------------- | -------------- | ------------------ | -------------- | ----------------- | ------------------ | ----------------- | --------------------------- | ------------------- | ------------------- | ----------------------- |
-| baseline      |                |                    |                |                   |                    |                   |                             |                     |                     |                         |
+| ~5 000        | 12.3           | 48 ms              | 81m            | 201               | 0.1                | 10.4              | 0.87 сек                    | 0                   | 0                   | 860                     |
 | ~13 500       |                |                    |                |                   |                    |                   |                             |                     |                     |                         |
 | ~17 000       |                |                    |                |                   |                    |                   |                             |                     |                     |                         |
 | ~23 000       |                |                    |                |                   |                    |                   |                             |                     |                     |                         |
@@ -371,7 +373,7 @@ vmalert настроен на запись и чтение состояния и
 
 | Этап (алерты) | ALERTS | ALERTS_FOR_STATE | vmalert_alerts_firing | totalSeries | ConfigMaps (кол-во) | ConfigMaps (размер) | vm_concurrent_select_current | scrape_body_size (vmalert) |
 | ------------- | ------ | ---------------- | --------------------- | ----------- | ------------------- | ------------------- | ---------------------------- | -------------------------- |
-| baseline      |        |                  |                       |             |                     |                     |                              |                            |
+| ~5 000        | 5 116  | 4 153            | 2 464                 | 483 529     | 4                   | 1.74 MiB            | 0                            | 5.3 MiB                    |
 | ~13 500       |        |                  |                       |             |                     |                     |                              |                            |
 | ~17 000       |        |                  |                       |             |                     |                     |                              |                            |
 | ~23 000       |        |                  |                       |             |                     |                     |                              |                            |
@@ -391,9 +393,9 @@ vmalert настроен на запись и чтение состояния и
 
 ### Краткосрочные
 
-- Отслеживать рост CPU vmalert при продолжении теста (при ~23 000 алертов — ~723m, запас до лимита 4 CPU есть)
-- Мониторинг `vmalert_iteration_missed_total` и `vmalert_iteration_duration_seconds` (текущий max 3.84 сек — приближается к `interval`)
-- Контролировать память vmstorage (~1.6 Gi на реплику при ~23 000 алертов)
+- Отслеживать рост CPU vmalert при продолжении теста (при ~5 000 алертов — ~139m, запас до лимита 4 CPU значительный)
+- Мониторинг `vmalert_iteration_missed_total` и `vmalert_iteration_duration_seconds` (текущий max 0.87 сек — далеко от `interval` 30s)
+- Контролировать память vmstorage (~652 Mi на реплику при ~5 000 алертов; лимит 4 Gi)
 
 ### Среднесрочные
 
@@ -474,6 +476,8 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query
 
 ## Метрики, выросшие при нагрузке (VictoriaMetrics stack)
 
+> Данные ниже собраны в предыдущем прогоне теста (до ~23 000 алертов). Текущий тест в процессе — свежие данные см. в таблицах раздела [Capacity Planning](#capacity-planning).
+
 Оценки даны для роста от малой нагрузки до **~23 000 алертов** (~252 VMRule, ~4,79 млн рядов). Базовый URL запросов: `http://vmselect-vmks-victoria-metrics-k8s-stack:8481/select/0/prometheus`.
 
 
@@ -549,6 +553,8 @@ curl -sk 'https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query?query
 
 
 ## Заключение и выводы
+
+> Выводы ниже основаны на предыдущем прогоне теста (до ~44 000 алертов). Текущий тест запущен 2026-03-22 — актуальные данные в разделе [Текущее состояние](#текущее-состояние-снимок-на-2026-03-22) и таблицах [Capacity Planning](#capacity-planning).
 
 Проведённое нагрузочное тестирование VictoriaMetrics stack большим количеством VMRule подтвердило заявленные цели и позволило сформулировать практические выводы.
 
