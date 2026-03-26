@@ -847,6 +847,8 @@ ALL_GENERATORS = [
     ("application", application_alerts),
 ]
 
+GROUP_INTERVAL_CHOICES = ["5m", "10m"]
+
 
 def fill_group(group_name, gen_func, count, vmrule_idx):
     alerts = []
@@ -872,7 +874,7 @@ def generate_vmrule(vmrule_idx, num_alerts):
     groups = []
     for i, (gname, gfunc) in enumerate(selected):
         cnt = base + (1 if i < remainder else 0)
-        interval = random.choice(["30s", "1m", "2m"])
+        interval = random.choice(GROUP_INTERVAL_CHOICES)
         rules = fill_group(gname, gfunc, cnt, vmrule_idx)
         groups.append({
             "name": f"{gname}-{vmrule_idx}",
