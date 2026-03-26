@@ -84,21 +84,21 @@ vmcluster:
         search.maxUniqueTimeseries: "5000000"
       resources:
         limits:
-          cpu: "2"
-          memory: 3Gi
+          cpu: "1"
+          memory: 1536Mi
         requests:
           # Ниже 500m: иначе на ноде с PVC vmselect + другими подами часто Insufficient cpu.
-          cpu: 300m
+          cpu: 200m
           memory: 512Mi
     vminsert:
       replicaCount: 2
       resources:
         limits:
-          memory: 1Gi
-          cpu: "1"
+          memory: 768Mi
+          cpu: "500m"
         requests:
           # Факт RSS ~360–430Mi при нагрузке — выше прежних 256Mi request (иначе «невидимый» оверкоммит).
-          memory: 512Mi
+          memory: 384Mi
           cpu: 50m
 
   ingress:
@@ -119,7 +119,7 @@ alertmanager:
 
     resources:
       limits:
-        cpu: "2"
+        cpu: "1"
         memory: 1Gi
       requests:
         # Факт ~150–190m CPU / ~150Mi RAM; оставляем запас под пики маршрутизации.
@@ -137,11 +137,11 @@ vmalert:
 
     resources:
       limits:
-        cpu: "4"
-        memory: 4Gi
+        cpu: "2"
+        memory: 3Gi
       requests:
         # 2 CPU × 2 реплики сильно забирают allocatable; limit 4 остаётся для пиков.
-        cpu: "1500m"
+        cpu: "500m"
         # Факт ~1.2–1.3Gi при сотнях VMRule; 3Gi request избыточен для планировщика.
         memory: 2Gi
 
@@ -154,8 +154,8 @@ vmagent:
     # Дефолт чарта ~200m CPU — при большом числе таргетов сильный CFS-throttling.
     resources:
       limits:
-        cpu: "2"
-        memory: 1Gi
+        cpu: "1"
+        memory: 768Mi
       requests:
         cpu: 250m
         memory: 256Mi
@@ -163,9 +163,9 @@ vmagent:
 victoria-metrics-operator:
   resources:
     limits:
-      cpu: "4"
-      memory: 6Gi
+      cpu: "1"
+      memory: 2Gi
     requests:
       # README: ~198m CPU при ~55k алертов; факт часто <300m. 2Gi memory request не нужен — см. README про OOM только при ~1.2k+ VMRule при 512Mi.
-      cpu: 300m
-      memory: 1Gi
+      cpu: 100m
+      memory: 512Mi
