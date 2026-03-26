@@ -13,20 +13,19 @@ _SSL.verify_mode = ssl.CERT_NONE
 
 BASE = "https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query"
 
-# Unix time: ближайший срез к count(ALERTS)≈N (|Δ|<=150), шаг query_range 15s, прогон 2026-03-23 UTC.
+# Unix time: ближайший срез к count(ALERTS)≈N, актуальный прогон (2026-03-26 UTC).
 TARGETS = {
-    500: 1774234380,
-    5000: 1774236330,
-    10000: 1774237695,
-    15000: 1774240440,
-    20000: 1774242870,
-    25000: 1774244415,
-    30000: 1774247190,
-    35000: 1774247370,
-    40000: 1774250355,
-    45000: 1774252335,
-    # count(ALERTS)≈50k; момент согласован с ростом vmalert/vmselect (см. README Capacity Planning)
-    50000: 1774254930,
+    500: 1774508380,
+    5000: 1774509920,
+    10000: 1774511940,
+    15000: 1774513200,
+    20000: 1774514700,
+    25000: 1774518225,
+    30000: 1774518360,
+    35000: 1774520140,
+    40000: 1774524660,
+    45000: 1774524450,
+    50000: 1774533900,
 }
 
 QUERIES = {
@@ -52,7 +51,7 @@ QUERIES = {
     # Additional metrics for the "grew with load" table in README.
     "vmalert_iter_max": 'max(vmalert_iteration_duration_seconds{namespace="vmks",pod=~"vmalert-vmks-victoria-metrics-k8s-stack-.*"})',
     "vmselect_concurrent": 'max(vm_concurrent_select_current{job="vmselect-vmks-victoria-metrics-k8s-stack"})',
-    "vmagent_scrape_samples_vmalert": 'max(scrape_samples_scraped{job=~"vmagent-vmks-victoria-metrics-k8s-stack.*",scrape_job=~".*vmalert.*"})',
+    "vmagent_scrape_samples_vmalert": 'max(scrape_samples_scraped{job="vmalert-vmks-victoria-metrics-k8s-stack"})',
 }
 
 
