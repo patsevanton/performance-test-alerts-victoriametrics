@@ -49,6 +49,10 @@ QUERIES = {
     "vmselect_rps": 'sum(rate(vm_http_requests_total{job="vmselect-vmks-victoria-metrics-k8s-stack"}[5m]))',
     "vmstorage_rps": 'sum(rate(vm_http_requests_total{job="vmstorage-vmks-victoria-metrics-k8s-stack"}[5m]))',
     "vminsert_rps": 'sum(rate(vm_http_requests_total{job="vminsert-vmks-victoria-metrics-k8s-stack"}[5m]))',
+    # Additional metrics for the "grew with load" table in README.
+    "vmalert_iter_max": 'max(vmalert_iteration_duration_seconds{namespace="vmks",pod=~"vmalert-vmks-victoria-metrics-k8s-stack-.*"})',
+    "vmselect_concurrent": 'max(vm_concurrent_select_current{job="vmselect-vmks-victoria-metrics-k8s-stack"})',
+    "vmagent_scrape_samples_vmalert": 'max(scrape_samples_scraped{job=~"vmagent-vmks-victoria-metrics-k8s-stack.*",scrape_job=~".*vmalert.*"})',
 }
 
 
@@ -95,6 +99,18 @@ def fmt_p99_sec(x: float | None) -> str:
     return f"{round(ms)} ms"
 
 
+def fmt_sec(x: float | None, nd: int = 2) -> str:
+    if x is None:
+        return "—"
+    return f"{x:.{nd}f}s".rstrip("0").rstrip(".")
+
+
+def fmt_count(x: float | None) -> str:
+    if x is None:
+        return "—"
+    return f"{round(x)}"
+
+
 def main() -> None:
     rows = []
     for label in sorted(TARGETS.keys()):
@@ -133,6 +149,12 @@ def main() -> None:
             fmt_rps(m["vmselect_rps"]),
             fmt_rps(m["vmstorage_rps"], 1),
             fmt_rps(m["vminsert_rps"]),
+        )
+        print(
+            "GROWTH",
+            fmt_sec(m["vmalert_iter_max"]),
+            fmt_count(m["vmselect_concurrent"]),
+            fmt_count(m["vmagent_scrape_samples_vmalert"]),
         )
         print()
 

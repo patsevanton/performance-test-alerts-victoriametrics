@@ -39,3 +39,4 @@ terraform.rc
 alerts/vmrules/*
 
 alerts/__pycache__/generate_alerts.cpython-313.pyc
+scripts/__pycache__/fetch_capacity_snapshots.cpython-313.pyc
