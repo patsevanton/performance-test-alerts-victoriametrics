@@ -1,8 +1,3 @@
-# Краткосрочные рекомендации (срезы нагрузки, см. README):
-# - vmalert: при ~25k алертов ~875m CPU/реплика (~78% до лимита 4 CPU) — отслеживать рост; /metrics ~31.6 MiB — не приближаться к promscrape.maxScrapeSize (128 Mi).
-# - Критично: vmalert_iteration_duration_seconds до ~22.77s при ~45k ALERTS (76% интервала при interval=30s, 38% при 60s); следить vmalert_iteration_missed_total (в срезах 0).
-# - vmstorage: ~2.3 Gi/реплика при ~25k алертов (~40% до лимита 4 Gi).
-# - vmselect: ~390 Mi → ~559 Mi (20k→25k ALERTS); vm_concurrent_select_limit_reached_total суммарно высокий — при необходимости поднять search.maxConcurrentRequests (см. vmselect.extraArgs).
 grafana:
   ingress:
     ingressClassName: nginx
@@ -10,8 +5,6 @@ grafana:
     hosts:
       - grafana.apatsev.org.ru
 
-# Таймауты Grafana ↔ vmselect: при большом числе серий/алертов дефолт 30s даёт
-# «context deadline exceeded» на query_range и на API меток для переменных дашбордов.
 defaultDatasources:
   victoriametrics:
     datasources:
@@ -23,30 +16,17 @@ defaultDatasources:
           httpMethod: POST
           queryTimeout: 300s
 
-# SLA 99.9 для хранилища метрик: уходим от SPOF `vmsingle` к реплицируемому `VMCluster`.
-# Это "настоящая" HA: потеря pod/ноды не равна потере сервиса и данных.
 vmsingle:
-  enabled: false # было true по умолчанию
-
-# HA / RTO / RPO (сжато). Реплики и PDB по компонентам — таблица «Компоненты» в README.
-# RTO: vmalert ≤60s; VMCluster ≤5m; Alertmanager ≤60s; VM Operator ≤2m.
-# RPO: vmalert 0 при remoteRead; VMCluster 0 при потере 1 vmstorage (RF=2); AM — silences/inhibitions в PVC; operator stateless (CRD).
-# Сценарии: (1) pod vmalert — пересоздание K8s, remoteRead/ALERTS_FOR_STATE, вторая реплика без даунтайма пайплайна;
-# (2) недоступен VMCluster — растёт vmalert_execution_errors_total, firing в памяти до восстановления;
-# (3) потеря 1 PVC vmstorage — сервис при RF=2; оба PVC — потеря метрик и ALERTS_FOR_STATE, for>0 с нуля;
-# (4) namespace/CRD — Helm + VMRule из Git, GitOps ~5 мин.
-# Дедуп при 2×vmalert: одинаковые labels (без per-replica -external.label); Alertmanager cluster (2 repl); один endpoint AM. Иначе — шард правил.
+  enabled: false
 
 vmcluster:
-  enabled: true # было false по умолчанию
+  enabled: true
   spec:
-    # Храним каждую точку минимум в 2 копиях на vmstorage.
     replicationFactor: 2
 
     vmstorage:
       # Иначе оператор подмешивает свои CPU defaults поверх requests из values.
       useDefaultResources: false
-      # Минимум 2 реплики, чтобы replicationFactor=2 имел смысл.
       replicaCount: 2
       # Поиск выполняется на vmstorage; дефолт maxConcurrentRequests=2 даёт 503 «couldn't start executing in 10s»
       # при параллельных запросах от vmselect/vmalert (см. также vmselect.extraArgs).
@@ -57,9 +37,6 @@ vmcluster:
         # фиксируем явно, чтобы query вроде topk(5, sum(vmalert_alerts_firing{…}) by(…)) не падал с 422.
         # vmalert_alerting_rules_last_evaluation_samples — по ряду на правило; при >1M правил 1M мало (422 TooManyTimeseries).
         search.maxUniqueTimeseries: "5000000"
-        # У vmstorage нет флага search.maxQueryDuration (только у vmselect); см. vmselect.extraArgs выше.
-      # Запас по памяти выше прежних 2Gi под длительную нагрузку и пики записи.
-      # CPU: при лимите 1 было заметное throttling на поисковых запросах.
       resources:
         limits:
           cpu: "2"
@@ -68,7 +45,6 @@ vmcluster:
           cpu: 250m
           memory: 1Gi
 
-    # VMSelect и VMInsert тоже без SPOF: по 2 реплики.
     vmselect:
       useDefaultResources: false
       replicaCount: 2
@@ -87,7 +63,6 @@ vmcluster:
           cpu: "1"
           memory: 1536Mi
         requests:
-          # Ниже 500m: иначе на ноде с PVC vmselect + другими подами часто Insufficient cpu.
           cpu: 200m
           memory: 512Mi
     vminsert:
@@ -97,7 +72,6 @@ vmcluster:
           memory: 768Mi
           cpu: "500m"
         requests:
-          # Факт RSS ~360–430Mi при нагрузке — выше прежних 256Mi request (иначе «невидимый» оверкоммит).
           memory: 384Mi
           cpu: 50m
 
@@ -108,12 +82,9 @@ vmcluster:
       hosts:
         - vmselect.apatsev.org.ru
 
-# HA для доставки уведомлений: Alertmanager в кластерном режиме.
-# Важно для SLA alerting pipeline: падение 1 pod/ноды не должно останавливать прием алертов.
 alertmanager:
   spec:
     replicaCount: 2
-    # Защищаемся от добровольных disruption'ов (drain/upgrade) так, чтобы 2 pod оставалось.
     podDisruptionBudget:
       minAvailable: 1
 
@@ -122,16 +93,12 @@ alertmanager:
         cpu: "1"
         memory: 1Gi
       requests:
-        # Факт ~150–190m CPU / ~150Mi RAM; оставляем запас под пики маршрутизации.
         cpu: 200m
         memory: 256Mi
 
 vmalert:
   spec:
-    # HA для оценки правил: 2 реплики, чтобы падение pod/ноды не останавливал оценку.
-    # Чтобы НЕ получить двойные нотификации, см. блок «HA / RTO / RPO» выше (перед vmcluster).
     replicaCount: 2
-    # Защита от disruption'ов (drain/upgrade): минимум 1 pod должен оставаться.
     podDisruptionBudget:
       minAvailable: 1
 
@@ -140,18 +107,13 @@ vmalert:
         cpu: "2"
         memory: 3Gi
       requests:
-        # 2 CPU × 2 реплики сильно забирают allocatable; limit 4 остаётся для пиков.
         cpu: "500m"
-        # Факт ~1.2–1.3Gi при сотнях VMRule; 3Gi request избыточен для планировщика.
         memory: 2Gi
 
-# VMAgent: при ~31 000+ алертов эндпоинт /metrics vmalert превышает
-# дефолтный maxScrapeSize (16 МБ) — vmagent перестаёт скрейпить vmalert. 128 МБ — до ~200 000 алертов.
 vmagent:
   spec:
     extraArgs:
       promscrape.maxScrapeSize: "134217728"
-    # Дефолт чарта ~200m CPU — при большом числе таргетов сильный CFS-throttling.
     resources:
       limits:
         cpu: "1"
@@ -166,6 +128,5 @@ victoria-metrics-operator:
       cpu: "1"
       memory: 2Gi
     requests:
-      # README: ~198m CPU при ~55k алертов; факт часто <300m. 2Gi memory request не нужен — см. README про OOM только при ~1.2k+ VMRule при 512Mi.
       cpu: 100m
       memory: 512Mi
