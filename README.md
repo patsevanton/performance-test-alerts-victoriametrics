@@ -132,8 +132,8 @@ VictoriaMetrics Operator хранит все правила оповещений
 
 vmalert настроен на запись и чтение состояния из VictoriaMetrics:
 
-- `**-remoteWrite.url**` — при каждой оценке vmalert записывает ряды `ALERTS` и `ALERTS_FOR_STATE` в VMCluster (через vminsert);
-- `**-remoteRead.url**` — при **старте** процесса vmalert восстанавливает состояние, запрашивая ряды `ALERTS_FOR_STATE` (через vmselect).
+- **-remoteWrite.url** — при каждой оценке vmalert записывает ряды `ALERTS` и `ALERTS_FOR_STATE` в VMCluster (через vminsert);
+- **-remoteRead.url** — при **старте** процесса vmalert восстанавливает состояние, запрашивая ряды `ALERTS_FOR_STATE` (через vmselect).
 
 `**ALERTS_FOR_STATE`** содержит полную информацию о состоянии каждого алерта (`ActiveAt`, `for` duration и т.д.), необходимую для восстановления после рестарта. При запуске vmalert однократно читает этот ряд для восстановления.
 
