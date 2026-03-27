@@ -3,11 +3,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VMRULES_DIR="${SCRIPT_DIR}/vmrules"
-APPLY_TIMEOUT=30
+APPLY_TIMEOUT=35
 
-# 500 files total, 100 alerts per file -> 45_000 alerts = first 450 files.
-START_INDEX=1
-END_INDEX=450
+# 500 files total, 100 alerts per file -> 30_000..40_000 alerts = files 301..400.
+START_INDEX=301
+END_INDEX=400
 EXPECTED_TOTAL=500
 
 if [ ! -d "$VMRULES_DIR" ]; then
@@ -23,13 +23,13 @@ if [ "$total" -ne "$EXPECTED_TOTAL" ]; then
   exit 1
 fi
 
-if [ "$END_INDEX" -gt "$total" ]; then
-  echo "END_INDEX=${END_INDEX} больше числа файлов (${total})." >&2
+if [ "$START_INDEX" -lt 1 ] || [ "$END_INDEX" -gt "$total" ] || [ "$START_INDEX" -gt "$END_INDEX" ]; then
+  echo "Некорректный диапазон ${START_INDEX}-${END_INDEX} для ${total} файлов." >&2
   exit 1
 fi
 
 slice_count=$((END_INDEX - START_INDEX + 1))
-echo "Этап 1: применяю файлы ${START_INDEX}-${END_INDEX} (${slice_count} шт), пауза ${APPLY_TIMEOUT}s."
+echo "Этап 2: применяю файлы ${START_INDEX}-${END_INDEX} (${slice_count} шт), пауза ${APPLY_TIMEOUT}s."
 
 for ((i = START_INDEX - 1; i <= END_INDEX - 1; i++)); do
   index=$((i + 1))
@@ -42,4 +42,4 @@ for ((i = START_INDEX - 1; i <= END_INDEX - 1; i++)); do
   fi
 done
 
-echo "Готово: этап 1 (до ~45000 ALERTS) завершен."
+echo "Готово: этап 2 (~30000 -> ~40000 ALERTS) завершен."

@@ -92,19 +92,25 @@ cd alerts
 
 Для поэтапного прогона используются отдельные скрипты:
 
-- [alerts/apply-yaml-to-45000.sh](alerts/apply-yaml-to-45000.sh) — этап 1, применяет файлы **1..450** (до ~45 000 `ALERTS`) с паузой **30 с**;
-- [alerts/apply-yaml-45000-to-50000.sh](alerts/apply-yaml-45000-to-50000.sh) — этап 2, применяет файлы **451..500** (~45 000 -> ~50 000 `ALERTS`) с паузой **70 с**.
+- [alerts/apply-yaml-0-to-30000.sh](alerts/apply-yaml-0-to-30000.sh) — этап 1, применяет файлы **1..300** (0 -> ~30 000 `ALERTS`) с паузой **20 с**;
+- [alerts/apply-yaml-30000-to-40000.sh](alerts/apply-yaml-30000-to-40000.sh) — этап 2, применяет файлы **301..400** (~30 000 -> ~40 000 `ALERTS`) с паузой **35 с**;
+- [alerts/apply-yaml-40000-to-45000.sh](alerts/apply-yaml-40000-to-45000.sh) — этап 3, применяет файлы **401..450** (~40 000 -> ~45 000 `ALERTS`) с паузой **45 с**;
+- [alerts/apply-yaml-45000-to-50000.sh](alerts/apply-yaml-45000-to-50000.sh) — этап 4, применяет файлы **451..500** (~45 000 -> ~50 000 `ALERTS`) с паузой **70 с**.
 
 **Запуск по этапам (из каталога `alerts`):**
 
 ```bash
 cd alerts
-./apply-yaml-to-45000.sh
+./apply-yaml-0-to-30000.sh
+./apply-yaml-30000-to-40000.sh
+./apply-yaml-40000-to-45000.sh
 ./apply-yaml-45000-to-50000.sh
 ```
 
 Исходный код:
-- [alerts/apply-yaml-to-45000.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-to-45000.sh)
+- [alerts/apply-yaml-0-to-30000.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-0-to-30000.sh)
+- [alerts/apply-yaml-30000-to-40000.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-30000-to-40000.sh)
+- [alerts/apply-yaml-40000-to-45000.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-40000-to-45000.sh)
 - [alerts/apply-yaml-45000-to-50000.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-45000-to-50000.sh)
 
 **Мониторинг ошибок:** в отдельном терминале (из `alerts`) запустите `./monitor-batch.sh`. Проверяются логи VictoriaLogs (широкий фильтр ошибок), OOM vmalert, счётчики ошибок и 5xx по компонентам VictoriaMetrics.
