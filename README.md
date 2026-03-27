@@ -230,6 +230,23 @@ python3 scripts/fetch_capacity_snapshots.py
 | ~50000 | 15.1s                            | 16                           | 274941                           |
 | ~50000 + 1h | 7.73s                        | 5                            | 276801                           |
 
+#### Таблица для `vm_concurrent_select_current`, `vm_concurrent_select_limit_reached_total` и p95 `vmselect_request_duration_seconds`
+
+| ALERTS | vm_concurrent_select_current | vm_concurrent_select_limit_reached_total (increase[5m]) | vmselect_request_duration p95 |
+| ------ | ---------------------------- | -------------------------------------------------------- | ----------------------------- |
+| ~500   | 2                            | 0                                                        | 36.8 ms                       |
+| ~5000  | 1                            | 0                                                        | 33.5 ms                       |
+| ~10000 | 2                            | 0                                                        | 17.6 ms                       |
+| ~15000 | 0                            | 0                                                        | 22 ms                         |
+| ~20000 | 0                            | 0                                                        | 26 ms                         |
+| ~25000 | 1                            | 0                                                        | 17.1 ms                       |
+| ~30000 | 0                            | 0                                                        | 15.7 ms                       |
+| ~35000 | 3                            | 0                                                        | 18.2 ms                       |
+| ~40000 | 1                            | 1                                                        | 18.3 ms                       |
+| ~45000 | 0                            | 106                                                      | 32.5 ms                       |
+| ~50000 | 16                           | 5347                                                     | 57.1 ms                       |
+| ~50000 + 1h | 5                       | 0                                                        | 6.4 ms                        |
+
 
 #### Описание метрик компонентов VictoriaMetrics stack, выросшие при нагрузке
 
