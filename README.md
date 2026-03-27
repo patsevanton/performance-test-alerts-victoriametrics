@@ -103,6 +103,23 @@ cd alerts
 
 Исходный код: [alerts/apply-yaml.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml.sh).
 
+Для поэтапного прогона используются отдельные скрипты:
+
+- [alerts/apply-yaml-to-45000.sh](alerts/apply-yaml-to-45000.sh) — этап 1, применяет файлы **1..450** (до ~45 000 `ALERTS`) с паузой **30 с**;
+- [alerts/apply-yaml-45000-to-50000.sh](alerts/apply-yaml-45000-to-50000.sh) — этап 2, применяет файлы **451..500** (~45 000 -> ~50 000 `ALERTS`) с паузой **70 с**.
+
+**Запуск по этапам (из каталога `alerts`):**
+
+```bash
+cd alerts
+./apply-yaml-to-45000.sh
+./apply-yaml-45000-to-50000.sh
+```
+
+Исходный код:
+- [alerts/apply-yaml-to-45000.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-to-45000.sh)
+- [alerts/apply-yaml-45000-to-50000.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-45000-to-50000.sh)
+
 **Мониторинг ошибок:** в отдельном терминале (из `alerts`) запустите `./monitor-batch.sh`. Проверяются логи VictoriaLogs (широкий фильтр ошибок), OOM vmalert, счётчики ошибок и 5xx по компонентам VictoriaMetrics.
 
 Исходный код: [alerts/monitor-batch.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/monitor-batch.sh).
