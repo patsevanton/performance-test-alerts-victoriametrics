@@ -149,6 +149,8 @@ vmalert настроен на запись и чтение состояния и
 python3 scripts/fetch_capacity_snapshots.py
 ```
 
+Исходный код: [scripts/fetch_capacity_snapshots.py](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/scripts/fetch_capacity_snapshots.py).
+
 ### Ресурсы подов при росте нагрузки
 
 #### CPU (в среднем на pod)
