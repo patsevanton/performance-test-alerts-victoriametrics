@@ -90,19 +90,6 @@ cd alerts
 
 ### Применение VMRule в Kubernetes
 
-Скрипт [alerts/apply-yaml.sh](alerts/apply-yaml.sh) применяет все **500** YAML-файлов из `alerts/vmrules/` по одному с фиксированной паузой между вызовами `kubectl apply`.
-
-**Темп:** пауза между apply задаётся константой `APPLY_TIMEOUT` (по умолчанию **45 с**). Общее расчётное время при 500 файлах и 45 с паузы: 45 × 499 = 22 455 с ≈ **~6 ч 14 мин**. При старте скрипт выводит найденное число файлов, таймаут и эту оценку.
-
-**Запуск (из каталога `alerts`):**
-
-```bash
-cd alerts
-./apply-yaml.sh
-```
-
-Исходный код: [alerts/apply-yaml.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml.sh).
-
 Для поэтапного прогона используются отдельные скрипты:
 
 - [alerts/apply-yaml-to-45000.sh](alerts/apply-yaml-to-45000.sh) — этап 1, применяет файлы **1..450** (до ~45 000 `ALERTS`) с паузой **30 с**;
