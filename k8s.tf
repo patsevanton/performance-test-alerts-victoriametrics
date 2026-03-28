@@ -56,7 +56,7 @@ resource "yandex_kubernetes_node_group" "k8s-node-group" {
 
   scale_policy {
     fixed_scale {
-      size = 11  # 1000 app + системные pod'ы: держим запас по pod slots, чтобы избежать Pending по "Too many pods"
+      size = 12  # Для 1000 app pod'ов + системных/мониторинговых pod'ов и rolling update оставляем дополнительный запас по pod slots.
     }
   }
 

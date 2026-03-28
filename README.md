@@ -309,6 +309,30 @@ python3 scripts/fetch_capacity_snapshots.py
 | `search.maxQueueDuration` (стенд)           | **60s**                        | Максимальное ожидание в очереди перед стартом выполнения запроса                                                                                    |
 | `search.maxQueryDuration` (vmselect, стенд) | **300s**                       | Согласовано с `queryTimeout` datasource Grafana (**300s**), иначе обрезка раньше клиента                                                            |
 
+## Скриншоты Grafana (места под вставку)
+
+Ниже скриншоты, где наблюдалась заметная динамика. Графики без треда (ровная линия) не включены.
+
+- Kubernetes API dashboard (RPS / p99 latency / CPU).
+
+![Kubernetes API dashboard](screenshots/kubernetes-api-dashboard.png)
+
+- `vmalert`: iteration duration и динамика активных алертов.
+
+![vmalert dashboard](screenshots/vmalert-dashboard.png)
+
+- `vmselect`: HTTP RPS, concurrent select, saturation/limit reached.
+
+![vmselect dashboard](screenshots/vmselect-dashboard.png)
+
+- `vmstorage`: CPU/Memory (рост на верхних стадиях нагрузки).
+
+![vmstorage dashboard](screenshots/vmstorage-dashboard.png)
+
+- `vmagent`: scrape samples (рост с числом правил/целей).
+
+![vmagent dashboard](screenshots/vmagent-dashboard.png)
+
 ## Выводы
 
 **Отказоустойчивость подтверждена:** Конфигурация с двумя репликами vmalert, remoteRead/remoteWrite (`ALERTS`, `ALERTS_FOR_STATE`) и Alertmanager в кластерном режиме корректно восстанавливает состояние алертов после рестарта без потерь и без дублирования уведомлений.
