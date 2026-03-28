@@ -92,25 +92,27 @@ cd alerts
 
 Для поэтапного прогона используются отдельные скрипты:
 
-- [alerts/apply-yaml-0-to-30000.sh](alerts/apply-yaml-0-to-30000.sh) — этап 1, применяет файлы **1..300** (0 -> ~30 000 `ALERTS`) с паузой **20 с** (минимум ~**1 ч 39 мин 40 с**);
-- [alerts/apply-yaml-30000-to-40000.sh](alerts/apply-yaml-30000-to-40000.sh) — этап 2, применяет файлы **301..400** (~30 000 -> ~40 000 `ALERTS`) с паузой **35 с** (минимум ~**57 мин 45 с**);
-- [alerts/apply-yaml-40000-to-45000.sh](alerts/apply-yaml-40000-to-45000.sh) — этап 3, применяет файлы **401..450** (~40 000 -> ~45 000 `ALERTS`) с паузой **45 с** (минимум ~**36 мин 45 с**);
-- [alerts/apply-yaml-45000-to-50000.sh](alerts/apply-yaml-45000-to-50000.sh) — этап 4, применяет файлы **451..500** (~45 000 -> ~50 000 `ALERTS`) с паузой **70 с** (минимум ~**57 мин 10 с**).
+- [alerts/apply-yaml-0-to-20000.sh](alerts/apply-yaml-0-to-20000.sh) — этап 1, файлы **1..200** (0 -> ~20 000 `ALERTS`), пауза **15 с** (минимум ~**50 мин** только sleep);
+- [alerts/apply-yaml-20000-to-35000.sh](alerts/apply-yaml-20000-to-35000.sh) — этап 2, файлы **201..350** (~20 000 -> ~35 000 `ALERTS`), пауза **30 с** (минимум ~**74 мин**);
+- [alerts/apply-yaml-35000-to-45000.sh](alerts/apply-yaml-35000-to-45000.sh) — этап 3, файлы **351..450** (~35 000 -> ~45 000 `ALERTS`), пауза **45 с** (минимум ~**74 мин**);
+- [alerts/apply-yaml-45000-to-50000.sh](alerts/apply-yaml-45000-to-50000.sh) — этап 4, файлы **451..500** (~45 000 -> ~50 000 `ALERTS`), пауза **60 с** (минимум ~**49 мин**).
+
+Объём алертов на этапе убывает (**200** > **150** > **100** > **50** файлов), пауза между `kubectl apply` растёт (**15** < **30** < **45** < **60** с). Время только на `sleep` на этапах различается; без учёта длительности самих `kubectl apply`.
 
 **Запуск по этапам (из каталога `alerts`):**
 
 ```bash
 cd alerts
-./apply-yaml-0-to-30000.sh
-./apply-yaml-30000-to-40000.sh
-./apply-yaml-40000-to-45000.sh
+./apply-yaml-0-to-20000.sh
+./apply-yaml-20000-to-35000.sh
+./apply-yaml-35000-to-45000.sh
 ./apply-yaml-45000-to-50000.sh
 ```
 
 Исходный код:
-- [alerts/apply-yaml-0-to-30000.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-0-to-30000.sh)
-- [alerts/apply-yaml-30000-to-40000.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-30000-to-40000.sh)
-- [alerts/apply-yaml-40000-to-45000.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-40000-to-45000.sh)
+- [alerts/apply-yaml-0-to-20000.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-0-to-20000.sh)
+- [alerts/apply-yaml-20000-to-35000.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-20000-to-35000.sh)
+- [alerts/apply-yaml-35000-to-45000.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-35000-to-45000.sh)
 - [alerts/apply-yaml-45000-to-50000.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-45000-to-50000.sh)
 
 **Мониторинг ошибок:** в отдельном терминале (из `alerts`) запустите `./monitor-batch.sh`. Проверяются логи VictoriaLogs (широкий фильтр ошибок), OOM vmalert, счётчики ошибок и 5xx по компонентам VictoriaMetrics.

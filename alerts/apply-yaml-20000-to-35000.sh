@@ -3,11 +3,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VMRULES_DIR="${SCRIPT_DIR}/vmrules"
-APPLY_TIMEOUT=35
+APPLY_TIMEOUT=30
 
-# 500 files total, 100 alerts per file -> 30_000..40_000 alerts = files 301..400.
-START_INDEX=301
-END_INDEX=400
+# 500 files total, 100 alerts per file -> 20_000..35_000 alerts = files 201..350.
+START_INDEX=201
+END_INDEX=350
 EXPECTED_TOTAL=500
 
 if [ ! -d "$VMRULES_DIR" ]; then
@@ -42,4 +42,4 @@ for ((i = START_INDEX - 1; i <= END_INDEX - 1; i++)); do
   fi
 done
 
-echo "Готово: этап 2 (~30000 -> ~40000 ALERTS) завершен."
+echo "Готово: этап 2 (~20000 -> ~35000 ALERTS) завершен."
