@@ -58,13 +58,14 @@ vmcluster:
         search.maxLabelsAPIDuration: 120s
         # Согласовать с vmstorage: иначе тяжёлые запросы по vmalert_* могут резаться на одном из слоёв.
         search.maxUniqueTimeseries: "5000000"
+      # 1536Mi давало OOMKilled при нагрузке (тысячи VMServiceScrape / тяжёлые PromQL).
       resources:
         limits:
-          cpu: "1"
-          memory: 1536Mi
+          cpu: "2"
+          memory: 4Gi
         requests:
-          cpu: 200m
-          memory: 512Mi
+          cpu: 500m
+          memory: 2Gi
     vminsert:
       replicaCount: 2
       resources:
@@ -114,13 +115,14 @@ vmagent:
   spec:
     extraArgs:
       promscrape.maxScrapeSize: "134217728"
+    # 768Mi давало OOMKilled: kubernetes_sd + сотни/тысячи целей держат метаданные в памяти.
     resources:
       limits:
-        cpu: "1"
-        memory: 768Mi
+        cpu: "2"
+        memory: 3Gi
       requests:
-        cpu: 250m
-        memory: 256Mi
+        cpu: 500m
+        memory: 1Gi
 
 victoria-metrics-operator:
   resources:
