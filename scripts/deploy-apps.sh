@@ -16,21 +16,21 @@ STAGE_SIZES="${STAGE_SIZES:-400,300,200,100}"
 STAGE_PAUSES="${STAGE_PAUSES:-15,30,45,60}"
 
 if [ ! -f "$NAMES_FILE" ]; then
-  echo "Error: $NAMES_FILE not found. Run generate-app-names.sh first."
+  echo "Ошибка: файл $NAMES_FILE не найден. Сначала выполните generate-app-names.sh."
   exit 1
 fi
 
 SYNTHETIC_ALERTS_COUNT="${SYNTHETIC_ALERTS_COUNT:-$((ALERTS_PER_APP - BASE_ALERTS_COUNT))}"
 
 if [ "$ALERTS_PER_APP" -lt "$BASE_ALERTS_COUNT" ]; then
-  echo "Error: ALERTS_PER_APP ($ALERTS_PER_APP) must be >= BASE_ALERTS_COUNT ($BASE_ALERTS_COUNT)."
+  echo "Ошибка: ALERTS_PER_APP ($ALERTS_PER_APP) должен быть >= BASE_ALERTS_COUNT ($BASE_ALERTS_COUNT)."
   exit 1
 fi
 
 mapfile -t all_names < "$NAMES_FILE"
 available=${#all_names[@]}
 if [ "$available" -lt "$TARGET_APPS" ]; then
-  echo "Error: $NAMES_FILE contains $available names, but TARGET_APPS=$TARGET_APPS."
+  echo "Ошибка: в $NAMES_FILE только $available имён, а TARGET_APPS=$TARGET_APPS."
   exit 1
 fi
 
@@ -41,7 +41,7 @@ IFS=',' read -r -a stage_sizes <<< "$STAGE_SIZES"
 IFS=',' read -r -a stage_pauses <<< "$STAGE_PAUSES"
 
 if [ "${#stage_sizes[@]}" -ne 4 ] || [ "${#stage_pauses[@]}" -ne 4 ]; then
-  echo "Error: STAGE_SIZES and STAGE_PAUSES must each contain exactly 4 comma-separated values."
+  echo "Ошибка: STAGE_SIZES и STAGE_PAUSES должны содержать ровно 4 значения через запятую."
   exit 1
 fi
 
@@ -50,19 +50,19 @@ for size in "${stage_sizes[@]}"; do
   sum=$((sum + size))
 done
 if [ "$sum" -ne "$TARGET_APPS" ]; then
-  echo "Error: sum(STAGE_SIZES)=$sum must equal TARGET_APPS=$TARGET_APPS."
+  echo "Ошибка: сумма(STAGE_SIZES)=$sum должна равняться TARGET_APPS=$TARGET_APPS."
   exit 1
 fi
 
-echo "Deploying $TARGET_APPS apps (parallelism: $PARALLEL)"
-echo "Alerts per app: $ALERTS_PER_APP (base: $BASE_ALERTS_COUNT, synthetic: $SYNTHETIC_ALERTS_COUNT)"
-echo "Planned total alerts: $total_alerts"
-echo "Namespace mode: per-app (namespace name = app name)"
+echo "Развёртывание $TARGET_APPS приложений (параллелизм: $PARALLEL)"
+echo "Алертов на приложение: $ALERTS_PER_APP (базовых: $BASE_ALERTS_COUNT, синтетических: $SYNTHETIC_ALERTS_COUNT)"
+echo "Запланировано всего алертов: $total_alerts"
+echo "Режим namespace: на приложение (имя namespace = имя приложения)"
 
 deploy_app() {
   local name="$1"
   local app_namespace="$name"
-  echo "[$(date +%H:%M:%S)] Installing $name into namespace $app_namespace ..."
+  echo "[$(date +%H:%M:%S)] Установка $name в namespace $app_namespace ..."
   kubectl create namespace "$app_namespace" 2>/dev/null || true
   helm upgrade --install "$name" "$CHART_PATH" \
     --namespace "$app_namespace" \
@@ -86,7 +86,7 @@ deploy_stage() {
   local names=("$@")
 
   echo ""
-  echo "Stage $stage_num/4: deploying apps $start-$end (${#names[@]} items), next pause ${pause}s"
+  echo "Этап $stage_num/4: развёртывание приложений $start-$end (${#names[@]} шт.), следующая пауза ${pause} с"
   printf '%s\n' "${names[@]}" | xargs -P "$PARALLEL" -I {} bash -c 'deploy_app "$@"' _ {}
 }
 
@@ -103,11 +103,11 @@ for i in "${!stage_sizes[@]}"; do
   offset=$end
 
   if [ "$stage_num" -lt 4 ]; then
-    echo "Stage $stage_num complete. Sleeping ${pause}s before next stage..."
+    echo "Этап $stage_num завершён. Пауза ${pause} с перед следующим этапом..."
     sleep "$pause"
   fi
 done
 
 echo ""
-echo "All $TARGET_APPS apps deployed in 4 stages (one namespace per app)."
-echo "Namespaces created/used: $TARGET_APPS"
+echo "Все $TARGET_APPS приложений развёрнуты за 4 этапа (по одному namespace на приложение)."
+echo "Создано/использовано namespace: $TARGET_APPS"

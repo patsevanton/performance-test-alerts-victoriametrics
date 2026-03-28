@@ -69,14 +69,14 @@ helm upgrade --install victoria-logs-collector oci://ghcr.io/victoriametrics/hel
 
 Исходный код файла [victoria-logs-collector-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/victoria-logs-collector-values.yaml).
 
-### Развёртывание 300 приложений для генерации метрик и алертов
+### Развёртывание 1000 приложений для генерации метрик и алертов
 
-Для нагрузочного тестирования VictoriaMetrics можно развернуть 300 экземпляров приложения Golden Signal App. Каждый экземпляр:
+Для нагрузочного тестирования VictoriaMetrics можно развернуть 1000 экземпляров приложения Golden Signal App. Каждый экземпляр:
 - генерирует метрики (`app_requests_total`, `app_errors_total`, `app_request_latency_seconds`, `app_goroutines`);
 - создаёт `VMServiceScrape` для автоматического сбора метрик;
-- создаёт `VMRule` со 100 алертами по умолчанию (10 базовых + 90 синтетических для нагрузочного профиля; количество настраивается через `alerts.synthetic.count` в `chart/values.yaml`).
+- создаёт `VMRule` с 50 алертами по умолчанию (10 базовых + 40 синтетических; общее число задаётся `ALERTS_PER_APP` в `deploy-apps.sh`, синтетика — `alerts.synthetic.count` в chart).
 
-**Итого при 300 экземплярах (по умолчанию):** 300 Deployment, 300 Service, 300 VMServiceScrape, 300 VMRule (30 000 алертов).
+**Итого при 1000 экземплярах (по умолчанию):** 1000 Deployment, 1000 Service, 1000 VMServiceScrape, 1000 VMRule (50 000 алертов).
 
 Исходный код приложения — [app/](https://github.com/patsevanton/performance-test-alerts-victoriametrics/tree/main/app), Helm chart — [chart/](https://github.com/patsevanton/performance-test-alerts-victoriametrics/tree/main/chart).
 
@@ -93,10 +93,10 @@ helm upgrade --install victoria-logs-collector oci://ghcr.io/victoriametrics/hel
 
 ```bash
 cd scripts
-./generate-app-names.sh 300
+./generate-app-names.sh 1000
 ```
 
-Количество можно изменить (по умолчанию 300):
+Количество можно изменить (по умолчанию 1000):
 
 ```bash
 ./generate-app-names.sh 500   # для 500 приложений
@@ -148,14 +148,14 @@ TARGET_APPS=1000 PARALLEL=20 ALERTS_PER_APP=50 ./deploy-apps.sh
 
 #### Ресурсные требования
 
-При 300 экземплярах (requests из `values.yaml`):
+При 1000 экземплярах (requests из `values.yaml`):
 
-| Ресурс | На 1 pod | На 300 pods |
-| ------ | -------- | ----------- |
-| CPU requests | 50m | 15 000m (15 cores) |
-| CPU limits | 100m | 30 000m (30 cores) |
-| Memory requests | 64Mi | 18.75 GiB |
-| Memory limits | 128Mi | 37.5 GiB |
+| Ресурс | На 1 pod | На 1000 pods |
+| ------ | -------- | ------------ |
+| CPU requests | 50m | 50 000m (50 cores) |
+| CPU limits | 100m | 100 000m (100 cores) |
+| Memory requests | 64Mi | ~62.5 GiB |
+| Memory limits | 128Mi | ~125 GiB |
 
 Рекомендуется кластер с достаточным запасом ресурсов. Ресурсы можно уменьшить, отредактировав `chart/values.yaml`.
 
