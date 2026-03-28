@@ -120,7 +120,7 @@ cd scripts
 | `TARGET_APPS` | `1000`      | Сколько приложений взять из начала `app-names.txt` |
 | `PARALLEL`   | `10`         | Число параллельных установок |
 | `ALERTS_PER_APP` | `50`      | Общее число алертов на приложение |
-| `IMAGE_REPO` | `ghcr.io/patsevanton/alert-templates-helm-vmalert-impulse` | Docker image |
+| `IMAGE_REPO` | `ghcr.io/patsevanton/performance-test-alerts-victoriametrics` | Docker image |
 | `IMAGE_TAG`  | `1.3.0`      | Версия image |
 
 Пример с кастомными параметрами:

@@ -1,4 +1,4 @@
-module github.com/patsevanton/alert-templates-helm-vmalert-impulse/app
+module github.com/patsevanton/performance-test-alerts-victoriametrics/app
 
 go 1.22
 

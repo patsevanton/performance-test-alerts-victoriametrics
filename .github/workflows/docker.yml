@@ -1,0 +1,49 @@
+name: Release and Docker
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release-and-docker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create Semver Release
+        id: semver
+        uses: huggingface/semver-release-action@latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Print version and tag
+        run: |
+          echo "Version: ${{ steps.semver.outputs.version }}"
+          echo "Tag:     ${{ steps.semver.outputs.tag }}"
+
+      - name: Login to GHCR
+        if: steps.semver.outputs.tag != ''
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        if: steps.semver.outputs.tag != ''
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app
+          file: ./app/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ steps.semver.outputs.version }}
+            ghcr.io/${{ github.repository }}:latest
