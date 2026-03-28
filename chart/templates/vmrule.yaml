@@ -145,3 +145,40 @@ spec:
             summary: "Error burst on {{ include "golden-signal-app.name" . }}"
             description: "{{ .Values.alerts.errorBurst.description }}. Errors in 2m are {{ `{{ $value }}` }}"
         {{- end }}
+        {{- if .Values.alerts.synthetic.enabled }}
+        {{- $appName := include "golden-signal-app.name" . }}
+        {{- range $i := until (int .Values.alerts.synthetic.count) }}
+        - alert: SyntheticAlert{{ printf "%03d" (add $i 1) }}
+          expr: |
+            {{- if eq (mod $i 10) 0 }}
+            (1000 * rate(app_errors_total{job="{{ $appName }}"}[1m]) / clamp_min(rate(app_requests_total{job="{{ $appName }}"}[1m]), 0.001)) > {{ add 20 $i }}
+            {{- else if eq (mod $i 10) 1 }}
+            (1000 * rate(app_errors_total{job="{{ $appName }}"}[5m]) / clamp_min(rate(app_requests_total{job="{{ $appName }}"}[5m]), 0.001)) > {{ add 30 $i }}
+            {{- else if eq (mod $i 10) 2 }}
+            (histogram_quantile(0.95, sum(rate(app_request_latency_seconds_bucket{job="{{ $appName }}"}[5m])) by (le)) * 1000) > {{ add 250 (mul $i 2) }}
+            {{- else if eq (mod $i 10) 3 }}
+            (histogram_quantile(0.99, sum(rate(app_request_latency_seconds_bucket{job="{{ $appName }}"}[5m])) by (le)) * 1000) > {{ add 400 (mul $i 3) }}
+            {{- else if eq (mod $i 10) 4 }}
+            (1000 * rate(app_request_latency_seconds_sum{job="{{ $appName }}"}[5m]) / clamp_min(rate(app_request_latency_seconds_count{job="{{ $appName }}"}[5m]), 0.001)) > {{ add 200 (mul $i 2) }}
+            {{- else if eq (mod $i 10) 5 }}
+            app_goroutines{job="{{ $appName }}"} > {{ add 25 $i }}
+            {{- else if eq (mod $i 10) 6 }}
+            max_over_time(app_goroutines{job="{{ $appName }}"}[3m]) > {{ add 35 $i }}
+            {{- else if eq (mod $i 10) 7 }}
+            increase(app_errors_total{job="{{ $appName }}"}[2m]) > {{ add 5 $i }}
+            {{- else if eq (mod $i 10) 8 }}
+            increase(app_requests_total{job="{{ $appName }}"}[5m]) > {{ add 50 (mul $i 5) }}
+            {{- else }}
+            avg_over_time(app_goroutines{job="{{ $appName }}"}[5m]) > {{ add 20 $i }}
+            {{- end }}
+          for: {{ ternary "2m" "1m" (eq (mod $i 2) 0) }}
+          labels:
+            severity: {{ ternary "critical" "warning" (eq (mod $i 5) 0) }}
+            app: {{ $appName }}
+            synthetic: "true"
+            synthetic_id: "{{ add $i 1 }}"
+          annotations:
+            summary: "Synthetic alert {{ printf "%03d" (add $i 1) }} on {{ $appName }}"
+            description: "{{ $.Values.alerts.synthetic.descriptionPrefix }} #{{ add $i 1 }} for {{ $appName }}. Value is {{ `{{ $value }}` }}"
+        {{- end }}
+        {{- end }}

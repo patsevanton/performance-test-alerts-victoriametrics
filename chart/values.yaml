@@ -72,3 +72,8 @@ alerts:
     threshold: "2.0"
     severity: "warning"
     description: "Traffic spike detected"
+
+  synthetic:
+    enabled: true
+    count: 90
+    descriptionPrefix: "Synthetic load alert"
