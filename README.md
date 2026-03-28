@@ -105,7 +105,7 @@ cd scripts
 
 #### Шаг 2: Развёртывание приложений
 
-Скрипт устанавливает каждое приложение как отдельный Helm release в namespace `load-test`:
+Скрипт устанавливает каждое приложение как отдельный Helm release в отдельный namespace (имя namespace = имя приложения).
 
 ```bash
 ./deploy-apps.sh
@@ -115,17 +115,18 @@ cd scripts
 
 | Переменная   | По умолчанию | Описание |
 | ------------ | ------------ | -------- |
-| `NAMESPACE`  | `load-test`  | Kubernetes namespace |
 | `CHART_PATH` | `<repo_root>/chart` | Путь к Helm chart (авто-определяется) |
 | `NAMES_FILE` | `scripts/app-names.txt` | Файл со списком имён (авто-определяется) |
+| `TARGET_APPS` | `1000`      | Сколько приложений взять из начала `app-names.txt` |
 | `PARALLEL`   | `10`         | Число параллельных установок |
+| `ALERTS_PER_APP` | `50`      | Общее число алертов на приложение |
 | `IMAGE_REPO` | `ghcr.io/patsevanton/alert-templates-helm-vmalert-impulse` | Docker image |
 | `IMAGE_TAG`  | `1.3.0`      | Версия image |
 
 Пример с кастомными параметрами:
 
 ```bash
-NAMESPACE=perf-test PARALLEL=20 ./deploy-apps.sh
+TARGET_APPS=1000 PARALLEL=20 ALERTS_PER_APP=50 ./deploy-apps.sh
 ```
 
 #### Шаг 3: Проверка статуса
@@ -142,7 +143,8 @@ NAMESPACE=perf-test PARALLEL=20 ./deploy-apps.sh
 ./delete-apps.sh
 ```
 
-Параметры `NAMESPACE`, `NAMES_FILE`, `PARALLEL` аналогичны `deploy-apps.sh`.
+Параметры `NAMES_FILE`, `TARGET_APPS`, `PARALLEL` аналогичны `deploy-apps.sh`.
+Дополнительно `DELETE_NAMESPACES=true|false` (по умолчанию `true`) управляет удалением namespace после `helm uninstall`.
 
 #### Ресурсные требования
 
