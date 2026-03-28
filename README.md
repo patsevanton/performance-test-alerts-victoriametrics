@@ -61,7 +61,7 @@ helm upgrade --install victoria-logs-cluster oci://ghcr.io/victoriametrics/helm-
 helm upgrade --install victoria-logs-collector oci://ghcr.io/victoriametrics/helm-charts/victoria-logs-collector \
   --namespace victoria-logs-collector \
   --create-namespace \
-  --version 0.2.13 \
+  --version 0.2.14 \
   --wait \
   --timeout 15m \
   -f victoria-logs-collector-values.yaml
