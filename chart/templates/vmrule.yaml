@@ -1,0 +1,51 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: {{ include "golden-signal-app.name" . }}
+  labels:
+    {{- include "golden-signal-app.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: {{ include "golden-signal-app.name" . }}-alerts
+      interval: 30s
+      rules:
+        {{- if .Values.alerts.errors.enabled }}
+        - alert: HighErrorRate
+          expr: |
+            (
+              rate(app_errors_total{job="{{ include "golden-signal-app.name" . }}"}[5m])
+              /
+              rate(app_requests_total{job="{{ include "golden-signal-app.name" . }}"}[5m])
+            ) > {{ .Values.alerts.errors.threshold }}
+          for: 1m
+          labels:
+            severity: {{ .Values.alerts.errors.severity }}
+            app: {{ include "golden-signal-app.name" . }}
+          annotations:
+            summary: "High error rate on {{ include "golden-signal-app.name" . }}"
+            description: "{{ .Values.alerts.errors.description }}. Error rate is {{ `{{ $value | humanize }}` }}"
+        {{- end }}
+        {{- if .Values.alerts.latency.enabled }}
+        - alert: HighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(app_request_latency_seconds_bucket{job="{{ include "golden-signal-app.name" . }}"}[5m])) by (le)
+            ) > {{ .Values.alerts.latency.threshold }}
+          for: 2m
+          labels:
+            severity: {{ .Values.alerts.latency.severity }}
+            app: {{ include "golden-signal-app.name" . }}
+          annotations:
+            summary: "High latency on {{ include "golden-signal-app.name" . }}"
+            description: "{{ .Values.alerts.latency.description }}. P95 latency is {{ `{{ $value }}` }}s"
+        {{- end }}
+        - alert: HighGoroutineCount
+          expr: |
+            app_goroutines{job="{{ include "golden-signal-app.name" . }}"} > 50
+          for: 1m
+          labels:
+            severity: warning
+            app: {{ include "golden-signal-app.name" . }}
+          annotations:
+            summary: "High goroutines on {{ include "golden-signal-app.name" . }}"
+            description: "Application has {{ `{{ $value }}` }} goroutines, indicating potential saturation"

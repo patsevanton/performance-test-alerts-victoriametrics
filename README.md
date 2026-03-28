@@ -75,51 +75,103 @@ helm upgrade --install victoria-logs-collector vm/victoria-logs-collector \
 
 Исходный код файла [victoria-logs-collector-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/victoria-logs-collector-values.yaml).
 
-### Генерация нагрузочных VMRule
+### Развёртывание 300 приложений для генерации метрик и алертов
 
-Скрипт `alerts/generate_alerts.py` генерирует YAML-файлы `VMRule` в директорию `alerts/vmrules/`. По умолчанию создаётся 500 файлов; каждый `VMRule` содержит 4–6 групп (с `interval` 5m/10m) и 100 алертов суммарно.
+Для нагрузочного тестирования VictoriaMetrics можно развернуть 300 экземпляров приложения Golden Signal App. Каждый экземпляр:
+- генерирует метрики (`app_requests_total`, `app_errors_total`, `app_request_latency_seconds`, `app_goroutines`);
+- создаёт `VMServiceScrape` для автоматического сбора метрик;
+- создаёт `VMRule` с 3 алертами (`HighErrorRate`, `HighLatency`, `HighGoroutineCount`).
 
-Исходный код файла [alerts/generate_alerts.py](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/generate_alerts.py).
+**Итого при 300 экземплярах:** 300 Deployment, 300 Service, 300 VMServiceScrape, 300 VMRule (900 алертов).
 
-```bash
-cd alerts
-./generate_alerts.py
-```
+Исходный код приложения — [app/](https://github.com/patsevanton/performance-test-alerts-victoriametrics/tree/main/app), Helm chart — [chart/](https://github.com/patsevanton/performance-test-alerts-victoriametrics/tree/main/chart).
 
-Правила «псевдо-реалистичные»: разные шаблоны (k8s/node/http/db/…), `expr` построены на `vector(...)`, `severity` задаётся шаблоном (в основном `warning`/`critical`), `for` — от `0s` до `1h`. Объём можно изменить в `main()` через `num_vmrules` и `alerts_per_vmrule`. Скрипт перезаписывает только файлы `vmrule-00001.yaml` … `vmrule-NNNNN.yaml` в пределах `num_vmrules`;
+#### Требования
 
-### Применение VMRule в Kubernetes
+- Kubernetes-кластер с установленным VictoriaMetrics Operator (входит в `victoria-metrics-k8s-stack`)
+- `helm` >= 3.x
+- `kubectl` с доступом к кластеру
+- `xargs` (стандартная утилита Linux)
 
-Для поэтапного прогона используются отдельные скрипты:
+#### Шаг 1: Генерация случайных имён
 
-- [alerts/apply-yaml-0-to-20000.sh](alerts/apply-yaml-0-to-20000.sh) — этап 1, файлы **1..200** (0 -> ~20 000 `ALERTS`), пауза **15 с** (минимум ~**50 мин** только sleep);
-- [alerts/apply-yaml-20000-to-35000.sh](alerts/apply-yaml-20000-to-35000.sh) — этап 2, файлы **201..350** (~20 000 -> ~35 000 `ALERTS`), пауза **30 с** (минимум ~**74 мин**);
-- [alerts/apply-yaml-35000-to-45000.sh](alerts/apply-yaml-35000-to-45000.sh) — этап 3, файлы **351..450** (~35 000 -> ~45 000 `ALERTS`), пауза **45 с** (минимум ~**74 мин**);
-- [alerts/apply-yaml-45000-to-50000.sh](alerts/apply-yaml-45000-to-50000.sh) — этап 4, файлы **451..500** (~45 000 -> ~50 000 `ALERTS`), пауза **60 с** (минимум ~**49 мин**).
-
-Объём алертов на этапе убывает (**200** > **150** > **100** > **50** файлов), пауза между `kubectl apply` растёт (**15** < **30** < **45** < **60** с). Время только на `sleep` на этапах различается; без учёта длительности самих `kubectl apply`.
-
-**Запуск по этапам (из каталога `alerts`):**
+Скрипт создаёт файл `app-names.txt` со случайными уникальными именами вида `app-{adjective}-{noun}-{number}`:
 
 ```bash
-cd alerts
-./apply-yaml-0-to-20000.sh
-./apply-yaml-20000-to-35000.sh
-./apply-yaml-35000-to-45000.sh
-./apply-yaml-45000-to-50000.sh
+cd scripts
+./generate-app-names.sh 300
 ```
 
-Исходный код:
-- [alerts/apply-yaml-0-to-20000.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-0-to-20000.sh)
-- [alerts/apply-yaml-20000-to-35000.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-20000-to-35000.sh)
-- [alerts/apply-yaml-35000-to-45000.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-35000-to-45000.sh)
-- [alerts/apply-yaml-45000-to-50000.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/apply-yaml-45000-to-50000.sh)
+Количество можно изменить (по умолчанию 300):
 
-**Мониторинг ошибок:** в отдельном терминале (из `alerts`) запустите `./monitor-batch.sh`. Проверяются логи VictoriaLogs (широкий фильтр ошибок), OOM vmalert, счётчики ошибок и 5xx по компонентам VictoriaMetrics.
+```bash
+./generate-app-names.sh 500   # для 500 приложений
+./generate-app-names.sh 100   # для 100 приложений
+```
 
-Исходный код: [alerts/monitor-batch.sh](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/alerts/monitor-batch.sh).
+#### Шаг 2: Развёртывание приложений
 
-После батча можно анализировать графики нагрузки на vmalert, vmselect, operator.
+Скрипт устанавливает каждое приложение как отдельный Helm release в namespace `load-test`:
+
+```bash
+./deploy-apps.sh
+```
+
+Параметры через переменные окружения:
+
+| Переменная   | По умолчанию | Описание |
+| ------------ | ------------ | -------- |
+| `NAMESPACE`  | `load-test`  | Kubernetes namespace |
+| `CHART_PATH` | `./chart`    | Путь к Helm chart |
+| `NAMES_FILE` | `app-names.txt` | Файл со списком имён |
+| `PARALLEL`   | `10`         | Число параллельных установок |
+| `IMAGE_REPO` | `ghcr.io/patsevanton/alert-templates-helm-vmalert-impulse` | Docker image |
+| `IMAGE_TAG`  | `1.3.0`      | Версия image |
+
+Пример с кастомными параметрами:
+
+```bash
+NAMESPACE=perf-test PARALLEL=20 ./deploy-apps.sh
+```
+
+#### Шаг 3: Проверка статуса
+
+```bash
+./status-apps.sh
+```
+
+Скрипт показывает: количество Helm releases, статусы Pod'ов, потребление ресурсов, количество VMRule и VMServiceScrape.
+
+#### Шаг 4: Удаление приложений
+
+```bash
+./delete-apps.sh
+```
+
+Параметры `NAMESPACE`, `NAMES_FILE`, `PARALLEL` аналогичны `deploy-apps.sh`.
+
+#### Ресурсные требования
+
+При 300 экземплярах (requests из `values.yaml`):
+
+| Ресурс | На 1 pod | На 300 pods |
+| ------ | -------- | ----------- |
+| CPU requests | 50m | 15 000m (15 cores) |
+| CPU limits | 100m | 30 000m (30 cores) |
+| Memory requests | 64Mi | 18.75 GiB |
+| Memory limits | 128Mi | 37.5 GiB |
+
+Рекомендуется кластер с достаточным запасом ресурсов. Ресурсы можно уменьшить, отредактировав `chart/values.yaml`.
+
+#### Структура нагрузки
+
+Каждое приложение:
+- каждые 2 секунды генерирует фоновый HTTP-запрос к `/work`;
+- с вероятностью 20% возвращает ошибку 500 → растёт `app_errors_total`;
+- латентность 100-500 мс → гистограмма `app_request_latency_seconds`;
+- считает горутины → gauge `app_goroutines`.
+
+Алерты в каждом VMRule фильтруются по `job` label, привязанному к имени release, что обеспечивает уникальность на каждый экземпляр.
 
 ### Механизм распределения алертов, перезапуски vmalert и состояние
 

@@ -36,7 +36,8 @@ override.tf.json
 .terraformrc
 terraform.rc
 .terraform.lock.hcl
-alerts/vmrules/*
 
-alerts/__pycache__/generate_alerts.cpython-313.pyc
 scripts/__pycache__/fetch_capacity_snapshots.cpython-313.pyc
+
+# Generated app names for load testing
+scripts/app-names.txt

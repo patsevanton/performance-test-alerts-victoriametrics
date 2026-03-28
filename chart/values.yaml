@@ -1,0 +1,32 @@
+image:
+  repository: ghcr.io/patsevanton/alert-templates-helm-vmalert-impulse
+  tag: "1.3.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+
+replicaCount: 1
+
+resources:
+  limits:
+    cpu: 100m
+    memory: 128Mi
+  requests:
+    cpu: 50m
+    memory: 64Mi
+
+alerts:
+  latency:
+    enabled: true
+    threshold: "0.5"
+    severity: "warning"
+    description: "High request latency detected"
+
+  errors:
+    enabled: true
+    threshold: "0.05"
+    severity: "critical"
+    description: "Error rate exceeds threshold"
