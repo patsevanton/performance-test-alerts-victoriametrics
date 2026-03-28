@@ -122,8 +122,8 @@ cd scripts
 | Переменная   | По умолчанию | Описание |
 | ------------ | ------------ | -------- |
 | `NAMESPACE`  | `load-test`  | Kubernetes namespace |
-| `CHART_PATH` | `./chart`    | Путь к Helm chart |
-| `NAMES_FILE` | `app-names.txt` | Файл со списком имён |
+| `CHART_PATH` | `<repo_root>/chart` | Путь к Helm chart (авто-определяется) |
+| `NAMES_FILE` | `scripts/app-names.txt` | Файл со списком имён (авто-определяется) |
 | `PARALLEL`   | `10`         | Число параллельных установок |
 | `IMAGE_REPO` | `ghcr.io/patsevanton/alert-templates-helm-vmalert-impulse` | Docker image |
 | `IMAGE_TAG`  | `1.3.0`      | Версия image |

@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 NAMESPACE="${NAMESPACE:-load-test}"
-NAMES_FILE="${NAMES_FILE:-app-names.txt}"
+NAMES_FILE="${NAMES_FILE:-$SCRIPT_DIR/app-names.txt}"
 PARALLEL="${PARALLEL:-10}"
 
 if [ ! -f "$NAMES_FILE" ]; then

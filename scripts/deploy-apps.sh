@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 NAMESPACE="${NAMESPACE:-load-test}"
-CHART_PATH="${CHART_PATH:-./chart}"
-NAMES_FILE="${NAMES_FILE:-app-names.txt}"
+CHART_PATH="${CHART_PATH:-$REPO_ROOT/chart}"
+NAMES_FILE="${NAMES_FILE:-$SCRIPT_DIR/app-names.txt}"
 PARALLEL="${PARALLEL:-10}"
 IMAGE_REPO="${IMAGE_REPO:-ghcr.io/patsevanton/alert-templates-helm-vmalert-impulse}"
 IMAGE_TAG="${IMAGE_TAG:-1.3.0}"
