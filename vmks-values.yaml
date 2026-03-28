@@ -125,8 +125,8 @@ vmagent:
 victoria-metrics-operator:
   resources:
     limits:
-      cpu: "1"
+      cpu: "2"
       memory: 2Gi
     requests:
-      cpu: 100m
+      cpu: 250m
       memory: 512Mi
