@@ -6,14 +6,14 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 CHART_PATH="${CHART_PATH:-$REPO_ROOT/chart}"
 NAMES_FILE="${NAMES_FILE:-$SCRIPT_DIR/app-names.txt}"
-PARALLEL="${PARALLEL:-10}"
 IMAGE_REPO="${IMAGE_REPO:-ghcr.io/patsevanton/performance-test-alerts-victoriametrics}"
 IMAGE_TAG="${IMAGE_TAG:-1.0.0}"
 TARGET_APPS="${TARGET_APPS:-1000}"
 ALERTS_PER_APP="${ALERTS_PER_APP:-50}"
 BASE_ALERTS_COUNT="${BASE_ALERTS_COUNT:-10}"
 STAGE_SIZES="${STAGE_SIZES:-400,300,200,100}"
-STAGE_PAUSES="${STAGE_PAUSES:-15,30,45,60}"
+# Пауза в секундах между последовательными установками app внутри стадии 1..4
+STAGE_APP_DELAYS="${STAGE_APP_DELAYS:-20,40,70,90}"
 
 if [ ! -f "$NAMES_FILE" ]; then
   echo "Ошибка: файл $NAMES_FILE не найден. Сначала выполните generate-app-names.sh."
@@ -38,10 +38,10 @@ apps=("${all_names[@]:0:TARGET_APPS}")
 total_alerts=$((TARGET_APPS * ALERTS_PER_APP))
 
 IFS=',' read -r -a stage_sizes <<< "$STAGE_SIZES"
-IFS=',' read -r -a stage_pauses <<< "$STAGE_PAUSES"
+IFS=',' read -r -a stage_app_delays <<< "$STAGE_APP_DELAYS"
 
-if [ "${#stage_sizes[@]}" -ne 4 ] || [ "${#stage_pauses[@]}" -ne 4 ]; then
-  echo "Ошибка: STAGE_SIZES и STAGE_PAUSES должны содержать ровно 4 значения через запятую."
+if [ "${#stage_sizes[@]}" -ne 4 ] || [ "${#stage_app_delays[@]}" -ne 4 ]; then
+  echo "Ошибка: STAGE_SIZES и STAGE_APP_DELAYS должны содержать ровно 4 значения через запятую."
   exit 1
 fi
 
@@ -54,7 +54,7 @@ if [ "$sum" -ne "$TARGET_APPS" ]; then
   exit 1
 fi
 
-echo "Развёртывание $TARGET_APPS приложений (параллелизм: $PARALLEL)"
+echo "Развёртывание $TARGET_APPS приложений (последовательно, паузы между установками по стадиям: $STAGE_APP_DELAYS с)"
 echo "Алертов на приложение: $ALERTS_PER_APP (базовых: $BASE_ALERTS_COUNT, синтетических: $SYNTHETIC_ALERTS_COUNT)"
 echo "Запланировано всего алертов: $total_alerts"
 echo "Режим namespace: на приложение (имя namespace = имя приложения)"
@@ -74,38 +74,39 @@ deploy_app() {
     2>&1 | tail -1
 }
 
-export -f deploy_app
-export CHART_PATH IMAGE_REPO IMAGE_TAG SYNTHETIC_ALERTS_COUNT
-
 deploy_stage() {
   local stage_num="$1"
   local start="$2"
   local end="$3"
-  local pause="$4"
+  local delay_between="$4"
   shift 4
   local names=("$@")
+  local n=${#names[@]}
+  local j=0
 
   echo ""
-  echo "Этап $stage_num/4: развёртывание приложений $start-$end (${#names[@]} шт.), следующая пауза ${pause} с"
-  printf '%s\n' "${names[@]}" | xargs -P "$PARALLEL" -I {} bash -c 'deploy_app "$@"' _ {}
+  echo "Этап $stage_num/4: последовательная установка приложений $start-$end ($n шт.), пауза между установками ${delay_between} с"
+
+  for name in "${names[@]}"; do
+    j=$((j + 1))
+    deploy_app "$name"
+    if [ "$j" -lt "$n" ]; then
+      sleep "$delay_between"
+    fi
+  done
 }
 
 offset=0
 for i in "${!stage_sizes[@]}"; do
   size=${stage_sizes[$i]}
-  pause=${stage_pauses[$i]}
+  delay=${stage_app_delays[$i]}
   start=$((offset + 1))
   end=$((offset + size))
   stage_num=$((i + 1))
   stage_names=("${apps[@]:offset:size}")
 
-  deploy_stage "$stage_num" "$start" "$end" "$pause" "${stage_names[@]}"
+  deploy_stage "$stage_num" "$start" "$end" "$delay" "${stage_names[@]}"
   offset=$end
-
-  if [ "$stage_num" -lt 4 ]; then
-    echo "Этап $stage_num завершён. Пауза ${pause} с перед следующим этапом..."
-    sleep "$pause"
-  fi
 done
 
 echo ""

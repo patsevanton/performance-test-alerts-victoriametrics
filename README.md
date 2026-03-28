@@ -111,7 +111,8 @@ cd scripts
 | `CHART_PATH` | `<repo_root>/chart` | Путь к Helm chart (авто-определяется) |
 | `NAMES_FILE` | `scripts/app-names.txt` | Файл со списком имён (авто-определяется) |
 | `TARGET_APPS` | `1000`      | Сколько приложений взять из начала `app-names.txt` |
-| `PARALLEL`   | `10`         | Число параллельных установок |
+| `STAGE_SIZES` | `400,300,200,100` | Число приложений на каждой из 4 стадий (сумма = `TARGET_APPS`) |
+| `STAGE_APP_DELAYS` | `20,40,70,90` | Секунды между последовательными установками внутри стадий 1–4 |
 | `ALERTS_PER_APP` | `50`      | Общее число алертов на приложение |
 | `IMAGE_REPO` | `ghcr.io/patsevanton/performance-test-alerts-victoriametrics` | Docker image |
 | `IMAGE_TAG`  | `1.0.0`      | Версия image |
@@ -119,7 +120,7 @@ cd scripts
 Пример с кастомными параметрами:
 
 ```bash
-TARGET_APPS=1000 PARALLEL=20 ALERTS_PER_APP=50 ./deploy-apps.sh
+TARGET_APPS=1000 ALERTS_PER_APP=50 ./deploy-apps.sh
 ```
 
 #### Шаг 3: Проверка статуса
