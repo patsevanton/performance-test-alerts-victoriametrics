@@ -25,6 +25,22 @@ spec:
             summary: "High error rate on {{ include "golden-signal-app.name" . }}"
             description: "{{ .Values.alerts.errors.description }}. Error rate is {{ `{{ $value | humanize }}` }}"
         {{- end }}
+        {{- if .Values.alerts.criticalErrors.enabled }}
+        - alert: CriticalErrorRate
+          expr: |
+            (
+              rate(app_errors_total{job="{{ include "golden-signal-app.name" . }}"}[5m])
+              /
+              clamp_min(rate(app_requests_total{job="{{ include "golden-signal-app.name" . }}"}[5m]), 0.001)
+            ) > {{ .Values.alerts.criticalErrors.threshold }}
+          for: 1m
+          labels:
+            severity: {{ .Values.alerts.criticalErrors.severity }}
+            app: {{ include "golden-signal-app.name" . }}
+          annotations:
+            summary: "Critical error rate on {{ include "golden-signal-app.name" . }}"
+            description: "{{ .Values.alerts.criticalErrors.description }}. Error rate is {{ `{{ $value | humanize }}` }}"
+        {{- end }}
         {{- if .Values.alerts.latency.enabled }}
         - alert: HighLatency
           expr: |
@@ -39,13 +55,93 @@ spec:
             summary: "High latency on {{ include "golden-signal-app.name" . }}"
             description: "{{ .Values.alerts.latency.description }}. P95 latency is {{ `{{ $value }}` }}s"
         {{- end }}
+        {{- if .Values.alerts.latencyP99.enabled }}
+        - alert: HighLatencyP99
+          expr: |
+            histogram_quantile(0.99,
+              sum(rate(app_request_latency_seconds_bucket{job="{{ include "golden-signal-app.name" . }}"}[5m])) by (le)
+            ) > {{ .Values.alerts.latencyP99.threshold }}
+          for: 2m
+          labels:
+            severity: {{ .Values.alerts.latencyP99.severity }}
+            app: {{ include "golden-signal-app.name" . }}
+          annotations:
+            summary: "High p99 latency on {{ include "golden-signal-app.name" . }}"
+            description: "{{ .Values.alerts.latencyP99.description }}. P99 latency is {{ `{{ $value }}` }}s"
+        {{- end }}
+        {{- if .Values.alerts.avgLatency.enabled }}
+        - alert: HighAverageLatency
+          expr: |
+            (
+              rate(app_request_latency_seconds_sum{job="{{ include "golden-signal-app.name" . }}"}[5m])
+              /
+              clamp_min(rate(app_request_latency_seconds_count{job="{{ include "golden-signal-app.name" . }}"}[5m]), 0.001)
+            ) > {{ .Values.alerts.avgLatency.threshold }}
+          for: 2m
+          labels:
+            severity: {{ .Values.alerts.avgLatency.severity }}
+            app: {{ include "golden-signal-app.name" . }}
+          annotations:
+            summary: "High average latency on {{ include "golden-signal-app.name" . }}"
+            description: "{{ .Values.alerts.avgLatency.description }}. Average latency is {{ `{{ $value }}` }}s"
+        {{- end }}
+        {{- if .Values.alerts.goroutines.enabled }}
         - alert: HighGoroutineCount
           expr: |
-            app_goroutines{job="{{ include "golden-signal-app.name" . }}"} > 50
+            app_goroutines{job="{{ include "golden-signal-app.name" . }}"} > {{ .Values.alerts.goroutines.threshold }}
           for: 1m
           labels:
-            severity: warning
+            severity: {{ .Values.alerts.goroutines.severity }}
             app: {{ include "golden-signal-app.name" . }}
           annotations:
             summary: "High goroutines on {{ include "golden-signal-app.name" . }}"
-            description: "Application has {{ `{{ $value }}` }} goroutines, indicating potential saturation"
+            description: "{{ .Values.alerts.goroutines.description }}. Current value is {{ `{{ $value }}` }}"
+        {{- end }}
+        {{- if .Values.alerts.criticalGoroutines.enabled }}
+        - alert: CriticalGoroutineCount
+          expr: |
+            app_goroutines{job="{{ include "golden-signal-app.name" . }}"} > {{ .Values.alerts.criticalGoroutines.threshold }}
+          for: 1m
+          labels:
+            severity: {{ .Values.alerts.criticalGoroutines.severity }}
+            app: {{ include "golden-signal-app.name" . }}
+          annotations:
+            summary: "Critical goroutines on {{ include "golden-signal-app.name" . }}"
+            description: "{{ .Values.alerts.criticalGoroutines.description }}. Current value is {{ `{{ $value }}` }}"
+        {{- end }}
+        {{- if .Values.alerts.lowTraffic.enabled }}
+        - alert: LowTraffic
+          expr: |
+            rate(app_requests_total{job="{{ include "golden-signal-app.name" . }}"}[5m]) < {{ .Values.alerts.lowTraffic.threshold }}
+          for: 5m
+          labels:
+            severity: {{ .Values.alerts.lowTraffic.severity }}
+            app: {{ include "golden-signal-app.name" . }}
+          annotations:
+            summary: "Low traffic on {{ include "golden-signal-app.name" . }}"
+            description: "{{ .Values.alerts.lowTraffic.description }}. Request rate is {{ `{{ $value }}` }} req/s"
+        {{- end }}
+        {{- if .Values.alerts.trafficSpike.enabled }}
+        - alert: TrafficSpike
+          expr: |
+            rate(app_requests_total{job="{{ include "golden-signal-app.name" . }}"}[1m]) > {{ .Values.alerts.trafficSpike.threshold }}
+          for: 1m
+          labels:
+            severity: {{ .Values.alerts.trafficSpike.severity }}
+            app: {{ include "golden-signal-app.name" . }}
+          annotations:
+            summary: "Traffic spike on {{ include "golden-signal-app.name" . }}"
+            description: "{{ .Values.alerts.trafficSpike.description }}. Request rate is {{ `{{ $value }}` }} req/s"
+        {{- end }}
+        {{- if .Values.alerts.errorBurst.enabled }}
+        - alert: ErrorBurst
+          expr: |
+            increase(app_errors_total{job="{{ include "golden-signal-app.name" . }}"}[2m]) > {{ .Values.alerts.errorBurst.threshold }}
+          for: 1m
+          labels:
+            severity: {{ .Values.alerts.errorBurst.severity }}
+            app: {{ include "golden-signal-app.name" . }}
+          annotations:
+            summary: "Error burst on {{ include "golden-signal-app.name" . }}"
+            description: "{{ .Values.alerts.errorBurst.description }}. Errors in 2m are {{ `{{ $value }}` }}"
+        {{- end }}

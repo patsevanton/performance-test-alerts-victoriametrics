@@ -6,6 +6,13 @@
 vlselect:
   vmServiceScrape:
     enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 512Mi
   ingress:
     enabled: true
     ingressClassName: nginx
@@ -18,10 +25,24 @@ vlselect:
 vlinsert:
   vmServiceScrape:
     enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 512Mi
 
 vlstorage:
   vmServiceScrape:
     enabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
   retentionPeriod: 1d
   persistentVolume:
     size: 20Gi

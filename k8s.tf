@@ -56,7 +56,7 @@ resource "yandex_kubernetes_node_group" "k8s-node-group" {
 
   scale_policy {
     fixed_scale {
-      size = 3  # Фиксированное количество нод
+      size = 5  # Фиксированное количество нод (запас по pod slots для load-test + VM stack)
     }
   }
 

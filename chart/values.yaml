@@ -24,9 +24,51 @@ alerts:
     threshold: "0.5"
     severity: "warning"
     description: "High request latency detected"
+  latencyP99:
+    enabled: true
+    threshold: "1.0"
+    severity: "critical"
+    description: "High P99 request latency detected"
+  avgLatency:
+    enabled: true
+    threshold: "0.3"
+    severity: "warning"
+    description: "Average request latency is above threshold"
 
   errors:
     enabled: true
     threshold: "0.05"
     severity: "critical"
     description: "Error rate exceeds threshold"
+  criticalErrors:
+    enabled: true
+    threshold: "0.15"
+    severity: "critical"
+    description: "Critical error rate exceeds threshold"
+  errorBurst:
+    enabled: true
+    threshold: "10"
+    severity: "warning"
+    description: "Too many errors in a short time window"
+
+  goroutines:
+    enabled: true
+    threshold: "50"
+    severity: "warning"
+    description: "High goroutine count detected"
+  criticalGoroutines:
+    enabled: true
+    threshold: "100"
+    severity: "critical"
+    description: "Critical goroutine count detected"
+
+  lowTraffic:
+    enabled: true
+    threshold: "0.05"
+    severity: "warning"
+    description: "Request rate is too low"
+  trafficSpike:
+    enabled: true
+    threshold: "2.0"
+    severity: "warning"
+    description: "Traffic spike detected"
