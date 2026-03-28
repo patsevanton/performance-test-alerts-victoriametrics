@@ -19,10 +19,7 @@
 ### victoria-metrics-k8s-stack
 
 ```bash
-helm repo add vm https://victoriametrics.github.io/helm-charts/
-helm repo update
-
-helm upgrade --install vmks vm/victoria-metrics-k8s-stack \
+helm upgrade --install vmks oci://ghcr.io/victoriametrics/helm-charts/victoria-metrics-k8s-stack \
   --namespace vmks --create-namespace \
   --version 0.72.5 \
   --wait --values vmks-values.yaml
@@ -45,10 +42,7 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 **1. VictoriaLogs cluster (vlselect, vlinsert, vlstorage):**
 
 ```bash
-helm repo add vm https://victoriametrics.github.io/helm-charts/
-helm repo update
-
-helm upgrade --install victoria-logs-cluster vm/victoria-logs-cluster \
+helm upgrade --install victoria-logs-cluster oci://ghcr.io/victoriametrics/helm-charts/victoria-logs-cluster \
   --namespace victoria-logs-cluster \
   --create-namespace \
   --version 0.0.31 \
@@ -64,7 +58,7 @@ helm upgrade --install victoria-logs-cluster vm/victoria-logs-cluster \
 **2. Victoria-logs-collector (сбор логов с подов кластера):**
 
 ```bash
-helm upgrade --install victoria-logs-collector vm/victoria-logs-collector \
+helm upgrade --install victoria-logs-collector oci://ghcr.io/victoriametrics/helm-charts/victoria-logs-collector \
   --namespace victoria-logs-collector \
   --create-namespace \
   --version 0.2.13 \
