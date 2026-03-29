@@ -52,11 +52,13 @@ resource "yandex_kubernetes_node_group" "k8s-node-group" {
   description = "Node group for the Managed Service for Kubernetes cluster"
   name        = "k8s-node-group"
   cluster_id  = yandex_kubernetes_cluster.vmalert.id
-  version     = "1.32"  # Версия Kubernetes на нодах
+  version     = "1.33"  # Версия Kubernetes на нодах
 
   scale_policy {
     fixed_scale {
-      size = 12  # Для 1000 app pod'ов + системных/мониторинговых pod'ов и rolling update оставляем дополнительный запас по pod slots.
+      # kubectl показал Pending у vmalert из-за `Insufficient cpu` (request=4 core на pod, на части нод уже ~96% по requests).
+      # Добавляем 1 ноду для гарантированного размещения тяжёлых monitoring pod'ов при rollout/reconcile.
+      size = 13
     }
   }
 
@@ -68,7 +70,8 @@ resource "yandex_kubernetes_node_group" "k8s-node-group" {
   }
 
   instance_template {
-    platform_id = "standard-v2"  # Тип виртуальной машины
+    # Переходим на standard-v3: более современная платформа, лучше подходит под текущий CPU-bound профиль кластера.
+    platform_id = "standard-v3"
 
     network_interface {
       nat = true  # Включение NAT для доступа в интернет
@@ -80,8 +83,8 @@ resource "yandex_kubernetes_node_group" "k8s-node-group" {
     }
 
     resources {
-      # По kubectl top нод: память ~23–47% от allocatable (~17Gi), CPU заметно выше — 8 vCPU оставляем.
-      # Для standard-v2 + 8 vCPU допустимы только 8, 16, 24, 32… ГБ — 20 недоступен, берём 24 (ближе к цели, чем 32).
+      # По kubectl top: память заметно ниже CPU, bottleneck сейчас по CPU slots (requests), не по RAM.
+      # Оставляем 8 vCPU / 24GB как сбалансированный baseline и снимаем pressure через +1 node.
       memory = 24  # ГБ
       cores  = 8   # vCPU
     }
