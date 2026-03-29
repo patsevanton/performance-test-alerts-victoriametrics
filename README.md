@@ -12,7 +12,7 @@
 
 ### Infrastructure
 
-**Кластер:** 3 ноды Kubernetes v1.32.1 на Yandex Cloud (Ubuntu 22.04.5 LTS, containerd 1.7.27).
+**Кластер:** 13 ноды Kubernetes v1.32.1 на Yandex Cloud (Ubuntu 22.04.5 LTS, containerd 1.7.27).
 
 ## Установка
 
