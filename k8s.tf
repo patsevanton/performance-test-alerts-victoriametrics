@@ -73,6 +73,11 @@ resource "yandex_kubernetes_node_group" "k8s-node-group" {
     # Переходим на standard-v3: более современная платформа, лучше подходит под текущий CPU-bound профиль кластера.
     platform_id = "standard-v3"
 
+    # Используем preemptible-ноды для снижения стоимости стенда.
+    scheduling_policy {
+      preemptible = true
+    }
+
     network_interface {
       nat = true  # Включение NAT для доступа в интернет
       subnet_ids = [
