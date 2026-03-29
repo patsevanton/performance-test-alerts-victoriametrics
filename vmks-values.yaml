@@ -68,13 +68,15 @@ vmcluster:
           memory: 2Gi
     vminsert:
       replicaCount: 2
+      # CPU: при limits 500m был rate(container_cpu_cfs_throttled_seconds_total) ~0.08–0.11 с/с;
+      # peak rate(usage[1m]) ~0.17 core — запас на всплески remote write.
       resources:
         limits:
-          memory: 768Mi
-          cpu: "500m"
+          memory: 1Gi
+          cpu: "1"
         requests:
-          memory: 384Mi
-          cpu: 50m
+          memory: 512Mi
+          cpu: 250m
 
   ingress:
     select:
