@@ -89,13 +89,14 @@ alertmanager:
     podDisruptionBudget:
       minAvailable: 1
 
+    # Больше CPU: при ~1 core limit наблюдался CFS throttling (container_cpu_cfs_throttled_seconds_total).
     resources:
       limits:
-        cpu: "1"
-        memory: 1Gi
+        cpu: "2"
+        memory: 1536Mi
       requests:
-        cpu: 200m
-        memory: 256Mi
+        cpu: "1"
+        memory: 512Mi
 
 vmalert:
   spec:
@@ -103,12 +104,13 @@ vmalert:
     podDisruptionBudget:
       minAvailable: 1
 
+    # Больше CPU: при ~2 cores limit наблюдался заметный throttling на eval десятков тысяч правил.
     resources:
       limits:
-        cpu: "2"
-        memory: 3Gi
+        cpu: "4"
+        memory: 4Gi
       requests:
-        cpu: "500m"
+        cpu: "2"
         memory: 2Gi
 
 vmagent:
