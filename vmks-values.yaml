@@ -42,7 +42,7 @@ vmcluster:
           cpu: "2"
           memory: 4Gi
         requests:
-          cpu: 250m
+          cpu: 1250m
           memory: 1Gi
 
     vmselect:
@@ -64,7 +64,7 @@ vmcluster:
           cpu: "2"
           memory: 4Gi
         requests:
-          cpu: 500m
+          cpu: "1"
           memory: 2Gi
     vminsert:
       replicaCount: 2
@@ -108,13 +108,13 @@ vmalert:
 
     # CPU: по VictoriaMetrics (cadvisor) max_over_time(rate(usage[1m])[30m]) до ~3.35 cores/под;
     # при limits 4–5 всё ещё был rate(container_cpu_cfs_throttled_seconds_total) > 0 на нагруженных подах.
-    # limits 6 + requests 3 дают запас под микровсплески eval. RAM: working_set ~1.4Gi при лимите 5Gi — ок.
+    # limits 6 + requests 4 (было 3): при ~113% от request подняли гарантию под фактический eval.
     resources:
       limits:
         cpu: "6"
         memory: 5Gi
       requests:
-        cpu: "3"
+        cpu: "4"
         memory: 3Gi
 
 vmagent:
@@ -127,7 +127,7 @@ vmagent:
         cpu: "2"
         memory: 3Gi
       requests:
-        cpu: 500m
+        cpu: 750m
         memory: 1Gi
 
 victoria-metrics-operator:
