@@ -66,13 +66,9 @@ fi
 
 estimated_runtime_seconds=$((estimated_delay_seconds + TARGET_APPS * INSTALL_SECONDS_ESTIMATE))
 max_runtime_seconds=$((MAX_RUNTIME_HOURS * 3600))
-if [ "$estimated_runtime_seconds" -gt "$max_runtime_seconds" ]; then
-  echo "Ошибка: оценка ${estimated_runtime_seconds}с превышает лимит ${max_runtime_seconds}с."
-  exit 1
-fi
 
 echo "День 2: развёртывание app-$START_INDEX..app-$required ($TARGET_APPS шт.)"
-echo "Оценка длительности: ${estimated_runtime_seconds}с (лимит: ${max_runtime_seconds}с)"
+echo "Оценка длительности: ${estimated_runtime_seconds}с (ориентир: ${max_runtime_seconds}с)"
 
 deploy_app() {
   local name="$1"
