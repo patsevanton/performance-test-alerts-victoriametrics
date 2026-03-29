@@ -104,14 +104,16 @@ vmalert:
     podDisruptionBudget:
       minAvailable: 1
 
-    # Больше CPU: при ~2 cores limit наблюдался заметный throttling на eval десятков тысяч правил.
+    # CPU: по VictoriaMetrics (cadvisor) max_over_time(rate(usage[1m])[30m]) до ~3.35 cores/под;
+    # при limits 4–5 всё ещё был rate(container_cpu_cfs_throttled_seconds_total) > 0 на нагруженных подах.
+    # limits 6 + requests 3 дают запас под микровсплески eval. RAM: working_set ~1.4Gi при лимите 5Gi — ок.
     resources:
       limits:
-        cpu: "4"
-        memory: 4Gi
+        cpu: "6"
+        memory: 5Gi
       requests:
-        cpu: "2"
-        memory: 2Gi
+        cpu: "3"
+        memory: 3Gi
 
 vmagent:
   spec:
