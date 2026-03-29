@@ -74,7 +74,7 @@ helm upgrade --install victoria-logs-collector oci://ghcr.io/victoriametrics/hel
 Для нагрузочного тестирования VictoriaMetrics можно развернуть 1000 экземпляров приложения Golden Signal App. Каждый экземпляр:
 - генерирует метрики (`app_requests_total`, `app_errors_total`, `app_request_latency_seconds`, `app_goroutines`);
 - создаёт `VMServiceScrape` для автоматического сбора метрик;
-- создаёт `VMRule` с 50 алертами по умолчанию (10 базовых + 40 синтетических; общее число задаётся `ALERTS_PER_APP` в `deploy-apps.sh`, синтетика — `alerts.synthetic.count` в chart).
+- создаёт `VMRule` с 50 алертами по умолчанию (10 базовых + 40 дополнительных; общее число задаётся `ALERTS_PER_APP` в `deploy-apps.sh`, число дополнительных — `alerts.extra.count` в chart).
 
 **Итого при 1000 экземплярах (по умолчанию):** 1000 Deployment, 1000 Service, 1000 VMServiceScrape, 1000 VMRule (50 000 алертов).
 

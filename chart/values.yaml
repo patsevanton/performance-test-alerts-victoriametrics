@@ -73,7 +73,7 @@ alerts:
     severity: "warning"
     description: "Traffic spike detected"
 
-  synthetic:
+  extra:
     enabled: true
     count: 90
-    descriptionPrefix: "Synthetic load alert"
+    descriptionPrefix: "Load alert"

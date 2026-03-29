@@ -20,7 +20,7 @@ if [ ! -f "$NAMES_FILE" ]; then
   exit 1
 fi
 
-SYNTHETIC_ALERTS_COUNT="${SYNTHETIC_ALERTS_COUNT:-$((ALERTS_PER_APP - BASE_ALERTS_COUNT))}"
+EXTRA_ALERTS_COUNT="${EXTRA_ALERTS_COUNT:-$((ALERTS_PER_APP - BASE_ALERTS_COUNT))}"
 
 if [ "$ALERTS_PER_APP" -lt "$BASE_ALERTS_COUNT" ]; then
   echo "Ошибка: ALERTS_PER_APP ($ALERTS_PER_APP) должен быть >= BASE_ALERTS_COUNT ($BASE_ALERTS_COUNT)."
@@ -55,7 +55,7 @@ if [ "$sum" -ne "$TARGET_APPS" ]; then
 fi
 
 echo "Развёртывание $TARGET_APPS приложений (последовательно, паузы между установками по стадиям: $STAGE_APP_DELAYS с)"
-echo "Алертов на приложение: $ALERTS_PER_APP (базовых: $BASE_ALERTS_COUNT, синтетических: $SYNTHETIC_ALERTS_COUNT)"
+echo "Алертов на приложение: $ALERTS_PER_APP (базовых: $BASE_ALERTS_COUNT, дополнительных: $EXTRA_ALERTS_COUNT)"
 echo "Запланировано всего алертов: $total_alerts"
 echo "Режим namespace: на приложение (имя namespace = имя приложения)"
 
@@ -68,7 +68,7 @@ deploy_app() {
     --namespace "$app_namespace" \
     --set image.repository="$IMAGE_REPO" \
     --set image.tag="$IMAGE_TAG" \
-    --set alerts.synthetic.count="$SYNTHETIC_ALERTS_COUNT" \
+    --set alerts.extra.count="$EXTRA_ALERTS_COUNT" \
     --wait=false \
     --timeout 2m \
     2>&1 | tail -1

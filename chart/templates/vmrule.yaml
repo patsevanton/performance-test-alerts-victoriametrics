@@ -145,10 +145,10 @@ spec:
             summary: "Error burst on {{ include "golden-signal-app.name" . }}"
             description: "{{ .Values.alerts.errorBurst.description }}. Errors in 2m are {{ `{{ $value }}` }}"
         {{- end }}
-        {{- if .Values.alerts.synthetic.enabled }}
+        {{- if .Values.alerts.extra.enabled }}
         {{- $appName := include "golden-signal-app.name" . }}
-        {{- range $i := until (int .Values.alerts.synthetic.count) }}
-        - alert: SyntheticAlert{{ printf "%03d" (add $i 1) }}
+        {{- range $i := until (int .Values.alerts.extra.count) }}
+        - alert: ExtraAlert{{ printf "%03d" (add $i 1) }}
           expr: |
             {{- if eq (mod $i 10) 0 }}
             (1000 * rate(app_errors_total{job="{{ $appName }}"}[1m]) / clamp_min(rate(app_requests_total{job="{{ $appName }}"}[1m]), 0.001)) > {{ add 20 $i }}
@@ -175,10 +175,10 @@ spec:
           labels:
             severity: {{ ternary "critical" "warning" (eq (mod $i 5) 0) }}
             app: {{ $appName }}
-            synthetic: "true"
-            synthetic_id: "{{ add $i 1 }}"
+            extra: "true"
+            extra_id: "{{ add $i 1 }}"
           annotations:
-            summary: "Synthetic alert {{ printf "%03d" (add $i 1) }} on {{ $appName }}"
-            description: "{{ $.Values.alerts.synthetic.descriptionPrefix }} #{{ add $i 1 }} for {{ $appName }}. Value is {{ `{{ $value }}` }}"
+            summary: "Alert {{ printf "%03d" (add $i 1) }} on {{ $appName }}"
+            description: "{{ $.Values.alerts.extra.descriptionPrefix }} #{{ add $i 1 }} for {{ $appName }}. Value is {{ `{{ $value }}` }}"
         {{- end }}
         {{- end }}
