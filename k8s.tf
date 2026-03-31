@@ -28,7 +28,7 @@ resource "yandex_kubernetes_cluster" "vmalert" {
   network_id = yandex_vpc_network.vmalert.id  # Сеть, к которой подключается кластер
 
   master {
-    version = "1.32"  # Версия Kubernetes мастера
+    version = "1.33"  # Версия Kubernetes мастера
     zonal {
       zone      = yandex_vpc_subnet.vmalert-a.zone  # Зона размещения мастера
       subnet_id = yandex_vpc_subnet.vmalert-a.id     # Подсеть для мастера

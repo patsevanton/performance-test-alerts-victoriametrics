@@ -11,12 +11,11 @@ IMAGE_TAG="${IMAGE_TAG:-1.0.0}"
 ALERTS_PER_APP="${ALERTS_PER_APP:-50}"
 BASE_ALERTS_COUNT="${BASE_ALERTS_COUNT:-10}"
 
-# День 2: app-651..app-1000
-START_INDEX=651
-TARGET_APPS=350
-STAGE_SIZES="150,100,60,40"
-STAGE_APP_DELAYS="20,40,70,90"
-MAX_RUNTIME_HOURS=8
+# День 2: 30% (app-401..app-700) за ~9 часов
+START_INDEX=401
+TARGET_APPS=300
+APP_DELAY_SECONDS=98
+MAX_RUNTIME_HOURS=9
 INSTALL_SECONDS_ESTIMATE=10
 
 if [ ! -f "$NAMES_FILE" ]; then
@@ -39,36 +38,14 @@ fi
 
 start_offset=$((START_INDEX - 1))
 apps=("${all_names[@]:start_offset:TARGET_APPS}")
-
-IFS=',' read -r -a stage_sizes <<< "$STAGE_SIZES"
-IFS=',' read -r -a stage_app_delays <<< "$STAGE_APP_DELAYS"
-
-if [ "${#stage_sizes[@]}" -ne 4 ] || [ "${#stage_app_delays[@]}" -ne 4 ]; then
-  echo "Ошибка: STAGE_SIZES и STAGE_APP_DELAYS должны содержать 4 значения."
-  exit 1
-fi
-
-sum=0
-estimated_delay_seconds=0
-for i in "${!stage_sizes[@]}"; do
-  size=${stage_sizes[$i]}
-  delay=${stage_app_delays[$i]}
-  sum=$((sum + size))
-  if [ "$size" -gt 1 ]; then
-    estimated_delay_seconds=$((estimated_delay_seconds + (size - 1) * delay))
-  fi
-done
-
-if [ "$sum" -ne "$TARGET_APPS" ]; then
-  echo "Ошибка: сумма STAGE_SIZES ($sum) должна быть равна TARGET_APPS ($TARGET_APPS)."
-  exit 1
-fi
-
+estimated_delay_seconds=$(((TARGET_APPS - 1) * APP_DELAY_SECONDS))
 estimated_runtime_seconds=$((estimated_delay_seconds + TARGET_APPS * INSTALL_SECONDS_ESTIMATE))
 max_runtime_seconds=$((MAX_RUNTIME_HOURS * 3600))
 
 echo "День 2: развёртывание app-$START_INDEX..app-$required ($TARGET_APPS шт.)"
+echo "Целевая доля: 30%"
 echo "Оценка длительности: ${estimated_runtime_seconds}с (ориентир: ${max_runtime_seconds}с)"
+echo "Задержка между app: ${APP_DELAY_SECONDS}с"
 
 deploy_app() {
   local name="$1"
@@ -84,23 +61,14 @@ deploy_app() {
     2>&1 | tail -1
 }
 
-offset=0
-for i in "${!stage_sizes[@]}"; do
-  size=${stage_sizes[$i]}
-  delay=${stage_app_delays[$i]}
-  stage_num=$((i + 1))
-  stage_names=("${apps[@]:offset:size}")
-  echo "Этап $stage_num/4: $size app, задержка ${delay}с"
-  n=${#stage_names[@]}
-  j=0
-  for name in "${stage_names[@]}"; do
-    j=$((j + 1))
-    deploy_app "$name"
-    if [ "$j" -lt "$n" ]; then
-      sleep "$delay"
-    fi
-  done
-  offset=$((offset + size))
+n=${#apps[@]}
+j=0
+for name in "${apps[@]}"; do
+  j=$((j + 1))
+  deploy_app "$name"
+  if [ "$j" -lt "$n" ]; then
+    sleep "$APP_DELAY_SECONDS"
+  fi
 done
 
 echo "День 2 завершён: установлено $TARGET_APPS app."

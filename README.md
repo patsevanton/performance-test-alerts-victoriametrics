@@ -74,7 +74,7 @@ helm upgrade --install victoria-logs-collector oci://ghcr.io/victoriametrics/hel
 Для нагрузочного тестирования VictoriaMetrics можно развернуть 1000 экземпляров приложения Golden Signal App. Каждый экземпляр:
 - генерирует метрики (`app_requests_total`, `app_errors_total`, `app_request_latency_seconds`, `app_goroutines`);
 - создаёт `VMServiceScrape` для автоматического сбора метрик;
-- создаёт `VMRule` с 50 алертами по умолчанию (10 базовых + 40 дополнительных; общее число задаётся `ALERTS_PER_APP` в `deploy-apps.sh`, число дополнительных — `alerts.extra.count` в chart).
+- создаёт `VMRule` с 50 алертами по умолчанию (10 базовых + 40 дополнительных; общее число задаётся `ALERTS_PER_APP` в `deploy-apps-day*.sh`, число дополнительных — `alerts.extra.count` в chart).
 
 **Итого при 1000 экземплярах (по умолчанию):** 1000 Deployment, 1000 Service, 1000 VMServiceScrape, 1000 VMRule (50 000 алертов).
 
@@ -100,18 +100,22 @@ cd scripts
 
 Каждый app устанавливается как отдельный Helm release в отдельный namespace (имя namespace = имя приложения).
 
-Запуск по дням (ограничение до 8 часов на один прогон):
+Запуск по дням (ориентир: ~9 часов на один прогон):
 
 ```bash
 ./deploy-apps-day1.sh
 ./deploy-apps-day2.sh
+./deploy-apps-day3.sh
+./deploy-apps-day4.sh
 ```
 
-В этом репозитории 1000 app разбиты на 2 дня:
-- День 1: `app-1..app-650` (`deploy-apps-day1.sh`)
-- День 2: `app-651..app-1000` (`deploy-apps-day2.sh`)
+В этом репозитории 1000 app разбиты на 4 дня:
+- День 1: `app-1..app-400` (40%, `deploy-apps-day1.sh`)
+- День 2: `app-401..app-700` (30%, `deploy-apps-day2.sh`)
+- День 3: `app-701..app-900` (20%, `deploy-apps-day3.sh`)
+- День 4: `app-901..app-1000` (10%, `deploy-apps-day4.sh`)
 
-Оба скрипта выводят оценку длительности запуска (ориентир 8 часов), но продолжают выполнение до конца даже при превышении оценки.
+Все четыре скрипта выводят оценку длительности запуска (ориентир 9 часов), но продолжают выполнение до конца даже при превышении оценки.
 
 #### Шаг 3: Проверка статуса
 
@@ -127,7 +131,7 @@ cd scripts
 ./delete-apps.sh
 ```
 
-Параметры `NAMES_FILE`, `TARGET_APPS`, `PARALLEL` аналогичны `deploy-apps.sh`.
+Параметры `NAMES_FILE`, `TARGET_APPS`, `PARALLEL` аналогичны скриптам `deploy-apps-day*.sh`.
 Дополнительно `DELETE_NAMESPACES=true|false` (по умолчанию `true`) управляет удалением namespace после `helm uninstall`.
 
 #### Ресурсные требования

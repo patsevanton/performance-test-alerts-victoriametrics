@@ -11,10 +11,10 @@ IMAGE_TAG="${IMAGE_TAG:-1.0.0}"
 ALERTS_PER_APP="${ALERTS_PER_APP:-50}"
 BASE_ALERTS_COUNT="${BASE_ALERTS_COUNT:-10}"
 
-# День 1: 40% (app-1..app-400) за ~9 часов
-START_INDEX=1
-TARGET_APPS=400
-APP_DELAY_SECONDS=71
+# День 4: 10% (app-901..app-1000) за ~9 часов
+START_INDEX=901
+TARGET_APPS=100
+APP_DELAY_SECONDS=317
 MAX_RUNTIME_HOURS=9
 INSTALL_SECONDS_ESTIMATE=10
 
@@ -38,12 +38,13 @@ fi
 
 start_offset=$((START_INDEX - 1))
 apps=("${all_names[@]:start_offset:TARGET_APPS}")
+
 estimated_delay_seconds=$(((TARGET_APPS - 1) * APP_DELAY_SECONDS))
 estimated_runtime_seconds=$((estimated_delay_seconds + TARGET_APPS * INSTALL_SECONDS_ESTIMATE))
 max_runtime_seconds=$((MAX_RUNTIME_HOURS * 3600))
 
-echo "День 1: развёртывание app-$START_INDEX..app-$required ($TARGET_APPS шт.)"
-echo "Целевая доля: 40%"
+echo "День 4: развёртывание app-$START_INDEX..app-$required ($TARGET_APPS шт.)"
+echo "Целевая доля: 10%"
 echo "Оценка длительности: ${estimated_runtime_seconds}с (ориентир: ${max_runtime_seconds}с)"
 echo "Задержка между app: ${APP_DELAY_SECONDS}с"
 
@@ -71,4 +72,4 @@ for name in "${apps[@]}"; do
   fi
 done
 
-echo "День 1 завершён: установлено $TARGET_APPS app."
+echo "День 4 завершён: установлено $TARGET_APPS app."
