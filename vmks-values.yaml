@@ -15,6 +15,8 @@ defaultDatasources:
         jsonData:
           httpMethod: POST
           queryTimeout: 300s
+          # Снижает число точек на панель и нагрузку fan-out на backend на широких диапазонах.
+          timeInterval: 30s
 
 vmsingle:
   enabled: false
@@ -25,51 +27,53 @@ vmcluster:
     replicationFactor: 2
 
     vmstorage:
-      # Иначе оператор подмешивает свои CPU defaults поверх requests из values.
+      # Иначе оператор подмешивает свои значения CPU по умолчанию поверх requests из values.
       useDefaultResources: false
-      replicaCount: 2
+      replicaCount: 3
       # Поиск выполняется на vmstorage; дефолт maxConcurrentRequests=2 даёт 503 «couldn't start executing in 10s»
       # при параллельных запросах от vmselect/vmalert (см. также vmselect.extraArgs).
       extraArgs:
-        search.maxConcurrentRequests: "16"
+        search.maxConcurrentRequests: "32"
         search.maxQueueDuration: "60s"
-        # С v1.105.0 лимит auto-calculated и может быть слишком мал при 16 concurrent + 4Gi;
-        # фиксируем явно, чтобы query вроде topk(5, sum(vmalert_alerts_firing{…}) by(…)) не падал с 422.
+        # С v1.105.0 лимит вычисляется автоматически и может быть слишком мал при 16 concurrent + 4Gi;
+        # фиксируем явно, чтобы запросы вроде topk(5, sum(vmalert_alerts_firing{…}) by(…)) не падали с 422.
         # vmalert_alerting_rules_last_evaluation_samples — по ряду на правило; при >1M правил 1M мало (422 TooManyTimeseries).
         search.maxUniqueTimeseries: "5000000"
       resources:
         limits:
-          cpu: "2"
+          cpu: "3"
           memory: 4Gi
         requests:
-          cpu: 1250m
+          cpu: "2"
           memory: 1Gi
 
     vmselect:
       useDefaultResources: false
-      replicaCount: 2
+      replicaCount: 3
       # При большом числе VMRule vmalert шлёт много запросов (restore ALERTS_FOR_STATE + eval).
       # Дефолт maxConcurrentRequests=2 даёт 429 и "couldn't start executing in 10s".
       extraArgs:
-        search.maxConcurrentRequests: "16"
+        search.maxConcurrentRequests: "32"
         search.maxQueueDuration: "60s"
         # Согласовать с queryTimeout в defaultDatasources (иначе vmselect обрежет раньше Grafana).
         search.maxQueryDuration: 300s
         search.maxLabelsAPIDuration: 120s
         # Согласовать с vmstorage: иначе тяжёлые запросы по vmalert_* могут резаться на одном из слоёв.
         search.maxUniqueTimeseries: "5000000"
+        # Даём тяжёлым панелям больше CPU-воркеров на один запрос.
+        search.maxWorkersPerQuery: "8"
       # 1536Mi давало OOMKilled при нагрузке (тысячи VMServiceScrape / тяжёлые PromQL).
       resources:
         limits:
-          cpu: "2"
+          cpu: "3"
           memory: 4Gi
         requests:
-          cpu: "1"
+          cpu: "2"
           memory: 2Gi
     vminsert:
       replicaCount: 2
       # CPU: при limits 500m был rate(container_cpu_cfs_throttled_seconds_total) ~0.08–0.11 с/с;
-      # peak rate(usage[1m]) ~0.17 core — запас на всплески remote write.
+      # пиковый rate(usage[1m]) ~0.17 ядра — запас на всплески remote write.
       resources:
         limits:
           memory: 1Gi
@@ -91,7 +95,7 @@ alertmanager:
     podDisruptionBudget:
       minAvailable: 1
 
-    # Больше CPU: при ~1 core limit наблюдался CFS throttling (container_cpu_cfs_throttled_seconds_total).
+    # Больше CPU: при лимите ~1 ядро наблюдался CFS throttling (container_cpu_cfs_throttled_seconds_total).
     resources:
       limits:
         cpu: "2"
@@ -103,12 +107,14 @@ alertmanager:
 vmalert:
   spec:
     replicaCount: 2
+    # Снижаем давление на vmselect от >1000 VMRule и улучшаем отзывчивость Grafana.
+    evaluationInterval: "1m"
     podDisruptionBudget:
       minAvailable: 1
 
-    # CPU: по VictoriaMetrics (cadvisor) max_over_time(rate(usage[1m])[30m]) до ~3.35 cores/под;
+    # CPU: по VictoriaMetrics (cadvisor) max_over_time(rate(usage[1m])[30m]) до ~3.35 ядер/под;
     # при limits 4–5 всё ещё был rate(container_cpu_cfs_throttled_seconds_total) > 0 на нагруженных подах.
-    # limits 6 + requests 4 (было 3): при ~113% от request подняли гарантию под фактический eval.
+    # limits 6 + requests 4 (было 3): при ~113% от request подняли гарантию под фактическую оценку правил.
     resources:
       limits:
         cpu: "6"

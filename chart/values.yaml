@@ -19,6 +19,7 @@ resources:
     memory: 64Mi
 
 alerts:
+  evaluationInterval: "1m"
   latency:
     enabled: true
     threshold: "0.5"
