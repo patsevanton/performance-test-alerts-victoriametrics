@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"net/http"
+	"os"
+	"os/signal"
 	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -41,31 +45,44 @@ func init() {
 func main() {
 	rand.Seed(time.Now().UnixNano())
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	go func() {
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
-		for range ticker.C {
-			saturationGauge.Set(float64(runtime.NumGoroutine()))
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				saturationGauge.Set(float64(runtime.NumGoroutine()))
+			}
 		}
 	}()
 
+	client := &http.Client{Timeout: 1 * time.Second}
 	go func() {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
-		client := &http.Client{
-			Timeout: 1 * time.Second,
-		}
-		for range ticker.C {
-			go func() {
-				resp, err := client.Get("http://localhost:8080/work")
-				if err == nil && resp != nil {
-					resp.Body.Close()
-				}
-			}()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				go func() {
+					resp, err := client.Get("http://localhost:8080/work")
+					if err == nil && resp != nil {
+						resp.Body.Close()
+					}
+				}()
+			}
 		}
 	}()
 
-	http.HandleFunc("/work", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/work", func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		requestCount.Inc()
 
@@ -82,14 +99,38 @@ func main() {
 		fmt.Fprintf(w, "processed in %.3f s\n", latency)
 	})
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "golden signal demo\n")
 	})
 
-	http.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "ok\n")
+	})
 
-	fmt.Println("serving on :8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		panic(err)
+	mux.Handle("/metrics", promhttp.Handler())
+
+	server := &http.Server{
+		Addr:    ":8080",
+		Handler: mux,
 	}
+
+	go func() {
+		fmt.Println("serving on :8080")
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			fmt.Fprintf(os.Stderr, "listen error: %v\n", err)
+			os.Exit(1)
+		}
+	}()
+
+	<-ctx.Done()
+	fmt.Println("shutting down gracefully...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		fmt.Fprintf(os.Stderr, "shutdown error: %v\n", err)
+	}
+	fmt.Println("shutdown complete")
 }

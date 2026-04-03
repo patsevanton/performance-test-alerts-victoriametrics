@@ -1,0 +1,11 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "golden-signal-app.name" . }}
+  labels:
+    {{- include "golden-signal-app.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "golden-signal-app.selectorLabels" . | nindent 6 }}

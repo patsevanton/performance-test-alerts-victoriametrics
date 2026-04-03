@@ -14,6 +14,20 @@ spec:
       labels:
         {{- include "golden-signal-app.selectorLabels" . | nindent 8 }}
     spec:
+      terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "golden-signal-app.selectorLabels" . | nindent 14 }}
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "golden-signal-app.selectorLabels" . | nindent 14 }}
       containers:
         - name: golden-signal-app
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -21,5 +35,19 @@ spec:
           ports:
             - containerPort: {{ .Values.service.targetPort }}
               name: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 3
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
