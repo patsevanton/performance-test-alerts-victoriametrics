@@ -21,7 +21,7 @@
 ```bash
 helm upgrade --install vmks oci://ghcr.io/victoriametrics/helm-charts/victoria-metrics-k8s-stack \
   --namespace vmks --create-namespace \
-  --version 0.72.5 \
+  --version 0.90.0 \
   --wait --values vmks-values.yaml
 ```
 
