@@ -79,7 +79,7 @@ resource "yandex_kubernetes_node_group" "k8s-node-group" {
     }
 
     network_interface {
-      nat = true # Включение NAT для доступа в интернет
+      nat = false # Публичные IP на нодах выключены; исходящий трафик через NAT-шлюз (см. net.tf)
       subnet_ids = [
         yandex_vpc_subnet.vmalert-a.id,
         yandex_vpc_subnet.vmalert-b.id,
@@ -96,7 +96,7 @@ resource "yandex_kubernetes_node_group" "k8s-node-group" {
 
     boot_disk {
       type = "network-ssd" # Тип диска
-      size = 33            # Размер диска
+      size = 30            # Размер диска
     }
   }
 }

@@ -1,5 +1,5 @@
 # VictoriaLogs cluster — хранилище логов (LogsQL).
-# Helm: vm/victoria-logs-cluster 0.0.31 (app v1.48.0) — см. README.
+# Helm: vm/victoria-logs-cluster 0.2.6 (app v1.48.0) — см. README.
 # Адаптировано из https://github.com/patsevanton/performance-test-alerts-victoriametrics
 # Требование: VictoriaMetrics K8s Stack установлен первым (CRD VMServiceScrape).
 

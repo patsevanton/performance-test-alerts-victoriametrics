@@ -1,6 +1,6 @@
 module github.com/patsevanton/performance-test-alerts-victoriametrics/app
 
-go 1.22
+go 1.25
 
 require github.com/prometheus/client_golang v1.17.0
 

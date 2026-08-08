@@ -21,7 +21,7 @@
 ```bash
 helm upgrade --install vmks oci://ghcr.io/victoriametrics/helm-charts/victoria-metrics-k8s-stack \
   --namespace vmks --create-namespace \
-  --version 0.90.0 \
+  --version 0.90.1 \
   --wait --values vmks-values.yaml
 ```
 
@@ -45,7 +45,7 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 helm upgrade --install victoria-logs-cluster oci://ghcr.io/victoriametrics/helm-charts/victoria-logs-cluster \
   --namespace victoria-logs-cluster \
   --create-namespace \
-  --version 0.0.31 \
+  --version 0.2.6 \
   --wait \
   --timeout 15m \
   -f victoria-logs-cluster-values.yaml
@@ -61,7 +61,7 @@ helm upgrade --install victoria-logs-cluster oci://ghcr.io/victoriametrics/helm-
 helm upgrade --install victoria-logs-collector oci://ghcr.io/victoriametrics/helm-charts/victoria-logs-collector \
   --namespace victoria-logs-collector \
   --create-namespace \
-  --version 0.2.14 \
+  --version 0.3.5 \
   --wait \
   --timeout 15m \
   -f victoria-logs-collector-values.yaml

@@ -1,5 +1,5 @@
 # Victoria-logs-collector — сбор логов со всех контейнеров в кластере.
-# Helm: vm/victoria-logs-collector 0.2.13 (app v1.48.0) — см. README.
+# Helm: vm/victoria-logs-collector 0.3.5 (app v1.48.0) — см. README.
 # Адаптировано из https://github.com/patsevanton/performance-test-alerts-victoriametrics
 # Требование: VictoriaLogs cluster развёрнут (vlinsert доступен).
 
