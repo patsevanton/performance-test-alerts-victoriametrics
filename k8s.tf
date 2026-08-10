@@ -30,8 +30,8 @@ resource "yandex_kubernetes_cluster" "vmalert" {
   master {
     version = "1.33" # Версия Kubernetes мастера
     zonal {
-      zone      = yandex_vpc_subnet.vmalert-a.zone # Зона размещения мастера
-      subnet_id = yandex_vpc_subnet.vmalert-a.id   # Подсеть для мастера
+      zone      = yandex_vpc_subnet.vmalert-e.zone # Зона размещения мастера
+      subnet_id = yandex_vpc_subnet.vmalert-e.id   # Подсеть для мастера
     }
 
     public_ip = true # Включение публичного IP для доступа к мастеру
@@ -64,9 +64,9 @@ resource "yandex_kubernetes_node_group" "k8s-node-group" {
 
   allocation_policy {
     # Распределение нод по зонам отказоустойчивости
-    location { zone = yandex_vpc_subnet.vmalert-a.zone }
     location { zone = yandex_vpc_subnet.vmalert-b.zone }
     location { zone = yandex_vpc_subnet.vmalert-d.zone }
+    location { zone = yandex_vpc_subnet.vmalert-e.zone }
   }
 
   instance_template {
@@ -81,21 +81,21 @@ resource "yandex_kubernetes_node_group" "k8s-node-group" {
     network_interface {
       nat = false # Публичные IP на нодах выключены; исходящий трафик через NAT-шлюз (см. net.tf)
       subnet_ids = [
-        yandex_vpc_subnet.vmalert-a.id,
         yandex_vpc_subnet.vmalert-b.id,
-        yandex_vpc_subnet.vmalert-d.id
+        yandex_vpc_subnet.vmalert-d.id,
+        yandex_vpc_subnet.vmalert-e.id
       ]
     }
 
     resources {
       # По kubectl top: память заметно ниже CPU, bottleneck сейчас по CPU slots (requests), не по RAM.
       # Оставляем 8 vCPU / 24GB как сбалансированный baseline и снимаем pressure через +1 node.
-      memory = 16 # ГБ
+      memory = 8 # ГБ
       cores  = 8  # vCPU
     }
 
     boot_disk {
-      type = "network-ssd" # Тип диска
+      type = "network-hdd" # Тип диска
       size = 30            # Размер диска
     }
   }
