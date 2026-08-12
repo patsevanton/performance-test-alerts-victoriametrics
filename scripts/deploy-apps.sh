@@ -11,12 +11,8 @@ IMAGE_TAG="${IMAGE_TAG:-1.0.0}"
 ALERTS_PER_APP="${ALERTS_PER_APP:-50}"
 BASE_ALERTS_COUNT="${BASE_ALERTS_COUNT:-10}"
 
-# День 1: 40% (app-1..app-400) за ~9 часов
-START_INDEX=1
-TARGET_APPS=400
-APP_DELAY_SECONDS=71
-MAX_RUNTIME_HOURS=9
-INSTALL_SECONDS_ESTIMATE=10
+START_INDEX="${START_INDEX:-1}"
+TARGET_APPS="${TARGET_APPS:-1000}"
 
 if [ ! -f "$NAMES_FILE" ]; then
   echo "Ошибка: файл $NAMES_FILE не найден. Сначала выполните generate-app-names.sh."
@@ -38,14 +34,8 @@ fi
 
 start_offset=$((START_INDEX - 1))
 apps=("${all_names[@]:start_offset:TARGET_APPS}")
-estimated_delay_seconds=$(((TARGET_APPS - 1) * APP_DELAY_SECONDS))
-estimated_runtime_seconds=$((estimated_delay_seconds + TARGET_APPS * INSTALL_SECONDS_ESTIMATE))
-max_runtime_seconds=$((MAX_RUNTIME_HOURS * 3600))
 
-echo "День 1: развёртывание app-$START_INDEX..app-$required ($TARGET_APPS шт.)"
-echo "Целевая доля: 40%"
-echo "Оценка длительности: ${estimated_runtime_seconds}с (ориентир: ${max_runtime_seconds}с)"
-echo "Задержка между app: ${APP_DELAY_SECONDS}с"
+echo "Развёртывание app-$START_INDEX..app-$required ($TARGET_APPS шт.) без пауз"
 
 deploy_app() {
   local name="$1"
@@ -66,9 +56,6 @@ j=0
 for name in "${apps[@]}"; do
   j=$((j + 1))
   deploy_app "$name"
-  if [ "$j" -lt "$n" ]; then
-    sleep "$APP_DELAY_SECONDS"
-  fi
 done
 
-echo "День 1 завершён: установлено $TARGET_APPS app."
+echo "Завершено: установлено $n app."

@@ -100,22 +100,13 @@ cd scripts
 
 Каждый app устанавливается как отдельный Helm release в отдельный namespace (имя namespace = имя приложения).
 
-Запуск по дням (ориентир: ~9 часов на один прогон):
+Запуск (без пауз между установками):
 
 ```bash
-./deploy-apps-day1.sh
-./deploy-apps-day2.sh
-./deploy-apps-day3.sh
-./deploy-apps-day4.sh
+./deploy-apps.sh
 ```
 
-В этом репозитории 1000 app разбиты на 4 дня:
-- День 1: `app-1..app-400` (40%, `deploy-apps-day1.sh`)
-- День 2: `app-401..app-700` (30%, `deploy-apps-day2.sh`)
-- День 3: `app-701..app-900` (20%, `deploy-apps-day3.sh`)
-- День 4: `app-901..app-1000` (10%, `deploy-apps-day4.sh`)
-
-Все четыре скрипта выводят оценку длительности запуска (ориентир 9 часов), но продолжают выполнение до конца даже при превышении оценки.
+По умолчанию скрипт развёртывает 1000 приложений (`app-1..app-1000`, переменные `START_INDEX` и `TARGET_APPS`).
 
 #### Шаг 3: Проверка статуса
 
@@ -131,7 +122,7 @@ cd scripts
 ./delete-apps.sh
 ```
 
-Параметры `NAMES_FILE`, `TARGET_APPS`, `PARALLEL` аналогичны скриптам `deploy-apps-day*.sh`.
+Параметры `NAMES_FILE`, `TARGET_APPS`, `PARALLEL` аналогичны скрипту `deploy-apps.sh`.
 Дополнительно `DELETE_NAMESPACES=true|false` (по умолчанию `true`) управляет удалением namespace после `helm uninstall`.
 
 #### Ресурсные требования
