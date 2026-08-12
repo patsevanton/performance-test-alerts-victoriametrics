@@ -88,8 +88,8 @@ resource "yandex_kubernetes_node_group" "k8s-node-group" {
     }
 
     resources {
-      # По kubectl top: память заметно ниже CPU, bottleneck сейчас по CPU slots (requests), не по RAM.
-      # Оставляем 8 vCPU / 24GB как сбалансированный baseline и снимаем pressure через +1 node.
+      # 8 vCPU / 8GB на ноду. Bottleneck по памяти (requests RAM на ноде ~99% при 64Mi/app),
+      # снимается снижением request app до 32Mi + scale до 16 нод.
       memory = 8 # ГБ
       cores  = 8  # vCPU
     }
