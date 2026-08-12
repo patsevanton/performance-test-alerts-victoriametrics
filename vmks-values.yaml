@@ -44,7 +44,7 @@ vmcluster:
           cpu: "3"
           memory: 4Gi
         requests:
-          cpu: "2"
+          cpu: 500m
           memory: 1Gi
 
     vmselect:
@@ -68,8 +68,8 @@ vmcluster:
           cpu: "3"
           memory: 4Gi
         requests:
-          cpu: "2"
-          memory: 2Gi
+          cpu: 500m
+          memory: 512Mi
     vminsert:
       replicaCount: 2
       # CPU: при limits 500m был rate(container_cpu_cfs_throttled_seconds_total) ~0.08–0.11 с/с;
@@ -79,8 +79,8 @@ vmcluster:
           memory: 1Gi
           cpu: "1"
         requests:
-          memory: 512Mi
-          cpu: 250m
+          memory: 256Mi
+          cpu: 100m
 
   ingress:
     select:
@@ -101,8 +101,8 @@ alertmanager:
         cpu: "2"
         memory: 1536Mi
       requests:
-        cpu: "1"
-        memory: 512Mi
+        cpu: 200m
+        memory: 128Mi
 
 vmalert:
   spec:
@@ -120,8 +120,8 @@ vmalert:
         cpu: "6"
         memory: 5Gi
       requests:
-        cpu: "4"
-        memory: 3Gi
+        cpu: 500m
+        memory: 1Gi
 
 vmagent:
   spec:
@@ -133,8 +133,8 @@ vmagent:
         cpu: "2"
         memory: 3Gi
       requests:
-        cpu: 750m
-        memory: 1Gi
+        cpu: 250m
+        memory: 512Mi
 
 victoria-metrics-operator:
   resources:
