@@ -105,6 +105,17 @@ alertmanager:
     replicaCount: 2
     podDisruptionBudget:
       minAvailable: 1
+    # Persistence для кластерного состояния (silences, notification log).
+    # Без PV состояние silences теряется при рестарте/пересоздании подов —
+    # добавляем volumeClaimTemplate, чтобы Alertmanager переживал рестарты.
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: network-ssd
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 1Gi
 
     # Больше CPU: при лимите ~1 ядро наблюдался CFS throttling (container_cpu_cfs_throttled_seconds_total).
     resources:
