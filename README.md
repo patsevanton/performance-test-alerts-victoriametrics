@@ -33,6 +33,16 @@ helm upgrade --install vmks oci://ghcr.io/victoriametrics/helm-charts/victoria-m
 kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | base64 --decode; echo
 ```
 
+### PriorityClass для VictoriaMetrics
+
+Компоненты vmks (vmstorage, vmselect, vminsert, vmalert, vmagent, alertmanager, operator) запускаются с `priorityClassName: vmks-critical`, чтобы не вытесняться apps-нагрузкой стенда. Применить вручную до установки чарта:
+
+```bash
+kubectl apply -f priority-class.yaml
+```
+
+Исходный код файла [priority-class.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/priority-class.yaml).
+
 ### VictoriaLogs
 
 [VictoriaLogs](https://docs.victoriametrics.com/victorialogs/) — хранилище логов с поддержкой LogsQL.
@@ -131,10 +141,10 @@ cd scripts
 
 | Ресурс | На 1 pod | На 1000 pods |
 | ------ | -------- | ------------ |
-| CPU requests | 50m | 50 000m (50 cores) |
-| CPU limits | 100m | 100 000m (100 cores) |
-| Memory requests | 64Mi | ~62.5 GiB |
-| Memory limits | 128Mi | ~125 GiB |
+| CPU requests | 1m | 1 000m (1 core) |
+| CPU limits | 10m | 10 000m (10 cores) |
+| Memory requests | 8Mi | ~7.8 GiB |
+| Memory limits | 32Mi | ~31.3 GiB |
 
 Рекомендуется кластер с достаточным запасом ресурсов. Ресурсы можно уменьшить, отредактировав `chart/values.yaml`.
 

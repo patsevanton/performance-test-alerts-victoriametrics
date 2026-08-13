@@ -12,11 +12,11 @@ replicaCount: 2
 
 resources:
   limits:
-    cpu: 100m
-    memory: 128Mi
+    cpu: 10m
+    memory: 20Mi
   requests:
-    cpu: 30m
-    memory: 32Mi
+    cpu: 1m
+    memory: 8Mi
 
 alerts:
   evaluationInterval: "1m"

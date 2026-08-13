@@ -29,6 +29,8 @@ vmcluster:
     vmstorage:
       # Иначе оператор подмешивает свои значения CPU по умолчанию поверх requests из values.
       useDefaultResources: false
+      # Высокий приоритет: мониторинг не должен вытесняться apps-нагрузкой стенда.
+      priorityClassName: vmks-critical
       replicaCount: 3
       # Поиск выполняется на vmstorage; дефолт maxConcurrentRequests=2 даёт 503 «couldn't start executing in 10s»
       # при параллельных запросах от vmselect/vmalert (см. также vmselect.extraArgs).
@@ -49,6 +51,7 @@ vmcluster:
 
     vmselect:
       useDefaultResources: false
+      priorityClassName: vmks-critical
       replicaCount: 3
       # При большом числе VMRule vmalert шлёт много запросов (restore ALERTS_FOR_STATE + eval).
       # Дефолт maxConcurrentRequests=2 даёт 429 и "couldn't start executing in 10s".
@@ -71,6 +74,7 @@ vmcluster:
           cpu: 500m
           memory: 512Mi
     vminsert:
+      priorityClassName: vmks-critical
       replicaCount: 2
       # CPU: при limits 500m был rate(container_cpu_cfs_throttled_seconds_total) ~0.08–0.11 с/с;
       # пиковый rate(usage[1m]) ~0.17 ядра — запас на всплески remote write.
@@ -91,6 +95,7 @@ vmcluster:
 
 alertmanager:
   spec:
+    priorityClassName: vmks-critical
     replicaCount: 2
     podDisruptionBudget:
       minAvailable: 1
@@ -106,6 +111,7 @@ alertmanager:
 
 vmalert:
   spec:
+    priorityClassName: vmks-critical
     replicaCount: 2
     # Снижаем давление на vmselect от >1000 VMRule и улучшаем отзывчивость Grafana.
     evaluationInterval: "1m"
@@ -125,6 +131,7 @@ vmalert:
 
 vmagent:
   spec:
+    priorityClassName: vmks-critical
     extraArgs:
       promscrape.maxScrapeSize: "134217728"
     # 768Mi давало OOMKilled: kubernetes_sd + сотни/тысячи целей держат метаданные в памяти.
@@ -137,6 +144,7 @@ vmagent:
         memory: 512Mi
 
 victoria-metrics-operator:
+  priorityClassName: vmks-critical
   resources:
     limits:
       cpu: "2"
