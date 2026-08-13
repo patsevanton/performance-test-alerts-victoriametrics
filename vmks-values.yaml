@@ -32,6 +32,8 @@ vmcluster:
       # Высокий приоритет: мониторинг не должен вытесняться apps-нагрузкой стенда.
       priorityClassName: vmks-critical
       replicaCount: 3
+      podDisruptionBudget:
+        minAvailable: 2
       # Поиск выполняется на vmstorage; дефолт maxConcurrentRequests=2 даёт 503 «couldn't start executing in 10s»
       # при параллельных запросах от vmselect/vmalert (см. также vmselect.extraArgs).
       extraArgs:
@@ -53,6 +55,8 @@ vmcluster:
       useDefaultResources: false
       priorityClassName: vmks-critical
       replicaCount: 3
+      podDisruptionBudget:
+        minAvailable: 2
       # При большом числе VMRule vmalert шлёт много запросов (restore ALERTS_FOR_STATE + eval).
       # Дефолт maxConcurrentRequests=2 даёт 429 и "couldn't start executing in 10s".
       extraArgs:
@@ -76,6 +80,8 @@ vmcluster:
     vminsert:
       priorityClassName: vmks-critical
       replicaCount: 2
+      podDisruptionBudget:
+        minAvailable: 1
       # CPU: при limits 500m был rate(container_cpu_cfs_throttled_seconds_total) ~0.08–0.11 с/с;
       # пиковый rate(usage[1m]) ~0.17 ядра — запас на всплески remote write.
       resources:
