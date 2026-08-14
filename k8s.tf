@@ -43,8 +43,13 @@ resource "yandex_kubernetes_cluster" "vmalert" {
 
   release_channel = "STABLE" # Канал обновлений
 
-  # Зависимость от ожидания применения IAM-ролей
-  depends_on = [time_sleep.wait_sa]
+  # Зависимость от ожидания применения IAM-ролей.
+  # При destroy кластер должен удалиться ДО time_sleep.wait_lb_release (пауза перед освобождением IP),
+  # чтобы cloud-controller-manager успел снять LoadBalancer с адреса yandex_vpc_address.addr.
+  depends_on = [
+    time_sleep.wait_sa,
+    time_sleep.wait_lb_release,
+  ]
 }
 
 # Группа узлов для Kubernetes-кластера
@@ -117,25 +122,33 @@ provider "helm" {
 # Установка ingress-nginx через Helm
 resource "helm_release" "ingress_nginx" {
   name             = "ingress-nginx"
-  repository       = "https://kubernetes.github.io/ingress-nginx"
-  chart            = "ingress-nginx"
-  version          = "4.15.1"
+  chart            = "oci://cr.yandex/yc-marketplace/yandex-cloud/ingress-nginx/chart/ingress-nginx"
+  version          = "4.13.0"
   namespace        = "ingress-nginx"
   create_namespace = true
+
   depends_on = [
     yandex_kubernetes_cluster.vmalert,
     yandex_kubernetes_node_group.k8s-node-group,
-    time_sleep.wait_sa,
-    yandex_vpc_address.addr
+    time_sleep.wait_lb_release,
   ]
 
-  set = [
-    {
-      name  = "controller.service.loadBalancerIP"
-      value = yandex_vpc_address.addr.external_ipv4_address[0].address # Присвоение внешнего IP ingress-контроллеру
-    }
+  values = [
+    yamlencode({
+      controller = {
+        service = {
+          loadBalancerIP = yandex_vpc_address.addr.external_ipv4_address[0].address
+        }
+        config = {
+          log-format-escape-json = "true"
+          log-format-upstream = trimspace(<<-EOT
+            {"ts":"$time_iso8601","http":{"request_id":"$req_id","method":"$request_method","status_code":$status,"url":"$host$request_uri","host":"$host","uri":"$request_uri","request_time":$request_time,"user_agent":"$http_user_agent","protocol":"$server_protocol","trace_session_id":"$http_trace_session_id","server_protocol":"$server_protocol","content_type":"$sent_http_content_type","bytes_sent":"$bytes_sent"},"nginx":{"x-forward-for":"$proxy_add_x_forwarded_for","remote_addr":"$proxy_protocol_addr","http_referrer":"$http_referer"}}
+          EOT
+          )
+        }
+      }
+    })
   ]
-
 }
 
 # Вывод команды для получения kubeconfig

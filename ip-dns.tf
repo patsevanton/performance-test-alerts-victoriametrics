@@ -7,6 +7,19 @@ resource "yandex_vpc_address" "addr" {
   }
 }
 
+# Пауза перед удалением публичного IP-адреса при terraform destroy.
+# LoadBalancer, создаваемый cloud-controller-manager через Service ingress-nginx,
+# освобождает адрес не мгновенно после удаления кластера/helm-релиза — без паузы
+# yandex_vpc_address.addr падает с ошибкой "Address in use".
+# Порядок destroy: helm_release -> cluster -> time_sleep (пауза) -> yandex_vpc_address.addr.
+resource "time_sleep" "wait_lb_release" {
+  destroy_duration = "60s"
+
+  depends_on = [
+    yandex_vpc_address.addr,
+  ]
+}
+
 # Создание публичной DNS-зоны в Yandex Cloud DNS
 resource "yandex_dns_zone" "apatsev-org-ru" {
   name = "apatsev-org-ru-zone" # Имя ресурса DNS-зоны
