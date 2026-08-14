@@ -111,7 +111,7 @@ alertmanager:
     storage:
       volumeClaimTemplate:
         spec:
-          storageClassName: network-ssd
+          storageClassName: yc-network-ssd
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
