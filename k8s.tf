@@ -63,7 +63,7 @@ resource "yandex_kubernetes_node_group" "k8s-node-group" {
     fixed_scale {
       # kubectl показал Pending у vmalert из-за `Insufficient cpu` (request=4 core на pod, на части нод уже ~96% по requests).
       # Добавляем 1 ноду для гарантированного размещения тяжёлых monitoring pod'ов при rollout/reconcile.
-      size = 19 # увеличить кол-во нод
+      size = 20 # увеличить кол-во нод
     }
   }
 
