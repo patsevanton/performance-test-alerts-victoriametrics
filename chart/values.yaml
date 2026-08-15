@@ -76,5 +76,5 @@ alerts:
 
   extra:
     enabled: true
-    count: 90
+    count: 40
     descriptionPrefix: "Load alert"
