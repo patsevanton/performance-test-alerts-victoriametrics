@@ -46,14 +46,7 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 
 **Итого при 1350 экземплярах (по умолчанию):** 1350 Deployment, 1350 Service, 1350 VMServiceScrape, 1350 VMRule (67 500 алертов).
 
-Исходный код приложения — [app/](https://github.com/patsevanton/performance-test-alerts-victoriametrics/tree/main/app), Helm chart — [chart/](https://github.com/patsevanton/performance-test-alerts-victoriametrics/tree/main/chart).
-
-#### Требования
-
-- Kubernetes-кластер с установленным VictoriaMetrics Operator (входит в `victoria-metrics-k8s-stack`)
-- `helm` >= 3.x
-- `kubectl` с доступом к кластеру
-- `xargs` (стандартная утилита Linux)
+Исходный код приложения — [app](https://github.com/patsevanton/performance-test-alerts-victoriametrics/tree/main/app), Helm chart — [chart](https://github.com/patsevanton/performance-test-alerts-victoriametrics/tree/main/chart).
 
 #### Шаг 1: Генерация случайных имён
 
