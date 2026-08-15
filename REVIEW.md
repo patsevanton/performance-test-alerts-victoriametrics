@@ -9,8 +9,6 @@
 
 ## Мелкие замечания
 
-14. **`app/main.go:46` — `rand.Seed(time.Now().UnixNano())`.** Начиная с Go 1.20 `rand.Seed` устарел (deprecated) — глобальный генератор seeding'ается автоматически. Предупреждение компилятора. Не ошибка, но устаревший код.
-
 15. **`chart/templates/_helpers.tpl` — `golden-signal-app.name = .Release.Name`.** Имя VMRule/VMServiceScrape = имя release. Но в `fetch_capacity_snapshots.py:96-118` pod-паттерны жёстко захардкожены как `vmalert-vmks-victoria-metrics-k8s-stack-.*` — это зависит от release name `vmks` (из `README.md:28`). Если пользователь установит vmks с другим release name, скрипт сломается. Не ошибка, но хрупкость.
 
 21. **`vmks-values.yaml` нет `templateFiles` / `config` для alertmanager.** Используется дефолтный config с receiver `blackhole` (`charts/victoria-metrics-k8s-stack/values.yaml:1658-1708`). Алерты никуда не отправляются — для нагрузочного теста допустимо, но в README `README.md:335` сказано «Alertmanager в кластерном режиме корректно восстанавливает состояние алертов после рестарта без потерь и без дублирования уведомлений». Без настроенных receivers «уведомления» не отправляются в принципе — утверждение о «дублировании уведомлений» не проверялось.
