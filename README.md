@@ -75,14 +75,14 @@ helm upgrade --install victoria-logs-collector oci://ghcr.io/victoriametrics/hel
 
 Исходный код файла [victoria-logs-collector-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/victoria-logs-collector-values.yaml).
 
-### Развёртывание 1000 приложений для генерации метрик и алертов
+### Развёртывание 1350 приложений для генерации метрик и алертов
 
-Для нагрузочного тестирования VictoriaMetrics можно развернуть 1000 экземпляров приложения Golden Signal App. Каждый экземпляр:
+Для нагрузочного тестирования VictoriaMetrics можно развернуть 1350 экземпляров приложения Golden Signal App. Каждый экземпляр:
 - генерирует метрики (`app_requests_total`, `app_errors_total`, `app_request_latency_seconds`, `app_goroutines`);
 - создаёт `VMServiceScrape` для автоматического сбора метрик;
 - создаёт `VMRule` с 50 алертами по умолчанию (10 базовых + 40 дополнительных; общее число задаётся `ALERTS_PER_APP` в `deploy-apps-day*.sh`, число дополнительных — `alerts.extra.count` в chart).
 
-**Итого при 1000 экземплярах (по умолчанию):** 1000 Deployment, 1000 Service, 1000 VMServiceScrape, 1000 VMRule (50 000 алертов).
+**Итого при 1350 экземплярах (по умолчанию):** 1350 Deployment, 1350 Service, 1350 VMServiceScrape, 1350 VMRule (50 000 алертов).
 
 Исходный код приложения — [app/](https://github.com/patsevanton/performance-test-alerts-victoriametrics/tree/main/app), Helm chart — [chart/](https://github.com/patsevanton/performance-test-alerts-victoriametrics/tree/main/chart).
 
@@ -111,7 +111,7 @@ scripts/generate-app-names.sh 1350
 scripts/deploy-apps.sh
 ```
 
-По умолчанию скрипт развёртывает 1000 приложений (`app-1..app-1000`, переменные `START_INDEX` и `TARGET_APPS`).
+По умолчанию скрипт развёртывает 1350 приложений (`app-1..app-1350`, переменные `START_INDEX` и `TARGET_APPS`).
 
 **Снимки Capacity Planning:** чтобы собрать замеры загрузки при ~500, 5000, … 50000 активных `ALERTS`, запустите **до начала** `deploy-apps.sh` в отдельном терминале скрипт:
 
@@ -139,9 +139,9 @@ scripts/delete-apps.sh
 
 #### Ресурсные требования
 
-При 1000 экземплярах (requests из `values.yaml`):
+При 1350 экземплярах (requests из `values.yaml`):
 
-| Ресурс | На 1 pod | На 1000 pods |
+| Ресурс | На 1 pod | На 1350 pods |
 | ------ | -------- | ------------ |
 | CPU requests | 1m | 1 000m (1 core) |
 | CPU limits | 10m | 10 000m (10 cores) |
