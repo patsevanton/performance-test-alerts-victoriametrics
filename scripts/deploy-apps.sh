@@ -35,6 +35,8 @@ fi
 start_offset=$((START_INDEX - 1))
 apps=("${all_names[@]:start_offset:TARGET_APPS}")
 
+START_TIME=$(date +%s)
+
 echo "Развёртывание app-$START_INDEX..app-$required ($TARGET_APPS шт.) без пауз"
 
 deploy_app() {
@@ -58,4 +60,10 @@ for name in "${apps[@]}"; do
   deploy_app "$name"
 done
 
+END_TIME=$(date +%s)
+ELAPSED=$((END_TIME - START_TIME))
+HOURS=$((ELAPSED / 3600))
+MINS=$(((ELAPSED % 3600) / 60))
+SECS=$((ELAPSED % 60))
 echo "Завершено: установлено $n app."
+echo "Время выполнения скрипта: ${HOURS}ч ${MINS}м ${SECS}с (всего ${ELAPSED}с)"
