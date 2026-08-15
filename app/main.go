@@ -43,8 +43,6 @@ func init() {
 }
 
 func main() {
-	rand.Seed(time.Now().UnixNano())
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
