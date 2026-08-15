@@ -12,7 +12,7 @@
 
 ### PriorityClass для VictoriaMetrics
 
-Компоненты vmks (vmstorage, vmselect, vminsert, vmalert, vmagent, alertmanager, operator) запускаются с `priorityClassName: vmks-critical`, чтобы не вытесняться apps-нагрузкой стенда. Обязательно применить **до установки чарта** `victoria-metrics-k8s-stack` — иначе при первом reconcile поды vmks стартуют без приоритета и не смогут вытеснить apps-нагрузку стенда:
+Компоненты vmks (vmstorage, vmselect, vminsert, vmalert, vmagent, alertmanager, operator) запускаются с `priorityClassName: vmks-critical`, чтобы не вытесняться apps-нагрузкой стенда:
 
 ```bash
 kubectl apply -f priority-class.yaml
