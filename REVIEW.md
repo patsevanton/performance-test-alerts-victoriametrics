@@ -7,8 +7,6 @@
 
 ## Неточности средней тяжести
 
-10. **`vmks-values.yaml:191-192` — `vmalert.spec.evaluationInterval: "1m"`.** В README `README.md:366` утверждается `interval 30s` («при interval 30 s»). Но в values стоит `1m`. Несоответствие между README и конфигом.
-
 11. **`vmks-values.yaml:68-71, 106-108` — комментарий про `dedup.minScrapeInterval: 20s`.** Сказано «20s = дефолт chart'а vmagent.spec.scrapeInterval». Действительно, в `charts/victoria-metrics-k8s-stack/values.yaml:1981` `scrapeInterval: 20s`. Но в `vmks-values.yaml` `vmagent.spec.scrapeInterval` не переопределён — значит дефолт 20s. Комментарий корректен, но это хрупкая связь: если кто-то переопределит `scrapeInterval`, нужно не забыть поменять `dedup.minScrapeInterval` в двух местах. Не ошибка, но стоит отметить.
 
 12. **`chart/templates/vmrule.yaml:148-183` — `ExtraAlert` используют `rate/histogram_quantile/avg_over_time`, а не `or vector(...)`.** В `README.md:344-353` утверждается, что 90,7% правил (45 368 из 50 000) используют `(real_query) or vector(fallback)`, а 9,3% — `absent(...)`. Но в шаблоне `vmrule.yaml` **ни одного правила с `or vector(...)` или `absent(...)` нет** — все правила используют прямые выражения (`rate(...) > threshold`, `histogram_quantile(...)` и т.д.). Это серьёзное противоречие между README (на котором построен раздел «Важная оговорка») и фактическим кодом чарта. Либо README описывает другой прогон/версию чарта, либо vmrule.yaml был изменён после прогона.
