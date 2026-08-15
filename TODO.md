@@ -22,15 +22,17 @@
 - [x] **#7 PDB для vminsert (2 реплики, minAvailable: 1).** Готово.
 - [x] **#8 Persistence для Alertmanager.** Добавлен `storage.volumeClaimTemplate`
       (network-ssd, 1Gi) — состояние silences переживает рестарт подов.
-- [ ] **#9 Anti-affinity / topologySpreadConstraints для vmstorage, vmselect, vminsert.**
-      3 реплики без anti-affinity могут оказаться в одной зоне. Добавить
-      `topologySpreadConstraints` по `topology.kubernetes.io/zone` (preferred).
-- [ ] **#10 Persistence для vmstorage.** `vmstorage` — stateful, без PV = потеря данных.
-      Добавить `storageDataPath` + `persistentVolume` (storageClassName: network-ssd).
-- [ ] **#11 vmagent — replicaCount и PDB.** В values не задан (использует дефолт chart'а).
-      Падение vmagent = остановка всего scrape. Либо 2 реплики + PDB, либо подтвердить дефолт.
-- [ ] **#12 `replicationFactor: 2` → 3.** При 3 vmstorage не переживёт потерю 2 нод storage.
-      Компромисс: +объём хранения.
+- [x] **#9 Anti-affinity / topologySpreadConstraints для vmstorage, vmselect, vminsert.**
+      Добавлены `topologySpreadConstraints` по `topology.kubernetes.io/zone`
+      (`whenUnsatisfiable: ScheduleAnyway`) для vmstorage, vmselect, vminsert.
+- [x] **#10 Persistence для vmstorage.** Добавлен
+      `storage.volumeClaimTemplate` (storageClassName: `yc-network-ssd`, 20Gi).
+      `storageDataPath` не переопределяется — используется дефолт chart'а (`/vm-data`).
+- [x] **#11 vmagent — replicaCount и PDB.** Заданы `replicaCount: 2` и
+      `podDisruptionBudget.minAvailable: 1`. Реплики — HA (не sharding), обе скрейпят
+      одни цели → дубликаты семплов схлопываются через `dedup.minScrapeInterval: 20s`
+      (= дефолт chart'а `vmagent.spec.scrapeInterval`) в `vmstorage` и `vmselect`.
+- [x] **#12 `replicationFactor: 2` → 3.** Установлен `replicationFactor: 3` (равен числу vmstorage).
 - [ ] **#13 PDB для ingress-nginx controller.** Проверить, что `controller.replicaCount >= 2`
       и есть PDB (в `helm_release.ingress_nginx` set-параметры).
 

@@ -26,7 +26,9 @@ vmsingle:
 vmcluster:
   enabled: true
   spec:
-    replicationFactor: 2
+    # replicationFactor = числу vmstorage: при потере 1 ноды данные остаются доступны через реплики.
+    # При RF=2 и 3 vmstorage потеря 2 нод storage = потеря данных. Компромисс: +объём хранения.
+    replicationFactor: 3
 
     vmstorage:
       # Иначе оператор подмешивает свои значения CPU по умолчанию поверх requests из values.
@@ -36,6 +38,22 @@ vmcluster:
       replicaCount: 3
       podDisruptionBudget:
         minAvailable: 2
+      # Распределяем 3 реплики по зонам, чтобы одна AZ не собрала все stateful-поды.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmstorage
+      storage:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: yc-network-ssd
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 20Gi
       # Поиск выполняется на vmstorage; дефолт maxConcurrentRequests=2 даёт 503 «couldn't start executing in 10s»
       # при параллельных запросах от vmselect/vmalert (см. также vmselect.extraArgs).
       extraArgs:
@@ -45,6 +63,10 @@ vmcluster:
         # фиксируем явно, чтобы запросы вроде topk(5, sum(vmalert_alerts_firing{…}) by(…)) не падали с 422.
         # vmalert_alerting_rules_last_evaluation_samples — по ряду на правило; при >1M правил 1M мало (422 TooManyTimeseries).
         search.maxUniqueTimeseries: "5000000"
+        # Дедупликация дубликатов семплов от 2 реплик vmagent (HA-репликация, не sharding).
+        # 20s = дефолт chart'а vmagent.spec.scrapeInterval (в vmks-values не переопределён).
+        # При изменении scrapeInterval — синхронно менять здесь и в vmselect.extraArgs.
+        dedup.minScrapeInterval: 20s
       resources:
         limits:
           cpu: "3"
@@ -59,6 +81,14 @@ vmcluster:
       replicaCount: 3
       podDisruptionBudget:
         minAvailable: 2
+      # Распределяем 3 реплики по зонам (stateless, но Fan-Out запросов — хотим AZ-изоляцию).
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmselect
       # При большом числе VMRule vmalert шлёт много запросов (restore ALERTS_FOR_STATE + eval).
       # Дефолт maxConcurrentRequests=2 даёт 429 и "couldn't start executing in 10s".
       extraArgs:
@@ -71,6 +101,9 @@ vmcluster:
         search.maxUniqueTimeseries: "5000000"
         # Даём тяжёлым панелям больше CPU-воркеров на один запрос.
         search.maxWorkersPerQuery: "8"
+        # Дедупликация (согласовано с vmstorage.extraArgs.dedup.minScrapeInterval).
+        # 20s = дефолт chart'а vmagent.spec.scrapeInterval (в vmks-values не переопределён).
+        dedup.minScrapeInterval: 20s
       # 1536Mi давало OOMKilled при нагрузке (тысячи VMServiceScrape / тяжёлые PromQL).
       resources:
         limits:
@@ -84,6 +117,14 @@ vmcluster:
       replicaCount: 2
       podDisruptionBudget:
         minAvailable: 1
+      # Распределяем 2 реплики по зонам, чтобы ingress-трафик remote-write не падал целиком в одну AZ.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: vminsert
       # CPU: при limits 500m был rate(container_cpu_cfs_throttled_seconds_total) ~0.08–0.11 с/с;
       # пиковый rate(usage[1m]) ~0.17 ядра — запас на всплески remote write.
       resources:
@@ -153,6 +194,9 @@ vmalert:
 vmagent:
   spec:
     priorityClassName: vmks-critical
+    replicaCount: 2
+    podDisruptionBudget:
+      minAvailable: 1
     extraArgs:
       promscrape.maxScrapeSize: "134217728"
     # 768Mi давало OOMKilled: kubernetes_sd + сотни/тысячи целей держат метаданные в памяти.
