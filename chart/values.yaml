@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/patsevanton/performance-test-alerts-victoriametrics
-  tag: "1.2.0"
+  tag: "1.3.0"
   pullPolicy: IfNotPresent
 
 service:
