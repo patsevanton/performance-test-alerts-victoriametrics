@@ -40,8 +40,3 @@
 
 - [ ] **#14 `replicaCount: 2` без anti-affinity.** Добавить `topologySpreadConstraints` по зоне,
       чтобы 2 реплики расходились по AZ.
-
-## Замечания (компромиссы)
-
-- `victoria-metrics-operator` (1 реплика) — SPOF, но допустимо: при падении не влияет
-  на уже запущенные поды, только на reconcile новых изменений.

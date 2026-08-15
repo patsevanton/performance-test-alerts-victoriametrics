@@ -4,8 +4,6 @@
 
 ## Критичные ошибки (нарушение правил/соглашений, противоречия)
 
-2. **`vmks-values.yaml:226-236` — `victoria-metrics-operator` без `spec:`.** В схеме подчарта victoria-metrics-operator ресурсы задаются на верхнем уровне (`resources`, `priorityClassName` — `charts/victoria-metrics-operator/values.yaml:309,329`), а в `vmks-values.yaml` они указаны на верхнем уровне (без `spec:`), что совпадает со схемой. Однако в README `README.md:17` перечислены компоненты «operator», а `victoria-metrics-operator` настроен с одной репликой без PDB — это отмечено в `TODO.md:46`, но не отражено в README. Несоответствий схеме нет, но `operator.replicaCount` не задан (по умолчанию 1, SPOF) — противоречит заявленной отказоустойчивости.
-
 
 ## Неточности средней тяжести
 
