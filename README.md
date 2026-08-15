@@ -10,10 +10,6 @@
 
 ## Архитектура и стенд
 
-### Infrastructure
-
-**Кластер:** 22 ноды Kubernetes v1.33 на Yandex Cloud (Yandex Managed K8s, release channel STABLE).
-
 ## Установка
 
 ### PriorityClass для VictoriaMetrics
