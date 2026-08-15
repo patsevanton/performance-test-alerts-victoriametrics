@@ -8,22 +8,30 @@
 2. **Потребление ресурсов:** где узкие места по CPU и памяти (`vmalert`, VMCluster, Operator) и как растут затраты при росте числа алертов.
 3. **Нагрузка на API server:** как растут RPS, задержки и CPU `kube-apiserver` при массовом применении `VMRule` и reconcile Operator'а.
 
-Дополнительно — практическая картина стека VictoriaMetrics в Kubernetes при такой нагрузке и набор метрик для контроля.
-
 ## Архитектура и стенд
 
 ### Infrastructure
 
-**Кластер:** 13 ноды Kubernetes v1.32.1 на Yandex Cloud (Ubuntu 22.04.5 LTS, containerd 1.7.27).
+**Кластер:** 22 ноды Kubernetes v1.33 на Yandex Cloud (Yandex Managed K8s, release channel STABLE).
 
 ## Установка
+
+### PriorityClass для VictoriaMetrics
+
+Компоненты vmks (vmstorage, vmselect, vminsert, vmalert, vmagent, alertmanager, operator) запускаются с `priorityClassName: vmks-critical`, чтобы не вытесняться apps-нагрузкой стенда. Обязательно применить **до установки чарта** `victoria-metrics-k8s-stack` — иначе при первом reconcile поды vmks стартуют без приоритета и не смогут вытеснить apps-нагрузку стенда:
+
+```bash
+kubectl apply -f priority-class.yaml
+```
+
+Исходный код файла [priority-class.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/priority-class.yaml).
 
 ### victoria-metrics-k8s-stack
 
 ```bash
 helm upgrade --install vmks oci://ghcr.io/victoriametrics/helm-charts/victoria-metrics-k8s-stack \
   --namespace vmks --create-namespace \
-  --version 0.90.1 \
+  --version 0.90.2 \
   --wait --values vmks-values.yaml
 ```
 
@@ -34,16 +42,6 @@ helm upgrade --install vmks oci://ghcr.io/victoriametrics/helm-charts/victoria-m
 ```bash
 kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | base64 --decode; echo
 ```
-
-### PriorityClass для VictoriaMetrics
-
-Компоненты vmks (vmstorage, vmselect, vminsert, vmalert, vmagent, alertmanager, operator) запускаются с `priorityClassName: vmks-critical`, чтобы не вытесняться apps-нагрузкой стенда. Применить вручную до установки чарта:
-
-```bash
-kubectl apply -f priority-class.yaml
-```
-
-Исходный код файла [priority-class.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/priority-class.yaml).
 
 ### VictoriaLogs
 
@@ -57,7 +55,7 @@ kubectl apply -f priority-class.yaml
 helm upgrade --install victoria-logs-cluster oci://ghcr.io/victoriametrics/helm-charts/victoria-logs-cluster \
   --namespace victoria-logs-cluster \
   --create-namespace \
-  --version 0.2.6 \
+  --version 0.2.8 \
   --wait \
   --timeout 15m \
   -f victoria-logs-cluster-values.yaml
@@ -73,7 +71,7 @@ helm upgrade --install victoria-logs-cluster oci://ghcr.io/victoriametrics/helm-
 helm upgrade --install victoria-logs-collector oci://ghcr.io/victoriametrics/helm-charts/victoria-logs-collector \
   --namespace victoria-logs-collector \
   --create-namespace \
-  --version 0.3.5 \
+  --version 0.3.7 \
   --wait \
   --timeout 15m \
   -f victoria-logs-collector-values.yaml
