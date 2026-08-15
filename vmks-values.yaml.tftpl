@@ -92,7 +92,7 @@ vmcluster:
         # vmalert_alerting_rules_last_evaluation_samples — по ряду на правило; при >1M правил 1M мало (422 TooManyTimeseries).
         search.maxUniqueTimeseries: "5000000"
         # Дедупликация дубликатов семплов от 2 реплик vmagent (HA-репликация, не sharding).
-        # 20s = дефолт chart'а vmagent.spec.scrapeInterval (в vmks-values не переопределён).
+        # 20s = vmagent.spec.scrapeInterval (явно зафиксирован в этом файле).
         # При изменении scrapeInterval — синхронно менять здесь и в vmselect.extraArgs.
         dedup.minScrapeInterval: 20s
       # Memory: при 50000 ALERTS пик container_memory_working_set_bytes ~3106Mi (линейно ~57,8 MiB / 1000 ALERTS).
@@ -134,7 +134,7 @@ vmcluster:
         # Даём тяжёлым панелям больше CPU-воркеров на один запрос.
         search.maxWorkersPerQuery: "8"
         # Дедупликация (согласовано с vmstorage.extraArgs.dedup.minScrapeInterval).
-        # 20s = дефолт chart'а vmagent.spec.scrapeInterval (в vmks-values не переопределён).
+        # 20s = vmagent.spec.scrapeInterval (явно зафиксирован в этом файле).
         dedup.minScrapeInterval: 20s
       # 4Gi давало OOMKilled (Exit 137) при тяжёлых fan-out запросах vmalert
       # (sum(increase(vmalert_alerting_rules_errors_total[5m])) without(id) > 0 —
@@ -240,6 +240,10 @@ vmagent:
   spec:
     priorityClassName: vmks-critical
     replicaCount: 2
+    # Явно фиксируем scrapeInterval (совпадает с дефолтом chart'а 20s),
+    # чтобы dedup.minScrapeInterval в vmstorage/vmselect всегда был согласован
+    # с фактическим интервалом скрейпинга, а не зависел от тишины chart-default.
+    scrapeInterval: 20s
     podDisruptionBudget:
       minAvailable: 1
     extraArgs:
