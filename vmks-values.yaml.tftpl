@@ -1,4 +1,6 @@
 grafana:
+  # Высокий приоритет: мониторинг не должен вытесняться apps-нагрузкой стенда.
+  priorityClassName: vmks-critical
   ingress:
     ingressClassName: nginx
     enabled: true
@@ -104,14 +106,16 @@ vmcluster:
         # Дедупликация (согласовано с vmstorage.extraArgs.dedup.minScrapeInterval).
         # 20s = дефолт chart'а vmagent.spec.scrapeInterval (в vmks-values не переопределён).
         dedup.minScrapeInterval: 20s
-      # 1536Mi давало OOMKilled при нагрузке (тысячи VMServiceScrape / тяжёлые PromQL).
+      # 4Gi давало OOMKilled (Exit 137) при тяжёлых fan-out запросах vmalert
+      # (sum(increase(vmalert_alerting_rules_errors_total[5m])) without(id) > 0 —
+      # десятки параллельных запросов по каждому app-N держат промежуточные ряды в памяти).
       resources:
         limits:
           cpu: "3"
-          memory: 4Gi
+          memory: 8Gi
         requests:
           cpu: 500m
-          memory: 512Mi
+          memory: 1Gi
     vminsert:
       priorityClassName: vmks-critical
       replicaCount: 2
@@ -144,6 +148,11 @@ vmcluster:
       hosts:
         - vmselect.${ingress_public_ip}.sslip.io
 
+prometheus-node-exporter:
+  # Высокий приоритет: DaemonSet node-exporter не должен вытесняться apps-нагрузкой стенда
+  # (без этого на нодах с maxPods=110 он уходил в Pending: «Too many pods»).
+  priorityClassName: vmks-critical
+
 alertmanager:
   spec:
     priorityClassName: vmks-critical
@@ -171,6 +180,10 @@ alertmanager:
         cpu: 200m
         memory: 128Mi
 
+kube-state-metrics:
+  # Высокий приоритет: мониторинг не должен вытесняться apps-нагрузкой стенда.
+  priorityClassName: vmks-critical
+
 vmalert:
   spec:
     priorityClassName: vmks-critical
@@ -183,13 +196,15 @@ vmalert:
     # CPU: по VictoriaMetrics (cadvisor) max_over_time(rate(usage[1m])[30m]) до ~3.35 ядер/под;
     # при limits 4–5 всё ещё был rate(container_cpu_cfs_throttled_seconds_total) > 0 на нагруженных подах.
     # limits 6 + requests 4 (было 3): при ~113% от request подняли гарантию под фактическую оценку правил.
+    # Memory: 5Gi давало OOMKilled (Exit 137) — после рестарта vmalert восстанавливает тысячи состояний
+    # алертов (ExtraAlert0xx restored to state) для ~1350 app × несколько правил → рост памяти → OOM.
     resources:
       limits:
         cpu: "6"
-        memory: 5Gi
+        memory: 8Gi
       requests:
         cpu: 500m
-        memory: 1Gi
+        memory: 2Gi
 
 vmagent:
   spec:
@@ -210,10 +225,12 @@ vmagent:
 
 victoria-metrics-operator:
   priorityClassName: vmks-critical
+  # Memory: 2Gi давало OOMKilled (Exit 137) — оператор держит in-memory кэш client-go
+  # для ~1350 namespace × CRD (15+ контроллеров с worker count: 15 каждый).
   resources:
     limits:
       cpu: "2"
-      memory: 2Gi
+      memory: 4Gi
     requests:
       cpu: 250m
-      memory: 512Mi
+      memory: 1Gi
