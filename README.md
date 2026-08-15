@@ -2,11 +2,9 @@
 
 ## Цели
 
-1. **Отказоустойчивость и непрерывность:** как при десятках тысяч активных `VMRule` сохраняются оценка правил, состояние алертов (`for`, pending/firing), восстановление после рестартов `vmalert`, и какие риски для этой цепочки возникают у оператора, `vmalert` и хранилища.
-2. **Потребление ресурсов:** где узкие места по CPU и памяти (`vmalert`, VMCluster, Operator) и как растут затраты при росте числа алертов.
-3. **Нагрузка на API server:** как растут RPS, задержки и CPU `kube-apiserver` при массовом применении `VMRule` и reconcile Operator'а.
-
-> **Перед шагами ниже** разверните инфраструктуру через `terraform apply` (кластер Yandex Managed K8s, node group, NAT-шлюз, публичный IP для ingress-nginx) и дождитесь готовности `helm_release.ingress_nginx`. Дальнейшие шаги предполагают, что кластер K8s работает, а ingress-nginx слушает на публичном IP из `terraform output ingress_public_ip` (Grafana доступна по http через sslip.io, TLS не используется).
+1. **Отказоустойчивость и непрерывность:** как при десятках тысяч активных `VMRule` сохраняются оценка правил, состояние алертов (pending/firing), восстановление после рестартов `vmalert`, и какие риски для этой цепочки возникают у `victoria-metrics-operator`, `vmalert` и `vmstorage`.
+2. **Потребление ресурсов:** где узкие места по CPU и памяти (`vmalert`, `VMCluster`, `victoria-metrics-operator`) и как растут затраты при росте числа алертов.
+3. **Нагрузка на API server:** как растут RPS, задержки и CPU `kube-apiserver` при массовом применении `VMRule` и reconcile `victoria-metrics-operator`.
 
 ## Установка
 
