@@ -28,8 +28,10 @@ vmsingle:
 vmcluster:
   enabled: true
   spec:
-    # replicationFactor = числу vmstorage: при потере 1 ноды данные остаются доступны через реплики.
-    # При RF=2 и 3 vmstorage потеря 2 нод storage = потеря данных. Компромисс: +объём хранения.
+    # replicationFactor — число копий каждой точки при записи (не число vmstorage).
+    # Здесь RF=3 и N=3 vmstorage: каждая точка пишется на 3 ноды, потеря 1 ноды оставляет
+    # кворум записи 2/3 — данные доступны и продолжают писаться. Потеря 2 нод = потеря
+    # кворума и данных. Компромисс: +объём хранения (каждая точка хранится в RF копиях).
     replicationFactor: 3
 
     vmstorage:
@@ -69,10 +71,14 @@ vmcluster:
         # 20s = дефолт chart'а vmagent.spec.scrapeInterval (в vmks-values не переопределён).
         # При изменении scrapeInterval — синхронно менять здесь и в vmselect.extraArgs.
         dedup.minScrapeInterval: 20s
+      # Memory: при 50000 ALERTS пик container_memory_working_set_bytes ~3106Mi (линейно ~57,8 MiB / 1000 ALERTS).
+      # 4Gi (4096Mi) покрывали пик с небольшим остатком, но при росте за 50k ALERTS лимит исчерпывается
+      # (~70k ALERTS → ~4Gi). Поднимаем до 5Gi без production-запаса — только под измеренный профиль теста.
+      # CPU: пик ~458m при limits 3 — запас 6x, без изменений.
       resources:
         limits:
           cpu: "3"
-          memory: 4Gi
+          memory: 5Gi
         requests:
           cpu: 500m
           memory: 1Gi
@@ -225,6 +231,13 @@ vmagent:
 
 victoria-metrics-operator:
   priorityClassName: vmks-critical
+  # Отказоустойчивость: leader election включён в шаблоне чарта (--leader-elect),
+  # активен один pod, второй работает в режиме ожидания и берёт управление при сбое.
+  replicaCount: 2
+  # PDB защищает от вытеснения обоих pod'ов одновременно при maintenance (drain).
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
   # Memory: 2Gi давало OOMKilled (Exit 137) — оператор держит in-memory кэш client-go
   # для ~1350 namespace × CRD (15+ контроллеров с worker count: 15 каждый).
   resources:
