@@ -11,8 +11,6 @@
 
 ## Мелкие замечания
 
-13. **`app/go.mod:3` и `app/Dockerfile:1` — Go 1.26.** Актуальная стабильная версия Go (на Aug 2026) — 1.24. `go 1.26` в go.mod и `golang:1.26-trixie` в Dockerfile могут не существовать или быть будущей версией. Стоит проверить, существует ли этот тег на Docker Hub. Если это сделано намеренно (rolling), ок, но это нестандартно.
-
 14. **`app/main.go:46` — `rand.Seed(time.Now().UnixNano())`.** Начиная с Go 1.20 `rand.Seed` устарел (deprecated) — глобальный генератор seeding'ается автоматически. Предупреждение компилятора. Не ошибка, но устаревший код.
 
 15. **`chart/templates/_helpers.tpl` — `golden-signal-app.name = .Release.Name`.** Имя VMRule/VMServiceScrape = имя release. Но в `fetch_capacity_snapshots.py:96-118` pod-паттерны жёстко захардкожены как `vmalert-vmks-victoria-metrics-k8s-stack-.*` — это зависит от release name `vmks` (из `README.md:28`). Если пользователь установит vmks с другим release name, скрипт сломается. Не ошибка, но хрупкость.
