@@ -165,6 +165,11 @@ output "grafana_url" {
   value       = "http://grafana.${local.ingress_public_ip}.sslip.io"
 }
 
+output "grafana_admin_password_command" {
+  description = "Команда для получения пароля администратора Grafana из секрета vmks-grafana"
+  value       = "kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | base64 --decode; echo"
+}
+
 output "vmselect_url" {
   description = "URL vmselect / VictoriaMetrics query API (сформирован через sslip.io из публичного IP балансировщика ingress-nginx)"
   value       = "http://vmselect.${local.ingress_public_ip}.sslip.io"
