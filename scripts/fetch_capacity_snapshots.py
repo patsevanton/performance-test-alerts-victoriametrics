@@ -26,6 +26,9 @@ Ctrl-C — будут выгружены снимки, собранные к э�
                     чтобы rate-метрики успели устаканиться после фиксации порога
   VMSELECT_URL      по умолчанию берётся из `terraform output -raw vmselect_url`
                     (FQDN формируется через sslip.io из публичного IP ingress-nginx).
+  RELEASE_NAME      по умолчанию vmks — имя release, которым установлен чарт
+                    victoria-metrics-k8s-stack (helm install <RELEASE_NAME> ...).
+                    От него зависят имена подов и scrape-job'ов компонент vmks.
 """
 import json
 import os
@@ -92,30 +95,40 @@ MIN_SNAPSHOT_GAP = int(os.environ.get("MIN_SNAPSHOT_GAP", "120"))
 
 EXPECTED_MAX_ALERTS = TARGET_APPS * ALERTS_PER_APP
 
+# Имя release чарта victoria-metrics-k8s-stack (helm install <RELEASE_NAME> ...).
+# От него зависят имена подов (vmalert-<RELEASE_NAME>-victoria-metrics-k8s-stack-.*)
+# и scrape-job'ов (vmalert-<RELEASE_NAME>-victoria-metrics-k8s-stack).
+# Namespace жёстко vmks согласно инфраструктурным правилам (AGENTS.md).
+RELEASE_NAME = os.environ.get("RELEASE_NAME", "vmks")
+
+# Префиксы имён подов и job'ов компонент vmks для подстановки в PromQL.
+_VMKS_STACK_PREFIX = f"{RELEASE_NAME}-victoria-metrics-k8s-stack"
+_OPERATOR_PREFIX = f"{RELEASE_NAME}-victoria-metrics-operator"
+
 QUERIES = {
-    "vmalert_cpu": 'avg(rate(pod_cpu_usage_seconds_total{namespace="vmks",pod=~"vmalert-vmks-victoria-metrics-k8s-stack-.*"}[2m]))*1000',
-    "vmstorage_cpu": 'avg(rate(pod_cpu_usage_seconds_total{namespace="vmks",pod=~"vmstorage-vmks-victoria-metrics-k8s-stack-.*"}[2m]))*1000',
-    "vmselect_cpu": 'avg(rate(pod_cpu_usage_seconds_total{namespace="vmks",pod=~"vmselect-vmks-victoria-metrics-k8s-stack-.*"}[2m]))*1000',
-    "vminsert_cpu": 'avg(rate(pod_cpu_usage_seconds_total{namespace="vmks",pod=~"vminsert-vmks-victoria-metrics-k8s-stack-.*"}[2m]))*1000',
-    "vmagent_cpu": 'avg(rate(pod_cpu_usage_seconds_total{namespace="vmks",pod=~"vmagent-vmks-victoria-metrics-k8s-stack-.*"}[2m]))*1000',
-    "operator_cpu": 'avg(rate(pod_cpu_usage_seconds_total{namespace="vmks",pod=~"vmks-victoria-metrics-operator-.*"}[2m]))*1000',
-    "vmalert_mem": 'avg(pod_memory_working_set_bytes{namespace="vmks",pod=~"vmalert-vmks-victoria-metrics-k8s-stack-.*"})/1024/1024',
-    "vmstorage_mem": 'avg(pod_memory_working_set_bytes{namespace="vmks",pod=~"vmstorage-vmks-victoria-metrics-k8s-stack-.*"})/1024/1024',
-    "vmselect_mem": 'avg(pod_memory_working_set_bytes{namespace="vmks",pod=~"vmselect-vmks-victoria-metrics-k8s-stack-.*"})/1024/1024',
-    "vminsert_mem": 'avg(pod_memory_working_set_bytes{namespace="vmks",pod=~"vminsert-vmks-victoria-metrics-k8s-stack-.*"})/1024/1024',
-    "vmagent_mem": 'avg(pod_memory_working_set_bytes{namespace="vmks",pod=~"vmagent-vmks-victoria-metrics-k8s-stack-.*"})/1024/1024',
-    "operator_mem": 'avg(pod_memory_working_set_bytes{namespace="vmks",pod=~"vmks-victoria-metrics-operator-.*"})/1024/1024',
+    "vmalert_cpu": f'avg(rate(pod_cpu_usage_seconds_total{{namespace="vmks",pod=~"vmalert-{_VMKS_STACK_PREFIX}-.*"}}[2m]))*1000',
+    "vmstorage_cpu": f'avg(rate(pod_cpu_usage_seconds_total{{namespace="vmks",pod=~"vmstorage-{_VMKS_STACK_PREFIX}-.*"}}[2m]))*1000',
+    "vmselect_cpu": f'avg(rate(pod_cpu_usage_seconds_total{{namespace="vmks",pod=~"vmselect-{_VMKS_STACK_PREFIX}-.*"}}[2m]))*1000',
+    "vminsert_cpu": f'avg(rate(pod_cpu_usage_seconds_total{{namespace="vmks",pod=~"vminsert-{_VMKS_STACK_PREFIX}-.*"}}[2m]))*1000',
+    "vmagent_cpu": f'avg(rate(pod_cpu_usage_seconds_total{{namespace="vmks",pod=~"vmagent-{_VMKS_STACK_PREFIX}-.*"}}[2m]))*1000',
+    "operator_cpu": f'avg(rate(pod_cpu_usage_seconds_total{{namespace="vmks",pod=~"{_OPERATOR_PREFIX}-.*"}}[2m]))*1000',
+    "vmalert_mem": f'avg(pod_memory_working_set_bytes{{namespace="vmks",pod=~"vmalert-{_VMKS_STACK_PREFIX}-.*"}})/1024/1024',
+    "vmstorage_mem": f'avg(pod_memory_working_set_bytes{{namespace="vmks",pod=~"vmstorage-{_VMKS_STACK_PREFIX}-.*"}})/1024/1024',
+    "vmselect_mem": f'avg(pod_memory_working_set_bytes{{namespace="vmks",pod=~"vmselect-{_VMKS_STACK_PREFIX}-.*"}})/1024/1024',
+    "vminsert_mem": f'avg(pod_memory_working_set_bytes{{namespace="vmks",pod=~"vminsert-{_VMKS_STACK_PREFIX}-.*"}})/1024/1024',
+    "vmagent_mem": f'avg(pod_memory_working_set_bytes{{namespace="vmks",pod=~"vmagent-{_VMKS_STACK_PREFIX}-.*"}})/1024/1024',
+    "operator_mem": f'avg(pod_memory_working_set_bytes{{namespace="vmks",pod=~"{_OPERATOR_PREFIX}-.*"}})/1024/1024',
     "apiserver_rps": "sum(rate(apiserver_request_total[5m]))",
     # Исключаем бакет +Inf — иначе p99 может схлопнуться до наибольшей конечной границы (напр. 60s).
     "apiserver_p99": 'histogram_quantile(0.99, sum(rate(apiserver_request_duration_seconds_bucket{le!="+Inf"}[5m])) by (le))',
     "apiserver_cpu": 'sum(rate(process_cpu_seconds_total{job=~".*apiserver.*"}[5m]))*1000',
-    "vmselect_rps": 'sum(rate(vm_http_requests_total{job="vmselect-vmks-victoria-metrics-k8s-stack"}[5m]))',
-    "vmstorage_rps": 'sum(rate(vm_http_requests_total{job="vmstorage-vmks-victoria-metrics-k8s-stack"}[5m]))',
-    "vminsert_rps": 'sum(rate(vm_http_requests_total{job="vminsert-vmks-victoria-metrics-k8s-stack"}[5m]))',
+    "vmselect_rps": f'sum(rate(vm_http_requests_total{{job="vmselect-{_VMKS_STACK_PREFIX}"}}[5m]))',
+    "vmstorage_rps": f'sum(rate(vm_http_requests_total{{job="vmstorage-{_VMKS_STACK_PREFIX}"}}[5m]))',
+    "vminsert_rps": f'sum(rate(vm_http_requests_total{{job="vminsert-{_VMKS_STACK_PREFIX}"}}[5m]))',
     # Дополнительные метрики для таблицы "grew with load" в README.
-    "vmalert_iter_max": 'max(vmalert_iteration_duration_seconds{namespace="vmks",pod=~"vmalert-vmks-victoria-metrics-k8s-stack-.*"})',
-    "vmselect_concurrent": 'max(vm_concurrent_select_current{job="vmselect-vmks-victoria-metrics-k8s-stack"})',
-    "vmagent_scrape_samples_vmalert": 'max(scrape_samples_scraped{job="vmalert-vmks-victoria-metrics-k8s-stack"})',
+    "vmalert_iter_max": f'max(vmalert_iteration_duration_seconds{{namespace="vmks",pod=~"vmalert-{_VMKS_STACK_PREFIX}-.*"}})',
+    "vmselect_concurrent": f'max(vm_concurrent_select_current{{job="vmselect-{_VMKS_STACK_PREFIX}"}})',
+    "vmagent_scrape_samples_vmalert": f'max(scrape_samples_scraped{{job="vmalert-{_VMKS_STACK_PREFIX}"}})',
 }
 
 COUNT_QUERY = "count(ALERTS)"
