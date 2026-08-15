@@ -104,8 +104,7 @@ helm upgrade --install victoria-logs-collector oci://ghcr.io/victoriametrics/hel
 Скрипт создаёт файл `app-names.txt` со случайными уникальными именами вида `app-{adjective}-{noun}-{number}`:
 
 ```bash
-cd scripts
-./generate-app-names.sh 1350
+scripts/generate-app-names.sh 1350
 ```
 
 #### Шаг 2: Развёртывание приложений
@@ -115,7 +114,7 @@ cd scripts
 Запуск (без пауз между установками):
 
 ```bash
-./deploy-apps.sh
+scripts/deploy-apps.sh
 ```
 
 По умолчанию скрипт развёртывает 1000 приложений (`app-1..app-1000`, переменные `START_INDEX` и `TARGET_APPS`).
@@ -130,7 +129,7 @@ python3 scripts/fetch_capacity_snapshots.py
 #### Шаг 3: Проверка статуса
 
 ```bash
-./status-apps.sh
+scripts/status-apps.sh
 ```
 
 Скрипт показывает: количество Helm releases, статусы Pod'ов, потребление ресурсов, количество VMRule и VMServiceScrape.
@@ -138,7 +137,7 @@ python3 scripts/fetch_capacity_snapshots.py
 #### Шаг 4: Удаление приложений
 
 ```bash
-./delete-apps.sh
+scripts/delete-apps.sh
 ```
 
 Параметры `NAMES_FILE`, `TARGET_APPS`, `PARALLEL` аналогичны скрипту `deploy-apps.sh`.
