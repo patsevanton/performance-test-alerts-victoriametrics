@@ -92,8 +92,8 @@ resource "yandex_kubernetes_node_group" "k8s_node_group" {
     }
 
     resources {
-      # 8 vCPU / 8GB на ноду. Bottleneck по памяти (requests RAM на ноде ~99% при 64Mi/app),
-      # снимается снижением request app до 32Mi + scale до 16 нод.
+      # 4 vCPU / 8GB на ноду. Bottleneck по памяти (requests RAM на ноде ~99% при 64Mi/app),
+      # снимается снижением request app до 32Mi + scale до 27 нод.
       cores  = 4 # vCPU # уменьшить
       memory = 8 # ГБ # уменьшить
     }

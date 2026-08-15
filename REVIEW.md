@@ -4,19 +4,10 @@
 
 ## Критичные ошибки (нарушение правил/соглашений, противоречия)
 
-1. **`vmks-values.yaml:31-33` — некорректный комментарий про replicationFactor.** Комментарий: `replicationFactor = числу vmstorage: при потере 1 ноды данные остаются доступны через реплики`. Это не так: `replicationFactor` определяет, на сколько реплик писать, а не сколько их. Потеря `RF-1` нод не теряет данные только если `RF ≤ N`. Комментарий же утверждает, что при RF=2 потеря одной ноды всегда безопасна — это неверно для случая, когда N=2 и RF=2 (теряется кворум записи). Формулировка вводит в заблуждение и противоречит докам VictoriaMetrics.
-
 2. **`vmks-values.yaml:226-236` — `victoria-metrics-operator` без `spec:`.** В схеме подчарта victoria-metrics-operator ресурсы задаются на верхнем уровне (`resources`, `priorityClassName` — `charts/victoria-metrics-operator/values.yaml:309,329`), а в `vmks-values.yaml` они указаны на верхнем уровне (без `spec:`), что совпадает со схемой. Однако в README `README.md:17` перечислены компоненты «operator», а `victoria-metrics-operator` настроен с одной репликой без PDB — это отмечено в `TODO.md:46`, но не отражено в README. Несоответствий схеме нет, но `operator.replicaCount` не задан (по умолчанию 1, SPOF) — противоречит заявленной отказоустойчивости.
 
-4. **`scripts/deploy-apps.sh:11` vs `chart/values.yaml:79` — несоответствие числа алертов.** В `deploy-apps.sh` `BASE_ALERTS_COUNT=10`, `ALERTS_PER_APP=50`, значит `EXTRA_ALERTS_COUNT = 40`. В `chart/values.yaml:79` `alerts.extra.count: 90` (по умолчанию). При запуске `helm upgrade` скрипт передаёт `--set alerts.extra.count=$EXTRA_ALERTS_COUNT` (40), переопределяя дефолт чарта. **Но в `README.md:83` сказано «50 000 алертов» и «40 дополнительных» — это сходится только если запущен скрипт.** Сам по себе `chart/values.yaml` даёт 10+90=100 алертов на app. Это несоответствие между дефолтом чарта и документацией/скриптом — пользователь, развернувший чарт вручную, получит не 50, а 100 алертов на app.
-
-5. **`README.md:83` — ссылка на несуществующий скрипт `deploy-apps-day*.sh`.** В тексте: `общее число задаётся ALERTS_PER_APP в deploy-apps-day*.sh`. Такого скрипта в `scripts/` нет — есть только `deploy-apps.sh`. Опечатка/устаревшая ссылка.
-
-6. **`README.md:85` — арифметика: 1350 × 50 = 67 500, а не 50 000.** В README: «1350 VMRule (50 000 алертов)». Но 1350 × 50 = 67 500. Значение «50 000 алертов» противоречит и `fetch_capacity_snapshots.py:79` (`TARGETS` включает 67500), и `EXPECTED_MAX_ALERTS = TARGET_APPS * ALERTS_PER_APP = 67500`. Где-то ошибка: либо число apps, либо alerts/app, либо итог в README.
 
 ## Неточности средней тяжести
-
-8. **`vmks-values.yaml:60-61` — некорректный комментарий про HTTP-код vmstorage.** В комментарии сказано «даёт **503**», однако по исходникам VictoriaMetrics vmstorage не возвращает HTTP 503 при перегрузке `search.maxConcurrentRequests`: он отдаёт RPC-ошибку с текстом `couldn't start executing in 10s`, которую vmselect транслирует в **429** (`http.StatusTooManyRequests`). Код 503 в кодовой базе VictoriaMetrics встречается только на `/health` при `shutdownDelay`. Корректная формулировка — 429.
 
 9. **`vmks-values.yaml` отсутствует блок `defaultRules.groups`** из AGENTS.md (правила для Yandex Managed K8s). Согласно `AGENTS.md`, при установке vmks в Yandex Managed K8s должны быть отключены scrape-job и recording-правила для kube-controller-manager, kube-scheduler, kube-etcd. В `vmks-values.yaml` этого нет, хотя кластер в `k8s.tf` — Yandex Managed K8s. Это прямое нарушение инфраструктурных правил из AGENTS.md:
    - `defaultRules.groups.etcd.enabled: false` — отсутствует
@@ -40,10 +31,6 @@
 14. **`app/main.go:46` — `rand.Seed(time.Now().UnixNano())`.** Начиная с Go 1.20 `rand.Seed` устарел (deprecated) — глобальный генератор seeding'ается автоматически. Предупреждение компилятора. Не ошибка, но устаревший код.
 
 15. **`chart/templates/_helpers.tpl` — `golden-signal-app.name = .Release.Name`.** Имя VMRule/VMServiceScrape = имя release. Но в `fetch_capacity_snapshots.py:96-118` pod-паттерны жёстко захардкожены как `vmalert-vmks-victoria-metrics-k8s-stack-.*` — это зависит от release name `vmks` (из `README.md:28`). Если пользователь установит vmks с другим release name, скрипт сломается. Не ошибка, но хрупкость.
-
-16. **`k8s.tf:97-99` — комментарий «8 vCPU / 8GB» против `cores = 4, memory = 8`.** Комментарий в строке 95-96 говорит про «8 vCPU / 8GB», но в `resources` указано `cores = 4`. Комментарий устарел/не соответствует коду (отмечено `# уменьшить` рядом).
-
-17. **`k8s.tf:65` — `size = 25` с комментарием про 16 нод.** Комментарий упоминает «scale до 16 нод» (строка 96), но `size = 25`. Несоответствие между комментариями.
 
 18. **`README.md:144-149` — таблица ресурсов: 1m CPU requests на pod, но `chart/values.yaml:18` — `cpu: 1m`.** Совпадает. Но `memory: 8Mi` requests → 1350 × 8Mi = 10,8 GiB, а в таблице указано «~7.8 GiB». Арифметическая ошибка: 1350 × 8 = 10 800 Mi ≈ 10,55 GiB, не 7,8 GiB. (Возможно, в таблице устаревшие данные при другом значении requests.)
 
