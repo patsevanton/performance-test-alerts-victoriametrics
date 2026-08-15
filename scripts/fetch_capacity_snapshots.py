@@ -19,11 +19,14 @@ Ctrl-C — будут выгружены снимки, собранные к э�
   ALERTS_PER_APP    по умолчанию 50   — алертов на одно приложение
   BASE_ALERTS_COUNT по умолчанию 10   — базовых алертов на приложение (информационно)
   POLL_INTERVAL     по умолчанию 10   — секунды между опросами count(ALERTS)
+  VMSELECT_URL      по умолчанию берётся из `terraform output -raw vmselect_url`
+                    (FQDN формируется через sslip.io из публичного IP ingress-nginx).
 """
 import json
 import os
 import signal
 import ssl
+import subprocess
 import sys
 import time
 import urllib.parse
@@ -35,7 +38,33 @@ _SSL = ssl.create_default_context()
 _SSL.check_hostname = False
 _SSL.verify_mode = ssl.CERT_NONE
 
-BASE = "https://vmselect.apatsev.org.ru/select/0/prometheus/api/v1/query"
+# Базовый URL vmselect. Порядок разрешения:
+#   1) переменная окружения VMSELECT_URL;
+#   2) `terraform output -raw vmselect_url` (FQDN через sslip.io из публичного IP ingress);
+#   3) ошибка с подсказкой.
+# Ожидается URL вида http://vmselect.<IP>.sslip.io — путь /select/0/prometheus/api/v1/query
+# добавляется автоматически.
+def _resolve_base() -> str:
+    url = os.environ.get("VMSELECT_URL")
+    if not url:
+        # Terraform-конфигурация лежит в корне проекта (на уровень выше scripts/).
+        tf_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
+        try:
+            out = subprocess.run(
+                ["terraform", "output", "-raw", "vmselect_url"],
+                capture_output=True, text=True, cwd=tf_dir,
+            )
+        except FileNotFoundError:
+            out = None
+        if out is not None and out.returncode == 0:
+            url = out.stdout.strip()
+    if not url:
+        print("Не удалось определить VMSELECT_URL. Задайте переменную окружения VMSELECT_URL "
+              "или выполните `terraform output -raw vmselect_url`.", file=sys.stderr)
+        sys.exit(2)
+    return url.rstrip("/") + "/select/0/prometheus/api/v1/query"
+
+BASE = _resolve_base()
 
 # Пороги (count(ALERTS)), при достижении которых фиксируется снимок.
 TARGETS = [500, 5000, 10000, 15000, 20000, 25000, 30000, 35000, 40000, 45000, 50000]

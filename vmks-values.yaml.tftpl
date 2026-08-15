@@ -5,7 +5,7 @@ grafana:
     annotations:
       nginx.ingress.kubernetes.io/ssl-redirect: "false"
     hosts:
-      - grafana.93.77.166.229.sslip.io
+      - grafana.${ingress_public_ip}.sslip.io
 
 defaultDatasources:
   victoriametrics:
@@ -101,7 +101,7 @@ vmcluster:
       annotations:
         nginx.ingress.kubernetes.io/ssl-redirect: "false"
       hosts:
-        - vmselect.93.77.166.229.sslip.io
+        - vmselect.${ingress_public_ip}.sslip.io
 
 alertmanager:
   spec:

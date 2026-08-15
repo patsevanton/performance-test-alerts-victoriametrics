@@ -27,7 +27,7 @@ helm upgrade --install vmks oci://ghcr.io/victoriametrics/helm-charts/victoria-m
   --wait --values vmks-values.yaml
 ```
 
-Исходный код файла [vmks-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/vmks-values.yaml). Включает Grafana с ingress на [grafana.apatsev.org.ru](http://grafana.apatsev.org.ru).
+Исходный код файла [vmks-values.yaml.tftpl](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/vmks-values.yaml.tftpl). FQDN Grafana формируется через sslip.io из публичного IP ingress-nginx (см. `terraform output grafana_url`).
 
 Получение пароля Grafana:
 
@@ -63,9 +63,9 @@ helm upgrade --install victoria-logs-cluster oci://ghcr.io/victoriametrics/helm-
   -f victoria-logs-cluster-values.yaml
 ```
 
-Исходный код файла [victoria-logs-cluster-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/victoria-logs-cluster-values.yaml).
+Исходный код файла [victoria-logs-cluster-values.yaml.tftpl](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/victoria-logs-cluster-values.yaml.tftpl).
 
-Проверка: `kubectl get pods -n victoria-logs-cluster`. Ingress для vlselect: `victorialogs.apatsev.org.ru` (из values).
+Проверка: `kubectl get pods -n victoria-logs-cluster`. Ingress для vlselect: `terraform output victorialogs_url` (FQDN через sslip.io из публичного IP ingress-nginx).
 
 **2. Victoria-logs-collector (сбор логов с подов кластера):**
 

@@ -41,3 +41,7 @@ scripts/__pycache__/fetch_capacity_snapshots.cpython-313.pyc
 
 # Generated app names for load testing
 scripts/app-names.txt
+
+# Values генерируются из *.tftpl через terraform (monitoring.tf)
+vmks-values.yaml
+victoria-logs-cluster-values.yaml

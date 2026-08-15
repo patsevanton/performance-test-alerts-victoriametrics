@@ -18,7 +18,7 @@ vlselect:
     annotations:
       nginx.ingress.kubernetes.io/ssl-redirect: "false"
     hosts:
-      - name: victorialogs.93.77.166.229.sslip.io
+      - name: victorialogs.${ingress_public_ip}.sslip.io
         path:
           - /
         port: http

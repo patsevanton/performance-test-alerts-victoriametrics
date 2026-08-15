@@ -1,45 +1,44 @@
-# Получаем информацию о конфигурации клиента Yandex
-data "yandex_client_config" "client" {}
-
 # Создание сервисного аккаунта для управления Kubernetes
-resource "yandex_iam_service_account" "sa-k8s-editor" {
-  name = "sa-k8s-editor" # Имя сервисного аккаунта
+resource "yandex_iam_service_account" "sa_k8s_editor" {
+  folder_id = local.folder_id
+  name      = "sa-k8s-editor" # Имя сервисного аккаунта
 }
 
 # Назначение роли "editor" сервисному аккаунту на уровне папки
-resource "yandex_resourcemanager_folder_iam_member" "sa-k8s-editor-permissions" {
+resource "yandex_resourcemanager_folder_iam_member" "sa_k8s_editor_permissions" {
   role      = "editor" # Роль, дающая полные права на ресурсы папки
-  folder_id = data.yandex_client_config.client.folder_id
-  member    = "serviceAccount:${yandex_iam_service_account.sa-k8s-editor.id}" # Назначаемый участник
+  folder_id = local.folder_id
+  member    = "serviceAccount:${yandex_iam_service_account.sa_k8s_editor.id}" # Назначаемый участник
 }
 
 # Пауза, чтобы изменения IAM успели примениться до создания кластера
 resource "time_sleep" "wait_sa" {
   create_duration = "20s"
   depends_on = [
-    yandex_iam_service_account.sa-k8s-editor,
-    yandex_resourcemanager_folder_iam_member.sa-k8s-editor-permissions
+    yandex_iam_service_account.sa_k8s_editor,
+    yandex_resourcemanager_folder_iam_member.sa_k8s_editor_permissions
   ]
 }
 
 # Создание Kubernetes-кластера в Yandex Cloud
 resource "yandex_kubernetes_cluster" "vmalert" {
-  name       = "vmalert"                     # Имя кластера
-  network_id = yandex_vpc_network.vmalert.id # Сеть, к которой подключается кластер
+  name       = "vmalert" # Имя кластера
+  folder_id  = local.folder_id
+  network_id = local.network_id # Сеть, к которой подключается кластер
 
   master {
     version = "1.33" # Версия Kubernetes мастера
     zonal {
-      zone      = yandex_vpc_subnet.vmalert-e.zone # Зона размещения мастера
-      subnet_id = yandex_vpc_subnet.vmalert-e.id   # Подсеть для мастера
+      zone      = local.subnet_e_zone # Зона размещения мастера
+      subnet_id = local.subnet_e_id   # Подсеть для мастера
     }
 
     public_ip = true # Включение публичного IP для доступа к мастеру
   }
 
   # Сервисный аккаунт для управления кластером и нодами
-  service_account_id      = yandex_iam_service_account.sa-k8s-editor.id
-  node_service_account_id = yandex_iam_service_account.sa-k8s-editor.id
+  service_account_id      = yandex_iam_service_account.sa_k8s_editor.id
+  node_service_account_id = yandex_iam_service_account.sa_k8s_editor.id
 
   release_channel = "STABLE" # Канал обновлений
 
@@ -53,7 +52,7 @@ resource "yandex_kubernetes_cluster" "vmalert" {
 }
 
 # Группа узлов для Kubernetes-кластера
-resource "yandex_kubernetes_node_group" "k8s-node-group" {
+resource "yandex_kubernetes_node_group" "k8s_node_group" {
   description = "Node group for the Managed Service for Kubernetes cluster"
   name        = "k8s-node-group"
   cluster_id  = yandex_kubernetes_cluster.vmalert.id
@@ -69,9 +68,9 @@ resource "yandex_kubernetes_node_group" "k8s-node-group" {
 
   allocation_policy {
     # Распределение нод по зонам отказоустойчивости
-    location { zone = yandex_vpc_subnet.vmalert-b.zone }
-    location { zone = yandex_vpc_subnet.vmalert-d.zone }
-    location { zone = yandex_vpc_subnet.vmalert-e.zone }
+    location { zone = local.subnet_b_zone }
+    location { zone = local.subnet_d_zone }
+    location { zone = local.subnet_e_zone }
   }
 
   instance_template {
@@ -86,16 +85,16 @@ resource "yandex_kubernetes_node_group" "k8s-node-group" {
     network_interface {
       nat = false # Публичные IP на нодах выключены; исходящий трафик через NAT-шлюз (см. net.tf)
       subnet_ids = [
-        yandex_vpc_subnet.vmalert-b.id,
-        yandex_vpc_subnet.vmalert-d.id,
-        yandex_vpc_subnet.vmalert-e.id
+        local.subnet_b_id,
+        local.subnet_d_id,
+        local.subnet_e_id
       ]
     }
 
     resources {
       # 8 vCPU / 8GB на ноду. Bottleneck по памяти (requests RAM на ноде ~99% при 64Mi/app),
       # снимается снижением request app до 32Mi + scale до 16 нод.
-      cores  = 4  # vCPU # уменьшить
+      cores  = 4 # vCPU # уменьшить
       memory = 8 # ГБ # уменьшить
     }
 
@@ -129,7 +128,7 @@ resource "helm_release" "ingress_nginx" {
 
   depends_on = [
     yandex_kubernetes_cluster.vmalert,
-    yandex_kubernetes_node_group.k8s-node-group,
+    yandex_kubernetes_node_group.k8s_node_group,
     time_sleep.wait_lb_release,
   ]
 
@@ -137,7 +136,7 @@ resource "helm_release" "ingress_nginx" {
     yamlencode({
       controller = {
         service = {
-          loadBalancerIP = yandex_vpc_address.addr.external_ipv4_address[0].address
+          loadBalancerIP = local.ingress_public_ip
         }
         config = {
           log-format-escape-json = "true"
@@ -154,4 +153,24 @@ resource "helm_release" "ingress_nginx" {
 # Вывод команды для получения kubeconfig
 output "k8s_cluster_credentials_command" {
   value = "yc managed-kubernetes cluster get-credentials --id ${yandex_kubernetes_cluster.vmalert.id} --external --force"
+}
+
+output "ingress_public_ip" {
+  description = "External ingress-nginx IP"
+  value       = local.ingress_public_ip
+}
+
+output "grafana_url" {
+  description = "URL Grafana (сформирован через sslip.io из публичного IP балансировщика ingress-nginx)"
+  value       = "http://grafana.${local.ingress_public_ip}.sslip.io"
+}
+
+output "vmselect_url" {
+  description = "URL vmselect / VictoriaMetrics query API (сформирован через sslip.io из публичного IP балансировщика ingress-nginx)"
+  value       = "http://vmselect.${local.ingress_public_ip}.sslip.io"
+}
+
+output "victorialogs_url" {
+  description = "URL VictoriaLogs (сформирован через sslip.io из публичного IP балансировщика ingress-nginx)"
+  value       = "http://victorialogs.${local.ingress_public_ip}.sslip.io"
 }
