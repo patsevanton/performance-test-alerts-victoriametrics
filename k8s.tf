@@ -135,6 +135,11 @@ resource "helm_release" "ingress_nginx" {
   values = [
     yamlencode({
       controller = {
+        replicaCount = 2
+        podDisruptionBudget = {
+          enabled      = true
+          minAvailable = 1
+        }
         service = {
           loadBalancerIP = local.ingress_public_ip
         }

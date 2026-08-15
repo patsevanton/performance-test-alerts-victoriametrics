@@ -21,7 +21,7 @@
       одни цели → дубликаты семплов схлопываются через `dedup.minScrapeInterval: 20s`
       (= дефолт chart'а `vmagent.spec.scrapeInterval`) в `vmstorage` и `vmselect`.
 - [x] **#12 `replicationFactor: 2` → 3.** Установлен `replicationFactor: 3` (равен числу vmstorage).
-- [ ] **#13 PDB для ingress-nginx controller (высокий приоритет).** Проверить, что `controller.replicaCount >= 2`
+- [x] **#13 PDB для ingress-nginx controller (высокий приоритет).** Проверить, что `controller.replicaCount >= 2`
       и есть PDB (в `helm_release.ingress_nginx` set-параметры).
 
 ## chart/values.yaml (golden-signal-app)
