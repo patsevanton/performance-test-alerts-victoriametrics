@@ -3,18 +3,6 @@
 Список задач по повышению отказоустойчивости стенда VictoriaMetrics в Yandex Managed K8s.
 Порядок — по приоритету реализации. Чекбокс `[x]` означает выполнено.
 
-## Инфраструктура (Terraform)
-
-- [ ] **#1 Региональный master (multi-zone).** Сейчас `master.zonal` в одной зоне `ru-central1-e` (`k8s.tf:32-35`).
-      Падение зоны = потеря API server. Перевести на региональный кластер (master в 3 зонах).
-- [ ] **#2 Убрать preemptible-ноды.** `scheduling_policy.preemptible = true` (`k8s.tf:77-79`).
-      Preemptible-ноды отзываются в любой момент — прямой риск для устойчивости data plane.
-      Заменить на обычные ноды (компромисс по стоимости).
-- [ ] **#3 NAT-шлюз в одной зоне (SPOF egress).** `yandex_vpc_address.nat` привязан к `ru-central1-e` (`net.tf:34`).
-      Падение зоны = потеря исходящего трафика. Рассмотреть multi-AZ NAT или принять как компромисс.
-- [ ] **#4 `network-ssd` для boot disk.** Сейчас `network-hdd` (`k8s.tf:98`).
-      network-ssd даст предсказуемый I/O под storage-подами vmstorage.
-
 ## Helm-values — vmks-values.yaml
 
 - [x] **#5 PDB для vmstorage (3 реплики, minAvailable: 2).** Готово.
