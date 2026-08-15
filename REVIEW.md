@@ -7,15 +7,6 @@
 
 ## Неточности средней тяжести
 
-9. **`vmks-values.yaml` отсутствует блок `defaultRules.groups`** из AGENTS.md (правила для Yandex Managed K8s). Согласно `AGENTS.md`, при установке vmks в Yandex Managed K8s должны быть отключены scrape-job и recording-правила для kube-controller-manager, kube-scheduler, kube-etcd. В `vmks-values.yaml` этого нет, хотя кластер в `k8s.tf` — Yandex Managed K8s. Это прямое нарушение инфраструктурных правил из AGENTS.md:
-   - `defaultRules.groups.etcd.enabled: false` — отсутствует
-   - `defaultRules.groups.kubernetes-system-scheduler.enabled: false` — отсутствует
-   - `defaultRules.groups.kubernetes-system-controller-manager.enabled: false` — отсутствует
-   - `defaultRules.groups.kube-scheduler.rules.enabled: false` — отсутствует
-   - `kubeControllerManager.enabled: false` — отсутствует
-   - `kubeScheduler.enabled: false` — отсутствует
-   - `kubeEtcd.enabled: false` — отсутствует
-
 10. **`vmks-values.yaml:191-192` — `vmalert.spec.evaluationInterval: "1m"`.** В README `README.md:366` утверждается `interval 30s` («при interval 30 s»). Но в values стоит `1m`. Несоответствие между README и конфигом.
 
 11. **`vmks-values.yaml:68-71, 106-108` — комментарий про `dedup.minScrapeInterval: 20s`.** Сказано «20s = дефолт chart'а vmagent.spec.scrapeInterval». Действительно, в `charts/victoria-metrics-k8s-stack/values.yaml:1981` `scrapeInterval: 20s`. Но в `vmks-values.yaml` `vmagent.spec.scrapeInterval` не переопределён — значит дефолт 20s. Комментарий корректен, но это хрупкая связь: если кто-то переопределит `scrapeInterval`, нужно не забыть поменять `dedup.minScrapeInterval` в двух местах. Не ошибка, но стоит отметить.
