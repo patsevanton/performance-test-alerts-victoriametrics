@@ -31,11 +31,11 @@ resource "yandex_vpc_subnet" "vmalert-e" {
 resource "yandex_vpc_address" "nat" {
   name = "nat-pip"
   external_ipv4_address {
-    zone_id = yandex_vpc_subnet.vmalert-e.zone
+    zone_id = yandex_vpc_subnet.vmalert-b.zone
   }
 }
 
-# NAT-шлюз в зоне "ru-central1-e" для исходящего трафика из приватных подсетей
+# NAT-шлюз в зоне "ru-central1-b" для исходящего трафика из приватных подсетей
 resource "yandex_vpc_gateway" "nat" {
   name = "nat-gw"
   shared_egress_gateway {}
