@@ -3,8 +3,11 @@
 
 Запускается ОДИН раз в начале теста (параллельно с scripts/deploy-apps.sh). Скрипт
 опрашивает `count(ALERTS)` каждые POLL_INTERVAL секунд и, как только значение
-пересекает очередной порог из TARGETS (500, 5000, ..., 50000), фиксирует снимок всех
-метрик из QUERIES через instant-запрос с `time=now`.
+пересекает очередной порог из TARGETS (500, 5000, ..., 67500), фиксирует снимок всех
+метрик из QUERIES через instant-запрос с `time=now`. Последний порог равен
+TARGET_APPS*ALERTS_PER_APP, поэтому скрипт собирает снимки вплоть до завершения
+деплоя всех приложений, а не выходит раньше на промежуточном пороге. После каждого
+снимка скрипт выдерживает MIN_SNAPSHOT_GAP секунд, чтобы rate-метрики устаканились.
 
 Скрипт ожидает достижения всех порогов бесконечно; для досрочной остановки нажмите
 Ctrl-C — будут выгружены снимки, собранные к этому моменту.
@@ -19,6 +22,8 @@ Ctrl-C — будут выгружены снимки, собранные к э�
   ALERTS_PER_APP    по умолчанию 50   — алертов на одно приложение
   BASE_ALERTS_COUNT по умолчанию 10   — базовых алертов на приложение (информационно)
   POLL_INTERVAL     по умолчанию 10   — секунды между опросами count(ALERTS)
+  MIN_SNAPSHOT_GAP  по умолчанию 120  — минимальная пауза (с) между снимками,
+                    чтобы rate-метрики успели устаканиться после фиксации порога
   VMSELECT_URL      по умолчанию берётся из `terraform output -raw vmselect_url`
                     (FQDN формируется через sslip.io из публичного IP ingress-nginx).
 """
@@ -67,13 +72,23 @@ def _resolve_base() -> str:
 BASE = _resolve_base()
 
 # Пороги (count(ALERTS)), при достижении которых фиксируется снимок.
-TARGETS = [500, 5000, 10000, 15000, 20000, 25000, 30000, 35000, 40000, 45000, 50000]
+# Последний порог равен ожидаемому максимуму алертов (TARGET_APPS*ALERTS_PER_APP),
+# чтобы скрипт продолжал сбор до фактического завершения деплоя всех приложений,
+# а не выходил раньше на промежуточном пороге.
+TARGETS = [500, 5000, 10000, 15000, 20000, 25000, 30000, 35000,
+           40000, 45000, 50000, 55000, 60000, 65000, 67500]
 
 # Параметры деплоя (значения по умолчанию из scripts/deploy-apps.sh).
 TARGET_APPS = int(os.environ.get("TARGET_APPS", "1350"))
 ALERTS_PER_APP = int(os.environ.get("ALERTS_PER_APP", "50"))
 BASE_ALERTS_COUNT = int(os.environ.get("BASE_ALERTS_COUNT", "10"))
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "10"))
+# Минимальная пауза (с) между фиксацией снимков. После снятия снимка скрипт
+# выжидает это время перед продолжением опроса, чтобы rate-метрики (CPU, RPS,
+# p99, vmalert_iteration_duration) успели устаканиться и не отражать скачок
+# от отставания vmalert. Иначе при быстром прохождении подряд идущих порогов
+# (например 35k→50k за минуту) снимки дублируют друг друга по значениям.
+MIN_SNAPSHOT_GAP = int(os.environ.get("MIN_SNAPSHOT_GAP", "120"))
 
 EXPECTED_MAX_ALERTS = TARGET_APPS * ALERTS_PER_APP
 
@@ -317,6 +332,12 @@ def main() -> None:
             snapshots.append(snap)
             print(f"[{fmt_rel(rel)}] captured snapshot for ALERTS~{target} (measured={int(count_val)})")
             next_idx += 1
+            # Даём rate-метрикам устаканиться после снятия снимка, чтобы
+            # следующий порог не зафиксировал «скачок» vmalert.
+            if next_idx < len(TARGETS) and MIN_SNAPSHOT_GAP > 0:
+                print(f"[{fmt_rel(rel)}] waiting {MIN_SNAPSHOT_GAP}s before next target "
+                      f"({TARGETS[next_idx]}) to let rate metrics settle")
+                time.sleep(MIN_SNAPSHOT_GAP)
             continue
 
         time.sleep(POLL_INTERVAL)
