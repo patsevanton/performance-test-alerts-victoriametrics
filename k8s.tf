@@ -174,8 +174,3 @@ output "vmselect_url" {
   description = "URL vmselect / VictoriaMetrics query API (сформирован через sslip.io из публичного IP балансировщика ingress-nginx)"
   value       = "http://vmselect.${local.ingress_public_ip}.sslip.io"
 }
-
-output "victorialogs_url" {
-  description = "URL VictoriaLogs (сформирован через sslip.io из публичного IP балансировщика ingress-nginx)"
-  value       = "http://victorialogs.${local.ingress_public_ip}.sslip.io"
-}

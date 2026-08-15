@@ -44,4 +44,3 @@ scripts/app-names.txt
 
 # Values генерируются из *.tftpl через terraform (monitoring.tf)
 vmks-values.yaml
-victoria-logs-cluster-values.yaml

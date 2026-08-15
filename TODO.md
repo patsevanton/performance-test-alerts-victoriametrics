@@ -45,6 +45,3 @@
 
 - `victoria-metrics-operator` (1 реплика) — SPOF, но допустимо: при падении не влияет
   на уже запущенные поды, только на reconcile новых изменений.
-- [ ] **#15 Удалить victoria-logs-cluster и victoria-logs-collector.** Удалить все упоминания
-      и использование `victoria-logs-cluster` / `victoria-logs-collector` из репозитория
-      (Helm values, Terraform, скрипты, документация).

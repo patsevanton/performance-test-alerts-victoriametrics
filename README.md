@@ -39,42 +39,6 @@ helm upgrade --install vmks oci://ghcr.io/victoriametrics/helm-charts/victoria-m
 kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | base64 --decode; echo
 ```
 
-### VictoriaLogs
-
-[VictoriaLogs](https://docs.victoriametrics.com/victorialogs/) — хранилище логов с поддержкой LogsQL.
-
-**Требование:** VictoriaMetrics K8s Stack установлен первым (CRD VMServiceScrape).
-
-**1. VictoriaLogs cluster (vlselect, vlinsert, vlstorage):**
-
-```bash
-helm upgrade --install victoria-logs-cluster oci://ghcr.io/victoriametrics/helm-charts/victoria-logs-cluster \
-  --namespace victoria-logs-cluster \
-  --create-namespace \
-  --version 0.2.8 \
-  --wait \
-  --timeout 15m \
-  -f victoria-logs-cluster-values.yaml
-```
-
-Исходный код файла [victoria-logs-cluster-values.yaml.tftpl](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/victoria-logs-cluster-values.yaml.tftpl).
-
-Проверка: `kubectl get pods -n victoria-logs-cluster`. Ingress для vlselect: `terraform output victorialogs_url` (FQDN через sslip.io из публичного IP ingress-nginx).
-
-**2. Victoria-logs-collector (сбор логов с подов кластера):**
-
-```bash
-helm upgrade --install victoria-logs-collector oci://ghcr.io/victoriametrics/helm-charts/victoria-logs-collector \
-  --namespace victoria-logs-collector \
-  --create-namespace \
-  --version 0.3.7 \
-  --wait \
-  --timeout 15m \
-  -f victoria-logs-collector-values.yaml
-```
-
-Исходный код файла [victoria-logs-collector-values.yaml](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/victoria-logs-collector-values.yaml).
-
 ### Развёртывание 1350 приложений для генерации метрик и алертов
 
 Для нагрузочного тестирования VictoriaMetrics можно развернуть 1350 экземпляров приложения Golden Signal App. Каждый экземпляр:

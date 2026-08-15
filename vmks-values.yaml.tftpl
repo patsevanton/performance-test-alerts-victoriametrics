@@ -58,7 +58,7 @@ vmcluster:
             resources:
               requests:
                 storage: 20Gi
-      # Поиск выполняется на vmstorage; дефолт maxConcurrentRequests=2 даёт 503 «couldn't start executing in 10s»
+      # Поиск выполняется на vmstorage; дефолт maxConcurrentRequests=2 даёт 429 «couldn't start executing in 10s»
       # при параллельных запросах от vmselect/vmalert (см. также vmselect.extraArgs).
       extraArgs:
         search.maxConcurrentRequests: "32"
