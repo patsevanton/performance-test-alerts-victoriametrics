@@ -105,7 +105,7 @@ helm upgrade --install victoria-logs-collector oci://ghcr.io/victoriametrics/hel
 
 ```bash
 cd scripts
-./generate-app-names.sh 1000
+./generate-app-names.sh 1350
 ```
 
 #### Шаг 2: Развёртывание приложений
