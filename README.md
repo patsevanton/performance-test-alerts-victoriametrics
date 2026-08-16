@@ -38,7 +38,7 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 Топология стека (из `vmks-values.yaml.tftpl`):
 
 - `vmcluster` с `replicationFactor: 3` и тремя `vmstorage` (по 20 Gi `yc-network-ssd`, PDB `minAvailable: 2`, `topologySpreadConstraints` по зонам);
-- три `vmselect` (PDB `minAvailable: 2`, fan-out по зонам);
+- три `vmselect` (PDB `minAvailable: 2`, каждый запрос расходится параллельно по `vmstorage` во всех зонах);
 - два `vminsert` и два `vmagent` (HA-репликация скрейпинга, `dedup.minScrapeInterval: 20s`);
 - два `vmalert` (`evaluationInterval: 1m`, PDB `minAvailable: 1`);
 - два `alertmanager` в кластерном режиме с persistence для silences;
@@ -172,7 +172,7 @@ Reconcile-цикл operator'а (порядка 60 с) собирает все `V
 | ~50000        | 509m    | 458m      | 288m     | 48m      | 250m    | 135m     |
 | ~50000 + 1h   | 277m    | 272m      | 196m     | 44m      | 240m    | 32m      |
 
-Рост CPU сосредоточен в `vmalert` и `vmstorage` — именно они выполняют оценку правил и fan-out запросы при restore/eval. `vminsert` остаётся низким: трафик remote-write — это преимущественно запись `ALERTS`/`ALERTS_FOR_STATE`, и он не масштабируется линейно с числом правил. `operator` растёт умеренно, его вклад — reconcile `VMRule` и пересборка ConfigMap.
+Рост CPU сосредоточен в `vmalert` и `vmstorage` — именно они выполняют оценку правил и порождают множество параллельных подзапросов к `vmstorage` при restore/eval. `vminsert` остаётся низким: трафик remote-write — это преимущественно запись `ALERTS`/`ALERTS_FOR_STATE`, и он не масштабируется линейно с числом правил. `operator` растёт умеренно, его вклад — reconcile `VMRule` и пересборка ConfigMap.
 
 ### Memory (в среднем на pod)
 

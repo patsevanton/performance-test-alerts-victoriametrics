@@ -19,7 +19,7 @@ defaultDatasources:
         jsonData:
           httpMethod: POST
           queryTimeout: 300s
-          # Снижает число точек на панель и нагрузку fan-out на backend на широких диапазонах.
+          # Снижает число точек на панель и нагрузку параллельных подзапросов к backend на широких диапазонах.
           timeInterval: 30s
 
 defaultRules:
@@ -136,7 +136,7 @@ vmcluster:
         # Дедупликация (согласовано с vmstorage.extraArgs.dedup.minScrapeInterval).
         # 20s = vmagent.spec.scrapeInterval (явно зафиксирован в этом файле).
         dedup.minScrapeInterval: 20s
-      # 4Gi давало OOMKilled (Exit 137) при тяжёлых fan-out запросах vmalert
+      # 4Gi давало OOMKilled (Exit 137) при тяжёлых параллельных подзапросах vmalert к vmstorage
       # (sum(increase(vmalert_alerting_rules_errors_total[5m])) without(id) > 0 —
       # десятки параллельных запросов по каждому app-N держат промежуточные ряды в памяти).
       resources:
