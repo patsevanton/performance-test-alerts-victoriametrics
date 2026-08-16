@@ -110,9 +110,12 @@ vmcluster:
     vmselect:
       useDefaultResources: false
       priorityClassName: vmks-critical
-      replicaCount: 3
+      # Масштабируем под 50000 ALERTS: на 3 репликах при ~45000 начиналось насыщение
+      # (vm_concurrent_select_limit_reached_total > 0). 6 реплик × 32 concurrent = 192
+      # параллельных select вместо 96 — запас под пик от vmalert (restore ALERTS_FOR_STATE + eval).
+      replicaCount: 6
       podDisruptionBudget:
-        minAvailable: 2
+        minAvailable: 4
       # Распределяем 3 реплики по зонам (vmselect stateless, но запросы
       # расходятся по всем storage-нодам — изолируем AZ для устойчивости).
       topologySpreadConstraints:
