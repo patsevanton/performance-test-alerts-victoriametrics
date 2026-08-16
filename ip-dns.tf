@@ -3,7 +3,7 @@ resource "yandex_vpc_address" "addr" {
   name = "vmalert-pip" # Имя ресурса внешнего IP-адреса
 
   external_ipv4_address {
-    zone_id = local.subnet_e_zone # Зона доступности, где будет выделен IP-адрес
+    zone_id = local.subnet_d_zone # Зона доступности, где будет выделен IP-адрес
   }
 }
 
