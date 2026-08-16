@@ -129,8 +129,7 @@ python3 scripts/fetch_capacity_snapshots.py
 ### Хранение правил в ConfigMap'ах
 
 
-TODO: надо уточнить размер ConfigMap в последних версиях victoria-metrics
-`victoria-metrics-operator` собирает все `VMRule` из подходящих namespace'ов в ConfigMap'ы с префиксом `rulefiles`. Kubernetes ограничивает размер ConfigMap ~1 MiB, поэтому при росте количества правил operator дробит их на несколько объектов:
+`victoria-metrics-operator` собирает все `VMRule` из подходящих namespace'ов и упаковывает в ConfigMap'ы вида `vm-<vmalert-name>-rulefiles-<i>`:
 
 ```
 vm-vmks-victoria-metrics-k8s-stack-rulefiles-0
@@ -138,7 +137,15 @@ vm-vmks-victoria-metrics-k8s-stack-rulefiles-1
 ...
 ```
 
-Reconcile-цикл operator'а (порядка 60 с) собирает все `VMRule`, упаковывает в `rulefiles-0`, при превышении лимита разбивает на несколько ConfigMap. `vmalert` монтирует эти ConfigMap как `volume`/`volumeMount`. Появление нового ConfigMap с правилами меняет спецификацию Pod'а `vmalert`, и operator пересоздаёт Pod (rolling restart). Если число ConfigMap'ов не меняется, обновления правил подхватываются через SIGHUP без рестарта. Таким образом, при массовом поэтапном apply новые ConfigMap могут вызывать пересоздание Pod'а `vmalert`, и для будущих изменений стоит использовать батчи или GitOps с контролируемым темпом.
+Размер одного объекта жёстко ограничен Kubernetes — 1 MiB (`The data stored in a ConfigMap cannot exceed 1 MiB`). Operator не заполняет бакеты под самый лимит: он хранит правила gzip-сжатыми (ключ `rules.yaml` в `binaryData`) и режет их по внутреннему бюджету `ConfigDataBudgetBytes`, который по умолчанию равен 524 288 байт (512 KiB) — это даёт ~50% запас под JSON-метаданные объекта и возможные инъекции меток/аннотаций (например, от Kyverno). Бюджет можно менять через env `VM_CONFIG_DATA_BUDGET_BYTES`. При превышении бюджета `build.PackItems` рекурсивно делит группы на бакеты, дополнительно `packRuleGroups` гарантирует, что внутри одного бакета нет групп с одинаковым именем (требование vmalert):
+
+```
+vm-vmks-victoria-metrics-k8s-stack-rulefiles-0
+vm-vmks-victoria-metrics-k8s-stack-rulefiles-1
+...
+```
+
+Reconcile-цикл operator'а (порядка 60 с) собирает все `VMRule`, упаковывает в `vm-...-rulefiles-0`, при превышении `ConfigDataBudgetBytes` (по умолчанию 512 KiB сжатых данных) разбивает на несколько ConfigMap. `vmalert` монтирует эти ConfigMap как `volume`/`volumeMount`. Появление нового ConfigMap с правилами меняет спецификацию Pod'а `vmalert`, и operator пересоздаёт Pod (rolling restart). Если число ConfigMap'ов не меняется, обновления правил подхватываются через SIGHUP без рестарта. Таким образом, при массовом поэтапном apply новые ConfigMap могут вызывать пересоздание Pod'а `vmalert`, и для будущих изменений стоит использовать батчи или GitOps с контролируемым темпом.
 
 ### Сохранение состояния: remoteRead/remoteWrite и ALERTS_FOR_STATE
 
@@ -335,7 +342,7 @@ Grafana доступна по адресу `http://grafana.<ingress_public_ip>.s
 
 <!-- TODO: уточнить происхождение значения 6.8 req/s на 1000 ALERTS (отличается от 12.6 выше; возможно, рассчитан по другому срезу vm_http_requests_total или по снимку +1h) -->
 
-- **Поведение `VMRule`/ConfigMap стабильно:** `operator` предсказуемо дробит правила около лимита ~1 MiB; при росте количества правил число `rulefiles-*` ConfigMap растёт ступенчато. При массовом поэтапном apply новые ConfigMap могут вызывать пересоздание Pod'а `vmalert`, поэтому для будущих изменений стоит использовать батчи или GitOps с контролируемым темпом.
+- **Поведение `VMRule`/ConfigMap стабильно:** `operator` предсказуемо дробит правила около `ConfigDataBudgetBytes` (по умолчанию 512 KiB сжатых данных, при хард-лимите K8s 1 MiB); при росте количества правил число `vm-...-rulefiles-*` ConfigMap растёт ступенчато. При массовом поэтапном apply новые ConfigMap могут вызывать пересоздание Pod'а `vmalert`, поэтому для будущих изменений стоит использовать батчи или GitOps с контролируемым темпом.
 
 ## Итог
 
