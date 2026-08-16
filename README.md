@@ -77,7 +77,7 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 
 При `APP_TENANTS=50`, `APP_ROUTES=10`, 5 method, 5 endpoint, 5 status_code, 3 region, 1 version число рядов на `app_requests_total` ≈ 50 × 10 × 5 × 5 × 5 × 3 × 1 = **18 750 на приложение**. При 1700 приложениях — ~25 млн рядов только по одному counter'у. Это «очень высокая» ступень; для отладки предусмотрена «средняя» (`APP_TENANTS=5`, `APP_ROUTES=5`).
 
-Передавать параметры кардинальности при деплое можно через env в `scripts/deploy-apps.sh` (см. 5.1) или напрямую `--set app.cardinality.tenants=5,app.cardinality.routes=5`.
+Передавать параметры кардинальности при деплое можно через env в `scripts/deploy_and_snapshot.py` (см. 5.1) или напрямую `--set app.cardinality.tenants=5,app.cardinality.routes=5`.
 
 ### Профиль правил
 
@@ -132,11 +132,24 @@ kubectl apply -f priority-class.yaml
 scripts/generate-app-names.sh 1700
 ```
 
-Шаг 2 — развёртывание. Каждый app устанавливается как отдельный Helm release в отдельный namespace (имя namespace = имя приложения):
+Шаг 2 — развёртывание и сбор снимков Capacity Planning одним скриптом [`scripts/deploy_and_snapshot.py`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/scripts/deploy_and_snapshot.py). Каждый app устанавливается как отдельный Helm release в отдельный namespace (имя namespace = имя приложения) через `helm upgrade --install --wait` с ретраями до 3 раз при ошибке. Скрипт совмещает деплой и снятие метрик:
 
 ```bash
-scripts/deploy-apps.sh
+python3 scripts/deploy_and_snapshot.py
 ```
+
+Логика работы:
+
+- Читает `app-names.txt`, формирует список `apps[START_INDEX-1 : START_INDEX-1+TARGET_APPS]`.
+- Устанавливает app по одному; счётчик `installed` — это номер завершённого релиза в цикле (детерминирован, не зависит от `kubectl get pod`).
+- Калибрует коэффициент `k` двумя реальными замерами `count(ALERTS)` у vmselect сразу после `helm install` 10-го и 20-го app: `k1 = count(ALERTS) / (10 * ALERTS_PER_APP)`, `k2 = count(ALERTS) / (20 * ALERTS_PER_APP)`, затем `k = (k1 + k2) / 2` (при неудаче одного замера — удвоенный успешный, при неудаче обоих — `k = 1.0`). Замер делается с ретраями до 3 раз с паузой `POLL_INTERVAL` (на 10–20 app алертов ~500–1000, таймаутов vmselect нет).
+- После app-20 оценивает число алертов как `installed * ALERTS_PER_APP * k` и больше не запрашивает `count(ALERTS)`. Непрерывный опрос `count(ALERTS)` намеренно удалён: на росте числа алертов он упирается в таймауты vmselect (120 с) из-за перегрузки vmstorage/vmselect оценкой ~1700 VMRule и ingestion'ом `ALERTS`/`ALERTS_FOR_STATE`.
+- При `alerts_count >= TARGETS[next_idx]` делает instant-запрос всех метрик из `QUERIES` через Prometheus API vmselect (CPU, память подов `vmks`, нагрузка на `kube-apiserver`, `vm_http_requests_total` компонент, `vmalert_iteration_duration_seconds`, `vm_concurrent_select_current`, `scrape_samples_scraped`) через `ThreadPoolExecutor(max_workers=16)`. В снимок записываются `alerts_count`, `alerts_count_estimated=True`, `k`, `installed`.
+- Пороги `< 20 * ALERTS_PER_APP` (в текущих `TARGETS` это 500) фиксируются ретроспективно на момент app-20 с пометкой `retrospective=True`.
+- После последнего порога выжидает `SETTLE_WAIT` (по умолчанию 600 с) и делает финальный снимок «после через 10 мин установки N app».
+- `MIN_SNAPSHOT_GAP` сохранён как env для совместимости, но при `--wait` не применяется (деплой блокирует цикл естественным образом).
+
+Результаты — `capacity_snapshots.json` (сырые значения + поле `calibration` с `k1`/`k2`/`k`) и `capacity_snapshots.txt` (форматированная таблица). Пороги скрипта: 500, 5000, 10000, 15000, 20000, 25000, 30000, 35000, 40000, 45000, 50000, 55000, 60000, 65000, 67500 (последний равен `TARGET_APPS * ALERTS_PER_APP`). Скрипт использует только стандартную библиотеку Python 3. Для досрочной остановки — Ctrl-C, будут выгружены собранные снимки.
 
 Шаг 3 — проверка статуса (число Helm releases, статусы Pod'ов, потребление ресурсов, количество `VMRule` и `VMServiceScrape`):
 
@@ -149,16 +162,6 @@ scripts/status-apps.sh
 ```bash
 scripts/delete-apps.sh
 ```
-
-### Сбор снимков Capacity Planning
-
-Чтобы зафиксировать загрузку при прохождении порогов `count(ALERTS)` (~500, 5000, ... 50 000), снимки собираются скриптом [`scripts/fetch_capacity_snapshots.py`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/scripts/fetch_capacity_snapshots.py). Скрипт опрашивает `count(ALERTS)` каждые `POLL_INTERVAL` секунд, и при достижении очередного порога делает instant-запрос всех метрик из `QUERIES` через Prometheus API vmselect (CPU, память подов `vmks`, нагрузка на `kube-apiserver`, `vm_http_requests_total` компонент, `vmalert_iteration_duration_seconds`, `vm_concurrent_select_current`, `scrape_samples_scraped`). После каждого снимка выдерживается `MIN_SNAPSHOT_GAP` (по умолчанию 120 с), чтобы rate-метрики устаканились. Скрипт использует только стандартную библиотеку Python 3:
-
-```bash
-python3 scripts/fetch_capacity_snapshots.py
-```
-
-Результаты — `capacity_snapshots.json` (сырые значения) и `capacity_snapshots.txt` (форматированная таблица). Пороги скрипта: 500, 5000, 10000, 15000, 20000, 25000, 30000, 35000, 40000, 45000, 50000, 55000, 60000, 65000, 67500 (последний равен `TARGET_APPS * ALERTS_PER_APP`).
 
 ## Как устроены оценка правил и восстановление состояния
 
@@ -340,7 +343,7 @@ Grafana доступна по адресу `http://grafana.<ingress_public_ip>.s
 
 ## Важная оговорка: структура выражений и интерпретация результатов
 
-Тяжёлая часть (высококардинальные метрики и 20 тяжёлых `ExtraAlert0xx`) **всегда активна** — отдельного «второго режима» нет. Параметризация кардинальности через `app.cardinality.*` в [`chart/values.yaml`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chart/values.yaml) или env в `scripts/deploy-apps.sh` (`APP_TENANTS`, `APP_ROUTES`, `APP_HIST_BUCKETS`, `APP_REGION`, `APP_VERSION`); число тяжёлых правил — `alerts.extra.count` (по умолчанию 40, из них 20 тяжёлых). Для отладки на малом числе приложений используйте «среднюю» ступень: `--set app.cardinality.tenants=5,app.cardinality.routes=5`.
+Тяжёлая часть (высококардинальные метрики и 20 тяжёлых `ExtraAlert0xx`) **всегда активна** — отдельного «второго режима» нет. Параметризация кардинальности через `app.cardinality.*` в [`chart/values.yaml`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chart/values.yaml) или env в `scripts/deploy_and_snapshot.py` (`APP_TENANTS`, `APP_ROUTES`, `APP_HIST_BUCKETS`, `APP_REGION`, `APP_VERSION`); число тяжёлых правил — `alerts.extra.count` (по умолчанию 40, из них 20 тяжёлых). Для отладки на малом числе приложений используйте «среднюю» ступень: `--set app.cardinality.tenants=5,app.cardinality.routes=5`.
 
 Все 67 500 правил построены по единому шаблону — прямое сравнение результата PromQL-выражения с порогом (`expr > N`). В шаблоне чарта ([`chart/templates/vmrule.yaml`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chart/templates/vmrule.yaml)) 20 из 40 `ExtraAlert0xx` используют тяжёлые классы PromQL: subqueries (`[5m:1m]`), joins (`group_left`/`on(...)`), `label_join`/`label_replace`, `histogram_quantile` по высококардинальной оси (`sum by (le, tenant_id, route[, status_code])`), `quantile_over_time`/`stddev_over_time`/`predict_linear`. Распределение функций по правилам:
 
