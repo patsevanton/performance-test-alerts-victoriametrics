@@ -46,7 +46,7 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 
 ## Что генерирует нагрузку
 
-Нагрузка — 1700 экземпляров приложения Golden Signal App, каждый в своём namespace как отдельный Helm release. Приложение ([`app/main.go`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/app/main.go)) экспонирует метрики через `prometheus/client_golang`. Кардинальность метрик и тяжёлые классы PromQL всегда активны (отдельного «режима 2» нет), параметризуются через `app.cardinality.*` и `alerts.extra.count` в [`chart/values.yaml`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chart/values.yaml).
+Нагрузка — 1700 экземпляров приложения Golden Signal App, каждый в своём namespace как отдельный Helm release. Приложение ([`app/main.go`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/app/main.go)) экспонирует метрики через `prometheus/client_golang`. Тяжёлые алерты на кардинальные метрики PromQL всегда активны, параметризуются через `app.cardinality.*` и `alerts.extra.count` в [`chart/values.yaml`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chart/values.yaml).
 
 ### Метрики и лейбл-пространства
 
