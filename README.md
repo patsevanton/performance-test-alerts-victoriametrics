@@ -32,7 +32,7 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 Топология стека (из `vmks-values.yaml.tftpl`):
 
 - `vmcluster` с `replicationFactor: 3` и тремя `vmstorage` (по 20 Gi `yc-network-ssd`, PDB `minAvailable: 2`, `topologySpreadConstraints` по зонам);
-- три `vmselect` (PDB `minAvailable: 2`, каждый запрос расходится параллельно по `vmstorage` во всех зонах);
+- шесть `vmselect` (PDB `minAvailable: 4`, каждый запрос расходится параллельно по `vmstorage` во всех зонах);
 - два `vminsert` и два `vmagent` (HA-репликация скрейпинга, `dedup.minScrapeInterval: 20s`);
 - два `vmalert` (`evaluationInterval: 1m`, PDB `minAvailable: 1`);
 - два `alertmanager` в кластерном режиме с persistence для silences;

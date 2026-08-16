@@ -116,7 +116,7 @@ vmcluster:
       replicaCount: 6
       podDisruptionBudget:
         minAvailable: 4
-      # Распределяем 3 реплики по зонам (vmselect stateless, но запросы
+      # Распределяем 6 реплик по зонам (vmselect stateless, но запросы
       # расходятся по всем storage-нодам — изолируем AZ для устойчивости).
       topologySpreadConstraints:
         - maxSkew: 1
