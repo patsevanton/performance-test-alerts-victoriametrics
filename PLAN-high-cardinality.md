@@ -1,19 +1,19 @@
-# План перехода на сложные и высококардинальные метрики
+# План повышения сложности и кардинальности метрик
 
 ## Цель
 
-Добавить второй нагрузочный профиль «сложные алерты на высококардинальных метриках» параллельно существующему профилю «много простых алертов на низкокардинальных метриках», чтобы получить сравнимые ориентиры capacity planning для тяжёлого PromQL.
+Повысить кардинальность существующих метрик (перевести в Vec с лейблами) и добавить немного новых высококардинальных метрик, а часть существующих 40 `ExtraAlert0xx` сделать сложными (subqueries/joins/`label_*`/`quantile_over_time`/`predict_linear`/`topk`), чтобы получить ориентиры capacity planning для тяжёлого PromQL.
 
-Принцип: текущий профиль не ломается, новый включается через `values.yaml`.
+Принцип: текущий профиль эволюционирует на месте — отдельного «второго режима» нет, тяжёлая часть всегда активна и параметризуется через `app.cardinality.*` и `alerts.extra.count` в `values.yaml`.
 
 ## Этап 0. Фиксация рамок
 
-Решить и зафиксировать в `README.md` (раздел «Важная оговорка») параметры нового профиля:
+Зафиксировать в `README.md` (раздел «Важная оговорка») параметры:
 
 - кардинальность на одно приложение (целевое число рядов на метрику);
 - набор лейблов;
-- классы тяжёлых PromQL (subqueries / joins / `label_*` / `quantile_over_time` / `predict_linear` / `topk`);
-- число алертов на приложение в новом профиле;
+- классы тяжёлого PromQL, встраиваемые в существующие `ExtraAlert0xx` (subqueries / joins / `label_*` / `quantile_over_time` / `predict_linear` / `topk`);
+- число алертов на приложение не меняется (50 = 10 базовых + 40 extra);
 - расширять ли `fetch_capacity_snapshots.py` метриками `vm_search_*`, `vm_rows_*`, cache miss.
 
 ## Этап 1. Высококардинальные метрики в `app/main.go`
@@ -61,7 +61,7 @@
 
 ## Этап 2. Сложные алерты в `chart/templates/vmrule.yaml`
 
-Добавить в `values.yaml` блок `alerts.heavy` (`enabled: bool`, `count: int`, `profile: low|medium|high`). При `alerts.heavy.enabled=true` в `VMRule` добавляется группа `<app>-heavy-alerts`.
+Сложные алерты — **не отдельная группа и не отдельный режим**. Классы тяжёлого PromQL (subqueries/joins/`label_*`/`quantile_over_time`/`predict_linear`/`topk`) встраиваются **внутрь существующих 40 `ExtraAlert0xx`** в той же группе `<app>-alerts`, замещая/дополняя часть шаблонов `range` в блоке `alerts.extra`. Отдельная группа `<app>-heavy-alerts` **не создаётся**. Блок `alerts.heavy` в `values.yaml` **не вводится** — используется существующий `alerts.extra.count` (по умолчанию 40). Часть extra-шаблонов теперь ссылается на новые высококардинальные метрики (`app_inflight_requests`, `app_cache_operations_total`, `app_queue_size`, `app_request_duration_seconds`).
 
 ### 2.1. Классы тяжёлых выражений
 
@@ -86,7 +86,7 @@
 
 ## Этап 3. Параметризация в `chart/values.yaml`
 
-Добавить:
+Добавить только блок кардинальности (блок `alerts.heavy` **не вводится** — сложные алерты живут внутри существующего `alerts.extra`):
 
 ```yaml
 app:
@@ -96,11 +96,6 @@ app:
     histBuckets: 50
     region: "ru-central1-b"
     version: "1.6.1"
-alerts:
-  heavy:
-    enabled: false
-    count: 50
-    profile: "high"
 ```
 
 Передавать `tenants`/`routes`/`histBuckets` в Deployment как env-переменные.
@@ -113,15 +108,15 @@ alerts:
 
 ### 5.1. `scripts/deploy-apps.sh`
 
-Добавить режим `HEAVY=1` (передаёт `alerts.heavy.enabled=true` и `app.cardinality.*` через `--set`).
+Режим `HEAVY` **не вводится** — тяжёлая часть всегда активна. Скрипт дополнительно передаёт `app.cardinality.*` через `--set` (tenants/routes/histBuckets) при их задании через env/аргументы. `alerts.heavy.*` не передаётся (блока нет).
 
 ### 5.2. `scripts/generate-app-names.sh`
 
 Без изменений.
 
-### 5.3. `scripts/deploy-apps-heavy.sh`
+### 5.3. Отдельного `scripts/deploy-apps-heavy.sh` не должно быть
 
-Новый (обёртка над `deploy-apps.sh` с предустановленными `--set`) — для воспроизводимости. Записать target: 1700 приложений × 50 тяжёлых алертов = 67 500 правил, но при этом рядов в TSDB на 2–3 порядка больше.
+Отдельный файл-обёртку `scripts/deploy-apps-heavy.sh` **не создавать** — никакого отдельного «тяжёлого режима» нет; сложные алерты и высококардинальные метрики всегда активны и параметризуются через `app.cardinality.*` и `alerts.extra.count` в существующем `scripts/deploy-apps.sh` (см. 5.1). Целевой ориентир: 1700 приложений × 50 алертов = 67 500 правил, но при этом рядов в TSDB на 2–3 порядка больше.
 
 ### 5.4. `scripts/fetch_capacity_snapshots.py`
 
