@@ -9,6 +9,12 @@ TARGET_APPS*ALERTS_PER_APP, поэтому скрипт собирает сни�
 деплоя всех приложений, а не выходит раньше на промежуточном пороге. После каждого
 снимка скрипт выдерживает MIN_SNAPSHOT_GAP секунд, чтобы rate-метрики устаканились.
 
+После достижения последнего порога (67500) скрипт:
+  1) дожидается установки TARGET_APPS приложений (через `kubectl get pod -A | grep app | wc -l`);
+  2) выжидает SETTLE_WAIT секунд (по умолчанию 600 = 10 минут);
+  3) делает дополнительный снимок с меткой
+     «после через 10 мин установки 1700 app».
+
 Скрипт ожидает достижения всех порогов бесконечно; для досрочной остановки нажмите
 Ctrl-C — будут выгружены снимки, собранные к этому моменту.
 
@@ -24,6 +30,8 @@ Ctrl-C — будут выгружены снимки, собранные к э�
   POLL_INTERVAL     по умолчанию 10   — секунды между опросами count(ALERTS)
   MIN_SNAPSHOT_GAP  по умолчанию 120  — минимальная пауза (с) между снимками,
                     чтобы rate-метрики успели устаканиться после фиксации порога
+  SETTLE_WAIT       по умолчанию 600  — пауза (с) после установки TARGET_APPS
+                    app перед финальным снимком «после через 10 мин».
   VMSELECT_URL      по умолчанию берётся из `terraform output -raw vmselect_url`
                     (FQDN формируется через sslip.io из публичного IP ingress-nginx).
   RELEASE_NAME      по умолчанию vmks — имя release, которым установлен чарт
@@ -93,6 +101,10 @@ POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "10"))
 # (например 35k→50k за минуту) снимки дублируют друг друга по значениям.
 MIN_SNAPSHOT_GAP = int(os.environ.get("MIN_SNAPSHOT_GAP", "120"))
 
+# Пауза (с) между подтверждением установки TARGET_APPS app и финальным снимком
+# «после через 10 мин установки 1700 app». По умолчанию 600 = 10 минут.
+SETTLE_WAIT = int(os.environ.get("SETTLE_WAIT", "600"))
+
 EXPECTED_MAX_ALERTS = TARGET_APPS * ALERTS_PER_APP
 
 # Имя release чарта victoria-metrics-k8s-stack (helm install <RELEASE_NAME> ...).
@@ -158,6 +170,32 @@ COUNT_QUERY = "count(ALERTS)"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 JSON_PATH = os.path.join(SCRIPT_DIR, "capacity_snapshots.json")
 TXT_PATH = os.path.join(SCRIPT_DIR, "capacity_snapshots.txt")
+
+# Метка финального снимка «после через 10 мин установки N app».
+SETTLE_LABEL = f"после через 10 мин установки {TARGET_APPS} app"
+
+
+def count_app_pods() -> int:
+    """Число установленных приложений через подсчёт app-подов.
+
+    deploy-apps.sh создаёт один helm release на приложение в одноимённом
+    namespace. Каждый app-под имеет в имени «app» (app-1, app-2, ...), поэтому
+    для подсчёта числа установленных приложений используется
+    `kubectl get pod -A | grep app | wc -l`.
+    """
+    try:
+        out = subprocess.run(
+            "kubectl get pod -A | grep app | wc -l",
+            shell=True, capture_output=True, text=True, timeout=60,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return -1
+    if out.returncode != 0:
+        return -1
+    try:
+        return int(out.stdout.strip())
+    except ValueError:
+        return -1
 
 
 def qval(data: dict) -> float | None:
@@ -240,7 +278,11 @@ def render_table(snapshots: list) -> str:
         ts = snap["timestamp"]
         measured = snap["alerts_count"]
         m = snap["metrics"]
-        lines.append(f"=== ALERTS~{label} (measured={measured}) {rel} ts={ts} ===")
+        if isinstance(label, str):
+            header = f"=== {label} (measured={measured}) {rel} ts={ts} ==="
+        else:
+            header = f"=== ALERTS~{label} (measured={measured}) {rel} ts={ts} ==="
+        lines.append(header)
         lines.append(
             "CPU "
             + " ".join([
@@ -396,6 +438,66 @@ def main() -> None:
     missed = [t for t in TARGETS if t not in {s["threshold"] for s in snapshots}]
     if missed:
         print(f"Thresholds not reached: {missed}", file=sys.stderr)
+
+    # После достижения последнего порога (67500):
+    # 1) ждём установки TARGET_APPS приложений (kubectl get pod -A | grep app | wc -l);
+    # 2) выжидаем SETTLE_WAIT секунд (по умолчанию 10 минут);
+    # 3) делаем финальный снимок «после через 10 мин установки N app».
+    all_targets_reached = not missed and not interrupted["flag"]
+    if all_targets_reached:
+        print(f"\nВсе пороги достигнуты. Ожидаю установки {TARGET_APPS} app "
+              f"(проверяю kubectl get pod -A | grep app | wc -l каждые {POLL_INTERVAL}s)...")
+        wait_start = time.time()
+        while not interrupted["flag"]:
+            installed = count_app_pods()
+            rel = int(time.time() - start_ts)
+            if installed < 0:
+                print(f"[{fmt_rel(rel)}] kubectl get pod недоступен — продолжаю ждать",
+                      file=sys.stderr)
+            else:
+                print(f"[{fmt_rel(rel)}] app pods={installed}/{TARGET_APPS}")
+                if installed >= TARGET_APPS:
+                    break
+            time.sleep(POLL_INTERVAL)
+
+        if not interrupted["flag"]:
+            print(f"\nУстановлено {TARGET_APPS} app. "
+                  f"Жду {SETTLE_WAIT}s ({SETTLE_WAIT // 60} мин) перед финальным снимком...")
+            settle_start = time.time()
+            while not interrupted["flag"]:
+                elapsed = int(time.time() - settle_start)
+                remaining = SETTLE_WAIT - elapsed
+                if remaining <= 0:
+                    break
+                rel = int(time.time() - start_ts)
+                print(f"[{fmt_rel(rel)}] settle wait: {elapsed}s/{SETTLE_WAIT}s "
+                      f"(осталось {remaining}s)")
+                # Печатаем прогресс не чаще раза в минуту.
+                time.sleep(min(60, remaining))
+
+        if not interrupted["flag"]:
+            now = int(time.time())
+            rel = int(now - start_ts)
+            try:
+                count_val = fetch_one(now, COUNT_QUERY)
+            except Exception as e:
+                print(f"[{fmt_rel(rel)}] count(ALERTS) query failed before settle snapshot: {e}",
+                      file=sys.stderr)
+                count_val = None
+            try:
+                metrics = fetch_snapshot(now)
+            except Exception as e:
+                print(f"[{fmt_rel(rel)}] settle snapshot fetch failed: {e}", file=sys.stderr)
+                metrics = {}
+            snap = {
+                "threshold": SETTLE_LABEL,
+                "timestamp": now,
+                "rel_seconds": rel,
+                "alerts_count": int(count_val) if count_val is not None else None,
+                "metrics": metrics,
+            }
+            snapshots.append(snap)
+            print(f"[{fmt_rel(rel)}] captured settle snapshot «{SETTLE_LABEL}»")
 
     write_outputs(snapshots)
     print()
