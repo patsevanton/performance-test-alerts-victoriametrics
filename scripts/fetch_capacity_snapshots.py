@@ -18,7 +18,7 @@ Ctrl-C — будут выгружены снимки, собранные к э�
   - stdout                  : та же таблица
 
 Переменные окружения (значения по умолчанию взяты из scripts/deploy-apps.sh):
-  TARGET_APPS       по умолчанию 1350 — число разворачиваемых приложений
+  TARGET_APPS       по умолчанию 1700 — число разворачиваемых приложений
   ALERTS_PER_APP    по умолчанию 50   — алертов на одно приложение
   BASE_ALERTS_COUNT по умолчанию 10   — базовых алертов на приложение (информационно)
   POLL_INTERVAL     по умолчанию 10   — секунды между опросами count(ALERTS)
@@ -82,7 +82,7 @@ TARGETS = [500, 5000, 10000, 15000, 20000, 25000, 30000, 35000,
            40000, 45000, 50000, 55000, 60000, 65000, 67500]
 
 # Параметры деплоя (значения по умолчанию из scripts/deploy-apps.sh).
-TARGET_APPS = int(os.environ.get("TARGET_APPS", "1350"))
+TARGET_APPS = int(os.environ.get("TARGET_APPS", "1700"))
 ALERTS_PER_APP = int(os.environ.get("ALERTS_PER_APP", "50"))
 BASE_ALERTS_COUNT = int(os.environ.get("BASE_ALERTS_COUNT", "10"))
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "10"))

@@ -12,7 +12,7 @@ ALERTS_PER_APP="${ALERTS_PER_APP:-50}"
 BASE_ALERTS_COUNT="${BASE_ALERTS_COUNT:-10}"
 
 START_INDEX="${START_INDEX:-1}"
-TARGET_APPS="${TARGET_APPS:-1350}"
+TARGET_APPS="${TARGET_APPS:-1700}"
 
 if [ ! -f "$NAMES_FILE" ]; then
   echo "Ошибка: файл $NAMES_FILE не найден. Сначала выполните generate-app-names.sh."

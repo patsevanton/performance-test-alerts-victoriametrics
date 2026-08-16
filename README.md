@@ -1,6 +1,6 @@
 # Нагрузочное тестирование VictoriaMetrics: 67 500 алертов и поведение vmalert, vmselect и vmstorage на насыщении
 
-Как 1350 приложений и 67 500 правил в `VMRule` нагружают кластер VictoriaMetrics, и какие ориентиры по CPU, памяти и параллелизму запросов это даёт для capacity planning.
+Как 1700 приложений и 67 500 правил в `VMRule` нагружают кластер VictoriaMetrics, и какие ориентиры по CPU, памяти и параллелизму запросов это даёт для capacity planning.
 
 ## Зачем этот тест
 
@@ -46,7 +46,7 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 
 ## Что генерирует нагрузку
 
-Нагрузка — 1350 экземпляров приложения Golden Signal App, каждый в своём namespace как отдельный Helm release. Приложение ([`app/main.go`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/app/main.go)) экспонирует четыре метрики через `prometheus/client_golang`:
+Нагрузка — 1700 экземпляров приложения Golden Signal App, каждый в своём namespace как отдельный Helm release. Приложение ([`app/main.go`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/app/main.go)) экспонирует четыре метрики через `prometheus/client_golang`:
 
 - `app_requests_total` (counter) — счётчик входящих HTTP-запросов;
 - `app_errors_total` (counter) — счётчик ответов с ошибкой;
@@ -57,17 +57,17 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 
 На каждый release через Helm chart ([`chart`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/tree/main/chart)) создаются `Service`, `VMServiceScrape` (автосбор метрик `vmagent`'ом) и `VMRule` с правилами. `VMRule` ([`chart/templates/vmrule.yaml`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chart/templates/vmrule.yaml)) содержит 10 базовых алертов (`HighErrorRate`, `CriticalErrorRate`, `HighLatency`, `HighLatencyP99`, `HighAverageLatency`, `HighGoroutineCount`, `CriticalGoroutineCount`, `LowTraffic`, `TrafficSpike`, `ErrorBurst`) и 40 дополнительных `ExtraAlert0xx`, итого 50 на приложение. Все выражения фильтруются по `job` label, равному имени release, поэтому каждый `VMRule` работает только со своими рядами и ряды реально существуют в TSDB.
 
-**Итого при 1350 экземплярах:** 1350 Deployment, 1350 Service, 1350 `VMServiceScrape`, 1350 `VMRule`, 67 500 правил.
+**Итого при 1700 экземплярах:** 1700 Deployment, 1700 Service, 1700 `VMServiceScrape`, 1700 `VMRule`, 67 500 правил.
 
 Развёртывание выполняется скриптами (смотри шаги ниже); здесь приводятся только зафиксированные результаты замеров, сами нагрузочные скрипты продолжают работать в стенде и не перезапускаются.
 
 ### Ресурсные требования генератора нагрузки
 
-При 1350 экземплярах (requests/limits из [`chart/values.yaml`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chart/values.yaml)):
+При 1700 экземплярах (requests/limits из [`chart/values.yaml`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chart/values.yaml)):
 
 
 TODO: Надо уточнить
-| Ресурс          | На 1 pod | На 1350 pods       |
+| Ресурс          | На 1 pod | На 1700 pods       |
 | --------------- | -------- | ------------------ |
 | CPU requests    | 1m       | 1 000m (1 core)    |
 | CPU limits      | 10m      | 10 000m (10 cores) |
@@ -91,7 +91,7 @@ kubectl apply -f priority-class.yaml
 Шаг 1 — генерация случайных имён вида `app-{adjective}-{noun}-{number}` в `app-names.txt`:
 
 ```bash
-scripts/generate-app-names.sh 1350
+scripts/generate-app-names.sh 1700
 ```
 
 Шаг 2 — развёртывание. Каждый app устанавливается как отдельный Helm release в отдельный namespace (имя namespace = имя приложения):

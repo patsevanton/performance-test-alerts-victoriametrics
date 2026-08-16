@@ -231,7 +231,7 @@ vmalert:
     # при limits 4–5 всё ещё был rate(container_cpu_cfs_throttled_seconds_total) > 0 на нагруженных подах.
     # limits 6 + requests 4 (было 3): при ~113% от request подняли гарантию под фактическую оценку правил.
     # Memory: 5Gi давало OOMKilled (Exit 137) — после рестарта vmalert восстанавливает тысячи состояний
-    # алертов (ExtraAlert0xx restored to state) для ~1350 app × несколько правил → рост памяти → OOM.
+    # алертов (ExtraAlert0xx restored to state) для ~1700 app × несколько правил → рост памяти → OOM.
     resources:
       limits:
         cpu: "6"
@@ -271,7 +271,7 @@ victoria-metrics-operator:
     enabled: true
     minAvailable: 1
   # Memory: 2Gi давало OOMKilled (Exit 137) — оператор держит in-memory кэш client-go
-  # для ~1350 namespace × CRD (15+ контроллеров с worker count: 15 каждый).
+  # для ~1700 namespace × CRD (15+ контроллеров с worker count: 15 каждый).
   resources:
     limits:
       cpu: "2"
