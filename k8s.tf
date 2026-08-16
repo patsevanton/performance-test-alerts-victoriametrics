@@ -97,7 +97,7 @@ resource "yandex_kubernetes_node_group" "k8s_node_group" {
     }
 
     boot_disk {
-      type = "network-hdd" # Тип диска
+      type = "network-ssd" # Тип диска
       size = 30            # Размер диска
     }
   }
