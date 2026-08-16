@@ -50,7 +50,7 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 
 ### Метрики и лейбл-пространства
 
-Базовые метрики переведены в `Vec`-варианты с полным набором лейблов:
+Базовые метрики переведены в высококардинальные варианты с полным набором лейблов:
 
 - `app_requests_total{method,endpoint,status_code,route,tenant_id,region,version}` (CounterVec);
 - `app_errors_total{method,endpoint,status_code,route,tenant_id,region,version}` (CounterVec);
@@ -71,7 +71,7 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 - `region` — из env `APP_REGION`, который прокидывается через Kubernetes Downward API из лейбла ноды `topology.kubernetes.io/zone` (фактическая зона, где запущен pod);
 - `version` — из env `APP_VERSION` (по умолчанию совпадает с `appVersion` чарта).
 
-Каждые 2 секунды приложение само отправляет фоновый запрос на `/work`, который выбирает случайные `tenant`/`route`/`method` и инкрементит все Vec-метрики с полным набором лейблов. Эндпоинт `/metrics` отдаёт метрики в формате Prometheus.
+Каждые 2 секунды приложение само отправляет фоновый запрос на `/work`, который выбирает случайные `tenant`/`route`/`method` и инкрементит все высококардинальные метрики с полным набором лейблов. Эндпоинт `/metrics` отдаёт метрики в формате Prometheus.
 
 ### Оценка кардинальности
 
@@ -104,7 +104,7 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 При 1700 экземплярах (requests/limits из [`chart/values.yaml`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chart/values.yaml)):
 
 
-TODO: Надо уточнить (лимиты памяти подняты до 50 Mi под высококардинальные Vec-метрики; замер RSS генератора при `APP_TENANTS=50`, `APP_ROUTES=10` — отдельная задача по PLAN-high-cardinality.md этап 4).
+TODO: Надо уточнить (лимиты памяти подняты до 50 Mi под высококардинальные метрики; замер RSS генератора при `APP_TENANTS=50`, `APP_ROUTES=10` — отдельная задача по PLAN-high-cardinality.md этап 4).
 | Ресурс          | На 1 pod | На 1700 pods       |
 | --------------- | -------- | ------------------ |
 | CPU requests    | 1m       | 1 000m (1 core)    |
@@ -340,7 +340,7 @@ Grafana доступна по адресу `http://grafana.<ingress_public_ip>.s
 
 ## Важная оговорка: структура выражений и интерпретация результатов
 
-Тяжёлая часть (высококардинальные Vec-метрики и 20 тяжёлых `ExtraAlert0xx`) **всегда активна** — отдельного «второго режима» нет. Параметризация кардинальности через `app.cardinality.*` в [`chart/values.yaml`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chart/values.yaml) или env в `scripts/deploy-apps.sh` (`APP_TENANTS`, `APP_ROUTES`, `APP_HIST_BUCKETS`, `APP_REGION`, `APP_VERSION`); число тяжёлых правил — `alerts.extra.count` (по умолчанию 40, из них 20 тяжёлых). Для отладки на малом числе приложений используйте «среднюю» ступень: `--set app.cardinality.tenants=5,app.cardinality.routes=5`.
+Тяжёлая часть (высококардинальные метрики и 20 тяжёлых `ExtraAlert0xx`) **всегда активна** — отдельного «второго режима» нет. Параметризация кардинальности через `app.cardinality.*` в [`chart/values.yaml`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chart/values.yaml) или env в `scripts/deploy-apps.sh` (`APP_TENANTS`, `APP_ROUTES`, `APP_HIST_BUCKETS`, `APP_REGION`, `APP_VERSION`); число тяжёлых правил — `alerts.extra.count` (по умолчанию 40, из них 20 тяжёлых). Для отладки на малом числе приложений используйте «среднюю» ступень: `--set app.cardinality.tenants=5,app.cardinality.routes=5`.
 
 Все 67 500 правил построены по единому шаблону — прямое сравнение результата PromQL-выражения с порогом (`expr > N`). В шаблоне чарта ([`chart/templates/vmrule.yaml`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chart/templates/vmrule.yaml)) 20 из 40 `ExtraAlert0xx` используют тяжёлые классы PromQL: subqueries (`[5m:1m]`), joins (`group_left`/`on(...)`), `label_join`/`label_replace`, `histogram_quantile` по высококардинальной оси (`sum by (le, tenant_id, route[, status_code])`), `quantile_over_time`/`stddev_over_time`/`predict_linear`. Распределение функций по правилам:
 
