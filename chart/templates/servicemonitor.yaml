@@ -2,9 +2,11 @@ apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMServiceScrape
 metadata:
   name: {{ include "golden-signal-app.name" . }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "golden-signal-app.labels" . | nindent 4 }}
 spec:
+  jobLabel: app.kubernetes.io/instance
   selector:
     matchLabels:
       {{- include "golden-signal-app.selectorLabels" . | nindent 6 }}
