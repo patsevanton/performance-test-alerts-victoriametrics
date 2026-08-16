@@ -66,11 +66,9 @@ func main() {
 	defer stop()
 
 	// Параметризация кардинальности через env (PLAN 1.1, 3).
-	tenants := makeTenants(envInt("APP_TENANTS", 50))
+	tenants := makeTenants(envInt("APP_TENANTS", 5))
 	routes := makeRoutes(envInt("APP_ROUTES", 10))
-	histBuckets := envInt("APP_HIST_BUCKETS", 50)
-	region := envStr("APP_REGION", "ru-central1-b")
-	version := envStr("APP_VERSION", "1.7.0")
+	histBuckets := envInt("APP_HIST_BUCKETS", 5)
 
 	labelNames := []string{"method", "endpoint", "status_code", "route", "tenant_id", "region", "version"}
 
@@ -206,8 +204,8 @@ func main() {
 			cacheHit = "hit"
 		}
 		cacheOperations.With(prometheus.Labels{
-			"cache_hit":  cacheHit,
-			"route":      route,
+			"cache_hit": cacheHit,
+			"route":     route,
 			"tenant_id": tenant,
 		}).Inc()
 

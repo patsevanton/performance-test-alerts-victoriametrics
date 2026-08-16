@@ -48,7 +48,7 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 
 - `app_requests_total{method,endpoint,status_code,route,tenant_id,region,version}` (CounterVec);
 - `app_errors_total{method,endpoint,status_code,route,tenant_id,region,version}` (CounterVec);
-- `app_request_latency_seconds` (HistogramVec, кастомные `ExponentialBuckets(0.005, 1.15, APP_HIST_BUCKETS)`, по умолчанию 50 бакетов);
+- `app_request_latency_seconds` (HistogramVec, кастомные `ExponentialBuckets(0.005, 1.15, APP_HIST_BUCKETS)`, по умолчанию 5 бакетов);
 - `app_request_duration_seconds` (HistogramVec, альтернатива с тем же набором бакетов — для тяжёлых алертов по высококардинальной оси);
 - `app_goroutines` (gauge без лейблов — служебная);
 - `app_inflight_requests{route,tenant_id}` (GaugeVec);
