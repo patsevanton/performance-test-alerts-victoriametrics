@@ -46,18 +46,56 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 
 ## Что генерирует нагрузку
 
-Нагрузка — 1700 экземпляров приложения Golden Signal App, каждый в своём namespace как отдельный Helm release. Приложение ([`app/main.go`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/app/main.go)) экспонирует четыре метрики через `prometheus/client_golang`:
+Нагрузка — 1700 экземпляров приложения Golden Signal App, каждый в своём namespace как отдельный Helm release. Приложение ([`app/main.go`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/app/main.go)) экспонирует метрики через `prometheus/client_golang`. Кардинальность метрик и тяжёлые классы PromQL всегда активны (отдельного «режима 2» нет), параметризуются через `app.cardinality.*` и `alerts.extra.count` в [`chart/values.yaml`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chart/values.yaml).
 
-- `app_requests_total` (counter) — счётчик входящих HTTP-запросов;
-- `app_errors_total` (counter) — счётчик ответов с ошибкой;
-- `app_request_latency_seconds` (histogram, `prometheus.DefBuckets`) — латентность обработки;
-- `app_goroutines` (gauge) — число горутин, обновляется раз в 5 с.
+### Метрики и лейбл-пространства
 
-Каждые 2 секунды приложение само отправляет фоновый запрос на `/work`, который спит 100–500 мс и с вероятностью 20% отвечает `500` (растёт `app_errors_total`). Эндпоинт `/metrics` отдаёт метрики в формате Prometheus.
+Базовые метрики переведены в `Vec`-варианты с полным набором лейблов:
+
+- `app_requests_total{method,endpoint,status_code,route,tenant_id,region,version}` (CounterVec);
+- `app_errors_total{method,endpoint,status_code,route,tenant_id,region,version}` (CounterVec);
+- `app_request_latency_seconds` (HistogramVec, кастомные `ExponentialBuckets(0.005, 1.15, APP_HIST_BUCKETS)`, по умолчанию 50 бакетов);
+- `app_request_duration_seconds` (HistogramVec, альтернатива с тем же набором бакетов — для тяжёлых алертов по высококардинальной оси);
+- `app_goroutines` (gauge без лейблов — служебная);
+- `app_inflight_requests{route,tenant_id}` (GaugeVec);
+- `app_cache_operations_total{cache_hit,route,tenant_id}` (CounterVec, `cache_hit` = `hit`/`miss`);
+- `app_queue_size{queue,tenant_id}` (GaugeVec).
+
+Лейбл-пространства ([`app/main.go`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/app/main.go), PLAN-high-cardinality.md 1.1):
+
+- `method` — `GET`, `POST`, `PUT`, `DELETE`, `PATCH` (5);
+- `endpoint` — `/work`, `/healthz`, `/metrics`, `/api/v1`, `/api/v2` (5);
+- `status_code` — `200`, `429`, `500`, `503`, `504` (5); вероятности: `500` — 20 %, `429`/`503`/`504` — по 5 % каждая, иначе `200`;
+- `route` — `route-0` … `route-(APP_ROUTES-1)` (по умолчанию 10);
+- `tenant_id` — `tenant-0` … `tenant-(APP_TENANTS-1)` (по умолчанию 50);
+- `region` — из env `APP_REGION`, который прокидывается через Kubernetes Downward API из лейбла ноды `topology.kubernetes.io/zone` (фактическая зона, где запущен pod);
+- `version` — из env `APP_VERSION` (по умолчанию совпадает с `appVersion` чарта).
+
+Каждые 2 секунды приложение само отправляет фоновый запрос на `/work`, который выбирает случайные `tenant`/`route`/`method` и инкрементит все Vec-метрики с полным набором лейблов. Эндпоинт `/metrics` отдаёт метрики в формате Prometheus.
+
+### Оценка кардинальности
+
+При `APP_TENANTS=50`, `APP_ROUTES=10`, 5 method, 5 endpoint, 5 status_code, 3 region, 1 version число рядов на `app_requests_total` ≈ 50 × 10 × 5 × 5 × 5 × 3 × 1 = **18 750 на приложение**. При 1700 приложениях — ~25 млн рядов только по одному counter'у. Это «очень высокая» ступень; для отладки предусмотрена «средняя» (`APP_TENANTS=5`, `APP_ROUTES=5`).
+
+Передавать параметры кардинальности при деплое можно через env в `scripts/deploy-apps.sh` (см. 5.1) или напрямую `--set app.cardinality.tenants=5,app.cardinality.routes=5`.
+
+### Профиль правил
 
 На каждый release через Helm chart ([`chart`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/tree/main/chart)) создаются `Service`, `VMServiceScrape` (автосбор метрик `vmagent`'ом) и `VMRule` с правилами. `VMRule` ([`chart/templates/vmrule.yaml`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chart/templates/vmrule.yaml)) содержит 10 базовых алертов (`HighErrorRate`, `CriticalErrorRate`, `HighLatency`, `HighLatencyP99`, `HighAverageLatency`, `HighGoroutineCount`, `CriticalGoroutineCount`, `LowTraffic`, `TrafficSpike`, `ErrorBurst`) и 40 дополнительных `ExtraAlert0xx`, итого 50 на приложение. Все выражения фильтруются по `job` label, равному имени release, поэтому каждый `VMRule` работает только со своими рядами и ряды реально существуют в TSDB.
 
-**Итого при 1700 экземплярах:** 1700 Deployment, 1700 Service, 1700 `VMServiceScrape`, 1700 `VMRule`, 67 500 правил.
+Из 40 `ExtraAlert0xx` **20 правил — тяжёлый PromQL** (помечены `heavy: "true"`), 20 — простой профиль. Распределение классов по 20 тяжёлым (при `alerts.extra.count=40`):
+
+| Класс                          | Правил | Шаблоны (ExtraAlert0xx) |
+| ------------------------------ | ------ | ----------------------- |
+| Subqueries                     | 6      | 001–006 (`max_over_time(rate(...)[5m:1m])`, `changes(...[10m])`, `deriv`) |
+| Joins                          | 5      | 007–011 (`* on(route,tenant_id) group_left(region) ...`, `or on(...)`, `and on(...)`) |
+| `label_replace`/`label_join`   | 3      | 012–014 (склейка `tenant_id` и `route` → `tenant_route`) |
+| `histogram_quantile` по high-card оси | 3 | 015–017 (`sum by (le, tenant_id, route[, status_code])`) |
+| `*_over_time` + `predict_linear` | 3    | 018–020 (`quantile_over_time`, `stddev_over_time`, `predict_linear`) |
+
+Часть тяжёлых правил ссылается на новые высококардинальные метрики `app_inflight_requests`, `app_cache_operations_total`, `app_queue_size`, `app_request_duration_seconds`. Все тяжёлые правила фильтруются по `job="{{ appName }}"` для сопоставимости с профилем 1 по числу правил на приложение.
+
+**Итого при 1700 экземплярах:** 1700 Deployment, 1700 Service, 1700 `VMServiceScrape`, 1700 `VMRule`, 67 500 правил (34 000 тяжёлых + 33 500 простых), ~25 млн рядов по `app_requests_total`.
 
 Развёртывание выполняется скриптами (смотри шаги ниже); здесь приводятся только зафиксированные результаты замеров, сами нагрузочные скрипты продолжают работать в стенде и не перезапускаются.
 
@@ -66,13 +104,13 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 При 1700 экземплярах (requests/limits из [`chart/values.yaml`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chart/values.yaml)):
 
 
-TODO: Надо уточнить
+TODO: Надо уточнить (лимиты памяти подняты до 50 Mi под высококардинальные Vec-метрики; замер RSS генератора при `APP_TENANTS=50`, `APP_ROUTES=10` — отдельная задача по PLAN-high-cardinality.md этап 4).
 | Ресурс          | На 1 pod | На 1700 pods       |
 | --------------- | -------- | ------------------ |
 | CPU requests    | 1m       | 1 000m (1 core)    |
 | CPU limits      | 10m      | 10 000m (10 cores) |
-| Memory requests | 8Mi      | ~10.55 GiB         |
-| Memory limits   | 20Mi     | ~26.37 GiB         |
+| Memory requests | 16Mi     | ~21.09 GiB         |
+| Memory limits   | 50Mi     | ~65.92 GiB         |
 
 ## Как разворачивался стенд
 
@@ -302,19 +340,26 @@ Grafana доступна по адресу `http://grafana.<ingress_public_ip>.s
 
 ## Важная оговорка: структура выражений и интерпретация результатов
 
-Все 67 500 правил построены по единому шаблону — прямое сравнение результата PromQL-выражения с порогом (`expr > N`). В шаблоне чарта ([`chart/templates/vmrule.yaml`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chart/templates/vmrule.yaml)) не используются ни `or vector(fallback)`, ни `absent(...)`, ни subqueries (`[5m:1m]`), ни joins (`group_left`/`group_right`), ни `label_join`/`label_replace`. Распределение функций по правилам:
+Тяжёлая часть (высококардинальные Vec-метрики и 20 тяжёлых `ExtraAlert0xx`) **всегда активна** — отдельного «второго режима» нет. Параметризация кардинальности через `app.cardinality.*` в [`chart/values.yaml`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chart/values.yaml) или env в `scripts/deploy-apps.sh` (`APP_TENANTS`, `APP_ROUTES`, `APP_HIST_BUCKETS`, `APP_REGION`, `APP_VERSION`); число тяжёлых правил — `alerts.extra.count` (по умолчанию 40, из них 20 тяжёлых). Для отладки на малом числе приложений используйте «среднюю» ступень: `--set app.cardinality.tenants=5,app.cardinality.routes=5`.
+
+Все 67 500 правил построены по единому шаблону — прямое сравнение результата PromQL-выражения с порогом (`expr > N`). В шаблоне чарта ([`chart/templates/vmrule.yaml`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chart/templates/vmrule.yaml)) 20 из 40 `ExtraAlert0xx` используют тяжёлые классы PromQL: subqueries (`[5m:1m]`), joins (`group_left`/`on(...)`), `label_join`/`label_replace`, `histogram_quantile` по высококардинальной оси (`sum by (le, tenant_id, route[, status_code])`), `quantile_over_time`/`stddev_over_time`/`predict_linear`. Распределение функций по правилам:
 
 | Характеристика                              | Значение                       |
 | ------------------------------------------- | ------------------------------ |
 | Всего правил                                | 67 500                         |
 | Правил на одно приложение                   | 50 (10 базовых + 40 `ExtraAlert`) |
+| из них тяжёлых `ExtraAlert` на приложение   | 20 (subqueries/joins/`label_*`/histogram_quantile high-card/`*_over_time`+`predict_linear`) |
 | `rate()`                                    | ~36 450 (54%)                  |
 | `histogram_quantile`                        | 13 500 (20%)                   |
 | `increase()`                                | 12 150 (18%)                   |
 | `max_over_time` / `avg_over_time`           | 10 800 (16%)                   |
 | Прямые сравнения gauge (`app_goroutines > N`) | 8 100 (12%)                  |
 | `clamp_min` (обёртка делителя)              | 18 900 (28%)                   |
-| Subqueries / joins / `label_*`              | 0                              |
+| Subqueries (`[5m:1m]`)                      | ~6 800 (10%, тяжёлая часть)    |
+| Joins (`group_left`/`on(...)`)              | ~5 100 (8%, тяжёлая часть)     |
+| `label_replace`/`label_join`                | ~3 400 (5%, тяжёлая часть)     |
+| `histogram_quantile` по high-card оси       | ~3 400 (5%, тяжёлая часть)     |
+| `quantile_over_time`/`stddev_over_time`/`predict_linear` | ~3 400 (5%, тяжёлая часть) |
 
 > Проценты в сумме превышают 100%, так как одно правило может содержать несколько функций (например, `histogram_quantile(..., sum(rate(...)))`).
 

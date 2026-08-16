@@ -131,6 +131,27 @@ QUERIES = {
     "vmagent_scrape_samples_vmalert": f'max(scrape_samples_scraped{{job="vmalert-{_VMKS_STACK_PREFIX}"}})',
 }
 
+# Дополнительные метрики для высококардинального профиля (PLAN-high-cardinality.md, 5.4).
+# Собираются всегда — тяжёлая часть всегда активна.
+QUERIES.update({
+    # Сканирование рядов при тяжёлом PromQL.
+    "vm_rows_scanned_total": f'sum(rate(vm_rows_scanned_total{{job="vmselect-{_VMKS_STACK_PREFIX}"}}[5m]))',
+    "vm_rows_scanned_vmstorage": f'sum(rate(vm_rows_scanned_total{{job="vmstorage-{_VMKS_STACK_PREFIX}"}}[5m]))',
+    # Cache miss по компонентам кэша.
+    "vm_cache_misses_vmselect": f'sum(rate(vm_cache_misses_total{{job="vmselect-{_VMKS_STACK_PREFIX}"}}[5m]))',
+    "vm_cache_misses_vmstorage": f'sum(rate(vm_cache_misses_total{{job="vmstorage-{_VMKS_STACK_PREFIX}"}}[5m]))',
+    # Latency поиска по рядам.
+    "vm_search_latency_max": f'max(vm_search_latency_seconds{{job=~"vmselect-{_VMKS_STACK_PREFIX}|vmstorage-{_VMKS_STACK_PREFIX}"}})',
+    # Нагрузка на evaluation-движок vmalert по тяжёлой группе.
+    "vm_evaluation_duration_max": f'max(vmalert_evaluation_duration_seconds{{job="vmalert-{_VMKS_STACK_PREFIX}"}})',
+    "vm_evaluation_count_rate": f'sum(rate(vmalert_evaluations_total{{job="vmalert-{_VMKS_STACK_PREFIX}"}}[5m]))',
+    # p99 длительности итерации vmalert.
+    "vmalert_iter_p99": (
+        f'histogram_quantile(0.99, '
+        f'sum(rate(vmalert_iteration_duration_seconds_bucket{{job="vmalert-{_VMKS_STACK_PREFIX}"}}[5m])) by (le))'
+    ),
+})
+
 COUNT_QUERY = "count(ALERTS)"
 
 # Куда писать результаты (рядом со скриптом).
@@ -260,6 +281,20 @@ def render_table(snapshots: list) -> str:
                 fmt_sec(m["vmalert_iter_max"]),
                 fmt_count(m["vmselect_concurrent"]),
                 fmt_count(m["vmagent_scrape_samples_vmalert"]),
+            ])
+        )
+        # Метрики высококардинального профиля (PLAN-high-cardinality.md, 5.4) — всегда.
+        lines.append(
+            "HEAVY "
+            + " ".join([
+                fmt_count(m.get("vm_rows_scanned_total")),
+                fmt_count(m.get("vm_rows_scanned_vmstorage")),
+                fmt_count(m.get("vm_cache_misses_vmselect")),
+                fmt_count(m.get("vm_cache_misses_vmstorage")),
+                fmt_sec(m.get("vm_search_latency_max")),
+                fmt_sec(m.get("vm_evaluation_duration_max")),
+                fmt_count(m.get("vm_evaluation_count_rate")),
+                fmt_sec(m.get("vmalert_iter_p99")),
             ])
         )
         lines.append("")

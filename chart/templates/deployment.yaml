@@ -51,3 +51,16 @@ spec:
             timeoutSeconds: 3
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          env:
+            - name: APP_TENANTS
+              value: {{ .Values.app.cardinality.tenants | quote }}
+            - name: APP_ROUTES
+              value: {{ .Values.app.cardinality.routes | quote }}
+            - name: APP_HIST_BUCKETS
+              value: {{ .Values.app.cardinality.histBuckets | quote }}
+            - name: APP_REGION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['topology.kubernetes.io/zone']
+            - name: APP_VERSION
+              value: {{ .Chart.AppVersion | quote }}

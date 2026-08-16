@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/patsevanton/performance-test-alerts-victoriametrics
-  tag: "1.6.1"
+  tag: "1.7.0"
   pullPolicy: IfNotPresent
 
 service:
@@ -8,15 +8,21 @@ service:
   port: 8080
   targetPort: 8080
 
+app:
+  cardinality:
+    tenants: 50
+    routes: 10
+    histBuckets: 50
+
 replicaCount: 1
 
 resources:
   limits:
     cpu: 10m
-    memory: 20Mi
+    memory: 50Mi
   requests:
     cpu: 1m
-    memory: 8Mi
+    memory: 16Mi
 
 alerts:
   evaluationInterval: "1m"

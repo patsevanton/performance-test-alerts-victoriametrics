@@ -149,9 +149,59 @@ spec:
         {{- if .Values.alerts.extra.enabled }}
         {{- $appName := include "golden-signal-app.name" . }}
         {{- range $i := until (int .Values.alerts.extra.count) }}
+        {{- /* Первые 20 правил — тяжёлый PromQL, остальные — простой профиль */}}
+        {{- $heavy := lt $i 20 }}
         - alert: ExtraAlert{{ printf "%03d" (add $i 1) }}
           expr: |
-            {{- if eq (mod $i 10) 0 }}
+            {{- if $heavy }}
+            {{- /* 30% subqueries (6 правил: i=0..5) */}}
+            {{- if lt $i 6 }}
+            {{- if eq (mod $i 2) 0 }}
+            max_over_time(rate(app_errors_total{job="{{ $appName }}",status_code=~"5.."}[5m])[5m:1m]) > {{ add 20 $i }}
+            {{- else }}
+            changes(app_errors_total{job="{{ $appName }}",status_code=~"5.."}[10m]) > {{ add 30 $i }}
+            {{- end }}
+            {{- /* 25% joins (5 правил: i=6..10) */}}
+            {{- else if lt $i 11 }}
+            {{- if eq (mod $i 2) 0 }}
+            rate(app_errors_total{job="{{ $appName }}"}[5m]) * on(route,tenant_id) group_left(region) rate(app_requests_total{job="{{ $appName }}"}[5m]) > {{ add 40 $i }}
+            {{- else if eq $i 7 }}
+            rate(app_errors_total{job="{{ $appName }}"}[5m]) or on(route,tenant_id) rate(app_requests_total{job="{{ $appName }}"}[5m])
+            {{- else if eq $i 9 }}
+            (rate(app_errors_total{job="{{ $appName }}"}[5m]) > 0) and on(route,tenant_id) (rate(app_requests_total{job="{{ $appName }}"}[5m]) > 0)
+            {{- else }}
+            rate(app_errors_total{job="{{ $appName }}"}[5m]) * on(route,tenant_id) group_left(region,version) rate(app_requests_total{job="{{ $appName }}"}[5m]) > {{ add 50 $i }}
+            {{- end }}
+            {{- /* 15% label_replace и label_join (3 правила: i=11..13) */}}
+            {{- else if lt $i 14 }}
+            {{- if eq $i 11 }}
+            sum by (tenant_route) (label_replace(rate(app_errors_total{job="{{ $appName }}"}[5m]), "tenant_route", "$1", "tenant_id", "(.*)")) > {{ add 60 $i }}
+            {{- else if eq $i 12 }}
+            sum by (tenant_route) (label_join(rate(app_requests_total{job="{{ $appName }}"}[5m]), "tenant_route", "-", "tenant_id", "route")) > {{ add 70 $i }}
+            {{- else }}
+            label_replace(sum by (tenant_id) (rate(app_errors_total{job="{{ $appName }}"}[5m])), "tenant_group", "group-$1", "tenant_id", "tenant-(.*)") > {{ add 80 $i }}
+            {{- end }}
+            {{- /* 15% histogram_quantile по высококардинальной оси (3 правила: i=14..16) */}}
+            {{- else if lt $i 17 }}
+            {{- if eq $i 14 }}
+            histogram_quantile(0.99, sum by (le, tenant_id, route) (rate(app_request_latency_seconds_bucket{job="{{ $appName }}"}[5m]))) > {{ add 90 $i }}
+            {{- else if eq $i 15 }}
+            histogram_quantile(0.95, sum by (le, tenant_id, route) (rate(app_request_duration_seconds_bucket{job="{{ $appName }}"}[5m]))) > {{ add 100 $i }}
+            {{- else }}
+            histogram_quantile(0.999, sum by (le, tenant_id, route, status_code) (rate(app_request_latency_seconds_bucket{job="{{ $appName }}"}[5m]))) > {{ add 110 $i }}
+            {{- end }}
+            {{- /* 15% over_time + predict_linear + topk + absent (3 pravila: i=17..19) */}}
+            {{- else }}
+            {{- if eq $i 17 }}
+            quantile_over_time(0.95, app_request_latency_seconds_count{job="{{ $appName }}"}[10m]) > {{ add 120 $i }}
+            {{- else if eq $i 18 }}
+            stddev_over_time(rate(app_errors_total{job="{{ $appName }}"}[5m])[10m:1m]) > {{ add 130 $i }}
+            {{- else if eq $i 19 }}
+            predict_linear(app_inflight_requests{job="{{ $appName }}"}[15m], 300) > {{ add 140 $i }}
+            {{- end }}
+            {{- end }}
+            {{- /* prostoj profil dlya ostavshihsya pravil */}}
+            {{- else if eq (mod $i 10) 0 }}
             (1000 * rate(app_errors_total{job="{{ $appName }}"}[1m]) / clamp_min(rate(app_requests_total{job="{{ $appName }}"}[1m]), 0.001)) > {{ add 20 $i }}
             {{- else if eq (mod $i 10) 1 }}
             (1000 * rate(app_errors_total{job="{{ $appName }}"}[5m]) / clamp_min(rate(app_requests_total{job="{{ $appName }}"}[5m]), 0.001)) > {{ add 30 $i }}
@@ -178,6 +228,9 @@ spec:
             app: {{ $appName }}
             extra: "true"
             extra_id: "{{ add $i 1 }}"
+            {{- if $heavy }}
+            heavy: "true"
+            {{- end }}
           annotations:
             summary: "Alert {{ printf "%03d" (add $i 1) }} on {{ $appName }}"
             description: "{{ $.Values.alerts.extra.descriptionPrefix }} #{{ add $i 1 }} for {{ $appName }}. Value is {{ `{{ $value }}` }}"
