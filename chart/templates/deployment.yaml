@@ -15,19 +15,6 @@ spec:
         {{- include "golden-signal-app.selectorLabels" . | nindent 8 }}
     spec:
       terminationGracePeriodSeconds: 30
-      topologySpreadConstraints:
-        - maxSkew: 1
-          topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: ScheduleAnyway
-          labelSelector:
-            matchLabels:
-              {{- include "golden-signal-app.selectorLabels" . | nindent 14 }}
-        - maxSkew: 1
-          topologyKey: topology.kubernetes.io/zone
-          whenUnsatisfiable: ScheduleAnyway
-          labelSelector:
-            matchLabels:
-              {{- include "golden-signal-app.selectorLabels" . | nindent 14 }}
       containers:
         - name: golden-signal-app
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"

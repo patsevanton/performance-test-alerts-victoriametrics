@@ -18,10 +18,10 @@ replicaCount: 1
 
 resources:
   limits:
-    cpu: 10m
+    cpu: 20m
     memory: 50Mi
   requests:
-    cpu: 1m
+    cpu: 10m
     memory: 16Mi
 
 alerts:
