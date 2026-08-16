@@ -51,3 +51,8 @@ spec:
                   fieldPath: metadata.labels['topology.kubernetes.io/zone']
             - name: APP_VERSION
               value: {{ .Chart.AppVersion | quote }}
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef:
+                  resource: limits.memory
+                  divisor: 1

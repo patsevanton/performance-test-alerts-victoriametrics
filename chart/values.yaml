@@ -10,9 +10,9 @@ service:
 
 app:
   cardinality:
-    tenants: 50
+    tenants: 5
     routes: 10
-    histBuckets: 50
+    histBuckets: 5
 
 replicaCount: 1
 
