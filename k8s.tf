@@ -28,9 +28,23 @@ resource "yandex_kubernetes_cluster" "vmalert" {
 
   master {
     version = "1.33" # Версия Kubernetes мастера
-    zonal {
-      zone      = local.subnet_d_zone # Зона размещения мастера
-      subnet_id = local.subnet_d_id   # Подсеть для мастера
+    regional {
+      region = "ru-central1" # Регион размещения мастера (3 зоны отказоустойчивости)
+
+      location {
+        zone      = local.subnet_b_zone # Зона размещения мастера
+        subnet_id = local.subnet_b_id   # Подсеть для мастера
+      }
+
+      location {
+        zone      = local.subnet_d_zone # Зона размещения мастера
+        subnet_id = local.subnet_d_id   # Подсеть для мастера
+      }
+
+      location {
+        zone      = local.subnet_e_zone # Зона размещения мастера
+        subnet_id = local.subnet_e_id   # Подсеть для мастера
+      }
     }
 
     public_ip = true # Включение публичного IP для доступа к мастеру
