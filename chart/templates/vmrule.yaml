@@ -190,7 +190,7 @@ spec:
             {{- else }}
             histogram_quantile(0.999, sum by (le, tenant_id, route, status_code) (rate(app_request_latency_seconds_bucket{job="{{ $appName }}"}[5m]))) > {{ add 110 $i }}
             {{- end }}
-            {{- /* 15% over_time + predict_linear + topk + absent (3 pravila: i=17..19) */}}
+            {{- /* 15% over_time + predict_linear + topk + absent (3 правила: i=17..19) */}}
             {{- else }}
             {{- if eq $i 17 }}
             quantile_over_time(0.95, app_request_latency_seconds_count{job="{{ $appName }}"}[10m]) > {{ add 120 $i }}
@@ -200,7 +200,7 @@ spec:
             predict_linear(app_inflight_requests{job="{{ $appName }}"}[15m], 300) > {{ add 140 $i }}
             {{- end }}
             {{- end }}
-            {{- /* prostoj profil dlya ostavshihsya pravil */}}
+            {{- /* простой профиль для оставшихся правил */}}
             {{- else if eq (mod $i 10) 0 }}
             (1000 * rate(app_errors_total{job="{{ $appName }}"}[1m]) / clamp_min(rate(app_requests_total{job="{{ $appName }}"}[1m]), 0.001)) > {{ add 20 $i }}
             {{- else if eq (mod $i 10) 1 }}

@@ -7,7 +7,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CHART_PATH="${CHART_PATH:-$REPO_ROOT/chart}"
 NAMES_FILE="${NAMES_FILE:-$SCRIPT_DIR/app-names.txt}"
 IMAGE_REPO="${IMAGE_REPO:-ghcr.io/patsevanton/performance-test-alerts-victoriametrics}"
-IMAGE_TAG="${IMAGE_TAG:-1.7.0}"
+IMAGE_TAG="${IMAGE_TAG:-1.8.1}"
 ALERTS_PER_APP="${ALERTS_PER_APP:-50}"
 BASE_ALERTS_COUNT="${BASE_ALERTS_COUNT:-10}"
 

@@ -1,10 +1,10 @@
-# Нагрузочное тестирование VictoriaMetrics: 67 500 алертов и поведение vmalert, vmselect и vmstorage на насыщении
+# Нагрузочное тестирование VictoriaMetrics: 85 000 алертов и поведение vmalert, vmselect и vmstorage на насыщении
 
 ## Цель статьи
 
-Как 1700 приложений и 67 500 правил в `VMRule` нагружают кластер VictoriaMetrics, и какие ориентиры по CPU, памяти и параллелизму запросов это даёт для capacity planning.
+Как 1700 приложений и 85 000 правил в `VMRule` нагружают кластер VictoriaMetrics, и какие ориентиры по CPU, памяти и параллелизму запросов это даёт для capacity planning.
 
-VictoriaMetrics часто применяют как единый бэкенд для метрик и алертов: один `VMCluster` хранит ряды, `vmalert` оценивает правила и пишет состояние алертов обратно в TSDB, а `victoria-metrics-operator` синхронизирует `VMRule` из Kubernetes API в ConfigMap'ы и пересобирает Pod'ы `vmalert`. При росте числа правил до десятков тысяч появляются конкретные вопросы: сохраняется ли оценка правил и состояние алертов (pending/firing) при рестартах `vmalert` и какова цена восстановления; где физически возникают узкие места по CPU и памяти в data plane (`vmalert`, `vmselect`, `vmstorage`, `vminsert`, `vmagent`) и в control plane (`victoria-metrics-operator`, `kube-apiserver`); как растут RPS, задержки и CPU `kube-apiserver` при массовом применении `VMRule` и reconcile operator'а. Ответы собраны в виде фиксированных снимков загрузки при прохождении порогов `count(ALERTS)` от ~500 до ~50 000 на живом стенде из 1700 приложений и 67 500 правил в `VMRule`, что даёт ориентиры по CPU, памяти и параллелизму запросов для capacity planning; измерения продолжают собираться, а нагрузочные скрипты работают в фоне и не перезапускаются.
+VictoriaMetrics часто применяют как единый бэкенд для метрик и алертов: один `VMCluster` хранит ряды, `vmalert` оценивает правила и пишет состояние алертов обратно в TSDB, а `victoria-metrics-operator` синхронизирует `VMRule` из Kubernetes API в ConfigMap'ы и пересобирает Pod'ы `vmalert`. При росте числа правил до десятков тысяч появляются конкретные вопросы: сохраняется ли оценка правил и состояние алертов (pending/firing) при рестартах `vmalert` и какова цена восстановления; где физически возникают узкие места по CPU и памяти в data plane (`vmalert`, `vmselect`, `vmstorage`, `vminsert`, `vmagent`) и в control plane (`victoria-metrics-operator`, `kube-apiserver`); как растут RPS, задержки и CPU `kube-apiserver` при массовом применении `VMRule` и reconcile operator'а. Ответы собраны в виде фиксированных снимков загрузки при прохождении порогов `count(ALERTS)` от ~500 до ~50 000 на живом стенде из 1700 приложений и 85 000 правил в `VMRule`, что даёт ориентиры по CPU, памяти и параллелизму запросов для capacity planning; измерения продолжают собираться, а нагрузочные скрипты работают в фоне и не перезапускаются.
 
 ## Стенд: Yandex Managed K8s + vmks
 
@@ -69,7 +69,7 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 
 ### Оценка кардинальности
 
-При `APP_TENANTS=50`, `APP_ROUTES=10`, 5 method, 5 endpoint, 5 status_code, 3 region, 1 version число рядов на `app_requests_total` ≈ 50 × 10 × 5 × 5 × 5 × 3 × 1 = **18 750 на приложение**. При 1700 приложениях — ~25 млн рядов только по одному counter'у. Это «очень высокая» ступень; для отладки предусмотрена «средняя» (`APP_TENANTS=5`, `APP_ROUTES=5`).
+При `APP_TENANTS=50`, `APP_ROUTES=10`, 5 method, 5 endpoint, 5 status_code, 3 region, 1 version число рядов на `app_requests_total` ≈ 50 × 10 × 5 × 5 × 5 × 3 × 1 = **187 500 на приложение**. При 1700 приложениях — ~319 млн рядов только по одному counter'у. Это «очень высокая» ступень; для отладки предусмотрена «средняя» (`APP_TENANTS=5`, `APP_ROUTES=5`).
 
 Передавать параметры кардинальности при деплое можно через env в `scripts/deploy_and_snapshot.py` (см. 5.1) или напрямую `--set app.cardinality.tenants=5,app.cardinality.routes=5`.
 
@@ -89,7 +89,7 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 
 Часть тяжёлых правил ссылается на новые высококардинальные метрики `app_inflight_requests`, `app_cache_operations_total`, `app_queue_size`, `app_request_duration_seconds`. Все тяжёлые правила фильтруются по `job="{{ appName }}"` для сопоставимости с профилем 1 по числу правил на приложение.
 
-**Итого при 1700 экземплярах:** 1700 Deployment, 1700 Service, 1700 `VMServiceScrape`, 1700 `VMRule`, 67 500 правил (34 000 тяжёлых + 33 500 простых), ~25 млн рядов по `app_requests_total`.
+**Итого при 1700 экземплярах:** 1700 Deployment, 1700 Service, 1700 `VMServiceScrape`, 1700 `VMRule`, 85 000 правил (34 000 тяжёлых + 51 000 простых), ~319 млн рядов по `app_requests_total`.
 
 Развёртывание выполняется скриптами (смотри шаги ниже); здесь приводятся только зафиксированные результаты замеров, сами нагрузочные скрипты продолжают работать в стенде и не перезапускаются.
 
@@ -101,10 +101,10 @@ kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | b
 TODO: Надо уточнить (лимиты памяти подняты до 50 Mi под высококардинальные метрики; замер RSS генератора при `APP_TENANTS=50`, `APP_ROUTES=10` — отдельная задача по PLAN-high-cardinality.md этап 4).
 | Ресурс          | На 1 pod | На 1700 pods       |
 | --------------- | -------- | ------------------ |
-| CPU requests    | 1m       | 1 000m (1 core)    |
-| CPU limits      | 10m      | 10 000m (10 cores) |
-| Memory requests | 16Mi     | ~21.09 GiB         |
-| Memory limits   | 50Mi     | ~65.92 GiB         |
+| CPU requests    | 10m      | 17 000m (17 cores) |
+| CPU limits      | 20m      | 34 000m (34 cores) |
+| Memory requests | 16Mi     | ~26.6 GiB          |
+| Memory limits   | 50Mi     | ~83.0 GiB          |
 
 ## Как разворачивался стенд
 
@@ -143,7 +143,7 @@ python3 scripts/deploy_and_snapshot.py
 - После последнего порога выжидает `SETTLE_WAIT` (по умолчанию 600 с) и делает финальный снимок «после через 10 мин установки N app».
 - `MIN_SNAPSHOT_GAP` сохранён как env для совместимости, но при `--wait` не применяется (деплой блокирует цикл естественным образом).
 
-Результаты — `capacity_snapshots.json` (сырые значения + поле `calibration` с `k1`/`k2`/`k`) и `capacity_snapshots.txt` (форматированная таблица). Пороги скрипта: 500, 5000, 10000, 15000, 20000, 25000, 30000, 35000, 40000, 45000, 50000, 55000, 60000, 65000, 67500 (последний равен `TARGET_APPS * ALERTS_PER_APP`). Скрипт использует только стандартную библиотеку Python 3. Для досрочной остановки — Ctrl-C, будут выгружены собранные снимки.
+Результаты — `capacity_snapshots.json` (сырые значения + поле `calibration` с `k1`/`k2`/`k`) и `capacity_snapshots.txt` (форматированная таблица). Пороги скрипта: 500, 5000, 10000, 15000, 20000, 25000, 30000, 35000, 40000, 45000, 50000, 55000, 60000, 65000, 70000, 75000, 80000, 85000 (последний равен `TARGET_APPS * ALERTS_PER_APP`). Скрипт использует только стандартную библиотеку Python 3. Для досрочной остановки — Ctrl-C, будут выгружены собранные снимки.
 
 Шаг 3 — проверка статуса (число Helm releases, статусы Pod'ов, потребление ресурсов, количество `VMRule` и `VMServiceScrape`):
 
@@ -339,24 +339,24 @@ Grafana доступна по адресу `http://grafana.<ingress_public_ip>.s
 
 Тяжёлая часть (высококардинальные метрики и 20 тяжёлых `ExtraAlert0xx`) **всегда активна** — отдельного «второго режима» нет. Параметризация кардинальности через `app.cardinality.*` в [`chart/values.yaml`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chart/values.yaml) или env в `scripts/deploy_and_snapshot.py` (`APP_TENANTS`, `APP_ROUTES`, `APP_HIST_BUCKETS`, `APP_REGION`, `APP_VERSION`); число тяжёлых правил — `alerts.extra.count` (по умолчанию 40, из них 20 тяжёлых). Для отладки на малом числе приложений используйте «среднюю» ступень: `--set app.cardinality.tenants=5,app.cardinality.routes=5`.
 
-Все 67 500 правил построены по единому шаблону — прямое сравнение результата PromQL-выражения с порогом (`expr > N`). В шаблоне чарта ([`chart/templates/vmrule.yaml`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chart/templates/vmrule.yaml)) 20 из 40 `ExtraAlert0xx` используют тяжёлые классы PromQL: subqueries (`[5m:1m]`), joins (`group_left`/`on(...)`), `label_join`/`label_replace`, `histogram_quantile` по высококардинальной оси (`sum by (le, tenant_id, route[, status_code])`), `quantile_over_time`/`stddev_over_time`/`predict_linear`. Распределение функций по правилам:
+Все 85 000 правил построены по единому шаблону — прямое сравнение результата PromQL-выражения с порогом (`expr > N`). В шаблоне чарта ([`chart/templates/vmrule.yaml`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/chart/templates/vmrule.yaml)) 20 из 40 `ExtraAlert0xx` используют тяжёлые классы PromQL: subqueries (`[5m:1m]`), joins (`group_left`/`on(...)`), `label_join`/`label_replace`, `histogram_quantile` по высококардинальной оси (`sum by (le, tenant_id, route[, status_code])`), `quantile_over_time`/`stddev_over_time`/`predict_linear`. Распределение функций по правилам:
 
 | Характеристика                              | Значение                       |
 | ------------------------------------------- | ------------------------------ |
-| Всего правил                                | 67 500                         |
+| Всего правил                                | 85 000                         |
 | Правил на одно приложение                   | 50 (10 базовых + 40 `ExtraAlert`) |
 | из них тяжёлых `ExtraAlert` на приложение   | 20 (subqueries/joins/`label_*`/histogram_quantile high-card/`*_over_time`+`predict_linear`) |
-| `rate()`                                    | ~36 450 (54%)                  |
-| `histogram_quantile`                        | 13 500 (20%)                   |
-| `increase()`                                | 12 150 (18%)                   |
-| `max_over_time` / `avg_over_time`           | 10 800 (16%)                   |
-| Прямые сравнения gauge (`app_goroutines > N`) | 8 100 (12%)                  |
-| `clamp_min` (обёртка делителя)              | 18 900 (28%)                   |
-| Subqueries (`[5m:1m]`)                      | ~6 800 (10%, тяжёлая часть)    |
-| Joins (`group_left`/`on(...)`)              | ~5 100 (8%, тяжёлая часть)     |
-| `label_replace`/`label_join`                | ~3 400 (5%, тяжёлая часть)     |
-| `histogram_quantile` по high-card оси       | ~3 400 (5%, тяжёлая часть)     |
-| `quantile_over_time`/`stddev_over_time`/`predict_linear` | ~3 400 (5%, тяжёлая часть) |
+| `rate()`                                    | ~52 700 (62%)                  |
+| `histogram_quantile`                        | 17 000 (20%)                   |
+| `increase()`                                | 15 300 (18%)                   |
+| `max_over_time` / `avg_over_time`           | 13 600 (16%)                   |
+| Прямые сравнения gauge (`app_goroutines > N`) | 8 500 (10%)                  |
+| `clamp_min` (обёртка делителя)              | 23 800 (28%)                   |
+| Subqueries (`[5m:1m]`)                      | ~10 200 (12%, тяжёлая часть)   |
+| Joins (`group_left`/`on(...)`)              | ~8 500 (10%, тяжёлая часть)    |
+| `label_replace`/`label_join`                | ~5 100 (6%, тяжёлая часть)     |
+| `histogram_quantile` по high-card оси       | ~5 100 (6%, тяжёлая часть)     |
+| `quantile_over_time`/`stddev_over_time`/`predict_linear` | ~5 100 (6%, тяжёлая часть) |
 
 > Проценты в сумме превышают 100%, так как одно правило может содержать несколько функций (например, `histogram_quantile(..., sum(rate(...)))`).
 
@@ -364,7 +364,7 @@ Grafana доступна по адресу `http://grafana.<ingress_public_ip>.s
 
 Что это означает для интерпретации результатов:
 
-- Измеренное потребление CPU и RAM компонентами `vmselect` и `vmstorage` отражает реальную стоимость выполнения ~67 500 алертов с базовыми функциями (`rate`, `histogram_quantile`, `increase`, `*_over_time`) на метриках низкой кардинальности: каждое приложение экспонирует лишь несколько рядов на метрику, а `job`-фильтр сужает выборку до одного release. Сложных агрегаций по тысячам серий нет.
+- Измеренное потребление CPU и RAM компонентами `vmselect` и `vmstorage` отражает реальную стоимость выполнения ~85 000 алертов с базовыми функциями (`rate`, `histogram_quantile`, `increase`, `*_over_time`) на метриках низкой кардинальности: каждое приложение экспонирует лишь несколько рядов на метрику, а `job`-фильтр сужает выборку до одного release. Сложных агрегаций по тысячам серий нет.
 - В production-окружении с высокой кардинальностью (тысячи pod'ов, контейнеров, сервисов в одном `job` или без фильтра) те же `rate()` и `histogram_quantile` будут сканировать значительно больше рядов, а добавление subqueries, joins и `label_*` дополнительно увеличит нагрузку на query engine.
 - Тест фиксирует ориентир для профиля «много простых алертов на низкокардинальных метриках»; для тяжёлых PromQL-выражений результаты следует перепроверять отдельно.
 

@@ -95,7 +95,7 @@ CHART_PATH = os.environ.get("CHART_PATH", os.path.join(REPO_ROOT, "chart"))
 NAMES_FILE = os.environ.get("NAMES_FILE", os.path.join(SCRIPT_DIR, "app-names.txt"))
 IMAGE_REPO = os.environ.get(
     "IMAGE_REPO", "ghcr.io/patsevanton/performance-test-alerts-victoriametrics")
-IMAGE_TAG = os.environ.get("IMAGE_TAG", "1.7.0")
+IMAGE_TAG = os.environ.get("IMAGE_TAG", "1.8.1")
 ALERTS_PER_APP = int(os.environ.get("ALERTS_PER_APP", "50"))
 BASE_ALERTS_COUNT = int(os.environ.get("BASE_ALERTS_COUNT", "10"))
 EXTRA_ALERTS_COUNT = int(os.environ.get(
@@ -157,7 +157,7 @@ BASE = _resolve_base()
 # Последний порог равен ожидаемому максимуму алертов (TARGET_APPS*ALERTS_PER_APP),
 # чтобы скрипт продолжал сбор до фактического завершения deploys всех приложений.
 TARGETS = [500, 5000, 10000, 15000, 20000, 25000, 30000, 35000,
-           40000, 45000, 50000, 55000, 60000, 65000, 67500]
+           40000, 45000, 50000, 55000, 60000, 65000, 70000, 75000, 80000, 85000]
 
 # Префиксы имён подов и job'ов компонент vmks для подстановки в PromQL.
 _VMKS_STACK_PREFIX = f"{RELEASE_NAME}-victoria-metrics-k8s-stack"
