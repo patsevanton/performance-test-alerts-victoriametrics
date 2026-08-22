@@ -10,12 +10,12 @@ VictoriaMetrics часто применяют как единый бэкенд �
 
 Инфраструктура разворачивается Terraform в Yandex Cloud. Кластер Managed Kubernetes (`k8s.tf`, версия 1.33) состоит из master (управляемый, вне кластера) и группы из 32 узлов `standard-v3`, 4 vCPU / 8 ГБ каждый, preemptible, с распределением по трём зонам (`ru-central1-b/-d/-e`). Ноды не имеют публичных IP: `network_interface.nat = false`, исходящий трафик из приватных подсетей идёт через NAT-шлюз и Route Table (`net.tf`). Публичный адрес есть только у балансировщика `ingress-nginx`, из которого через `sslip.io` формируются FQDN Grafana и vmselect. Исходники инфраструктуры: [`k8s.tf`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/k8s.tf), [`net.tf`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/net.tf), [`ip-dns.tf`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/ip-dns.tf), [`monitoring.tf`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/monitoring.tf).
 
-Сам стек мониторинга установлен через Helm-чарт `victoria-metrics-k8s-stack` (версия 0.90.2) в namespace `vmks`:
+Сам стек мониторинга установлен через Helm-чарт `victoria-metrics-k8s-stack` (версия 0.91.1) в namespace `vmks`:
 
 ```bash
 helm upgrade --install vmks oci://ghcr.io/victoriametrics/helm-charts/victoria-metrics-k8s-stack \
   --namespace vmks --create-namespace \
-  --version 0.90.2 \
+  --version 0.91.1 \
   --wait --values vmks-values.yaml
 ```
 

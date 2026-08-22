@@ -189,5 +189,15 @@ output "grafana_admin_password_command" {
 
 output "vmselect_url" {
   description = "URL vmselect / VictoriaMetrics query API (сформирован через sslip.io из публичного IP балансировщика ingress-nginx)"
-  value       = "http://vmselect.${local.ingress_public_ip}.sslip.io"
+  value       = "http://vmselect.${local.ingress_public_ip}.sslip.io/select/0/vmui/"
+}
+
+output "vmalert_url" {
+  description = "URL vmalert UI (сформирован через sslip.io из публичного IP балансировщика ingress-nginx)"
+  value       = "http://vmalert.${local.ingress_public_ip}.sslip.io"
+}
+
+output "alertmanager_url" {
+  description = "URL alertmanager UI (сформирован через sslip.io из публичного IP балансировщика ingress-nginx)"
+  value       = "http://alertmanager.${local.ingress_public_ip}.sslip.io"
 }

@@ -188,6 +188,13 @@ prometheus-node-exporter:
   priorityClassName: vmks-critical
 
 alertmanager:
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    hosts:
+      - alertmanager.${ingress_public_ip}.sslip.io
   spec:
     priorityClassName: vmks-critical
     replicaCount: 2
@@ -219,6 +226,13 @@ kube-state-metrics:
   priorityClassName: vmks-critical
 
 vmalert:
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    hosts:
+      - vmalert.${ingress_public_ip}.sslip.io
   spec:
     priorityClassName: vmks-critical
     replicaCount: 2
