@@ -74,6 +74,10 @@ vmcluster:
           labelSelector:
             matchLabels:
               app.kubernetes.io/name: vmstorage
+      # Диск: по объёму 20Gi хватало с запасом (занято ~3.3Gi при retention 1 месяц),
+      # но производительность yc-network-ssd (IOPS/throughput) масштабируется линейно
+      # с размером диска — на 20Gi запись частей упиралась в потолок при насыщении вставки.
+      # 65Gi даёт ~3.2x IOPS под запись и merge частей.
       storage:
         volumeClaimTemplate:
           spec:
@@ -81,7 +85,7 @@ vmcluster:
             accessModes: ["ReadWriteOnce"]
             resources:
               requests:
-                storage: 20Gi
+                storage: 65Gi
       # Поиск выполняется на vmstorage; дефолт maxConcurrentRequests=2 даёт 429 «couldn't start executing in 10s»
       # при параллельных запросах от vmselect/vmalert (см. также vmselect.extraArgs).
       extraArgs:
@@ -98,11 +102,14 @@ vmcluster:
       # Memory: при 50000 ALERTS пик container_memory_working_set_bytes ~3106Mi (линейно ~57,8 MiB / 1000 ALERTS).
       # 4Gi (4096Mi) покрывали пик с небольшим остатком, но при росте за 50k ALERTS лимит исчерпывается
       # (~70k ALERTS → ~4Gi). Поднимаем до 5Gi без production-запаса — только под измеренный профиль теста.
-      # CPU: пик ~458m при limits 3 — запас 6x, без изменений.
+      # Memory: при насыщении вставки (1700+ app) working set дошел до ~4.9Gi при limits 5Gi — впритык
+      # к OOM. Поднимаем до 6Gi под merge частей при высоком ingestion.
+      # CPU: при насыщении вставки usage уперся в limits 3 (2.1–3.0 ядер по kubectl top),
+      # vminsert-очередь vmagent переполнялась и дропала данные. Поднимаем до 6.
       resources:
         limits:
-          cpu: "3"
-          memory: 5Gi
+          cpu: "6"
+          memory: 6Gi
         requests:
           cpu: 500m
           memory: 1Gi
@@ -271,10 +278,13 @@ vmagent:
     extraArgs:
       promscrape.maxScrapeSize: "134217728"
     # 768Mi давало OOMKilled: kubernetes_sd + сотни/тысячи целей держат метаданные в памяти.
+    # CPU: при насыщении (1700+ app, ~2k целей) usage уперся в limits 2 (~1.95 ядер/под),
+    # scrape-таймауты (request canceled while reading body) и переполнение persistent queue.
+    # Поднимаем до 4. Memory: 3Gi → 4Gi под рост SD-метаданных и буферов.
     resources:
       limits:
-        cpu: "2"
-        memory: 3Gi
+        cpu: "4"
+        memory: 4Gi
       requests:
         cpu: 250m
         memory: 512Mi
