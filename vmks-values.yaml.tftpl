@@ -212,14 +212,18 @@ alertmanager:
             requests:
               storage: 1Gi
 
-    # Больше CPU: при лимите ~1 ядро наблюдался CFS throttling (container_cpu_cfs_throttled_seconds_total).
+    # Memory: 1536Mi давало OOMKilled (Exit 137) — после рестарта vmalert (2 реплики) доставляет
+    # backlog из ~16k правил (360 VMRule), память Alertmanager растёт скачком
+    # (689Mi → 958Mi за минуту после старта) и упирается в лимит → CrashLoopBackOff
+    # → vmalert получает connection refused по :9093. Поднимаем до 4Gi.
+    # CPU: при лимите ~1 ядро наблюдался CFS throttling (container_cpu_cfs_throttled_seconds_total).
     resources:
       limits:
         cpu: "2"
-        memory: 1536Mi
+        memory: 4Gi
       requests:
         cpu: 200m
-        memory: 128Mi
+        memory: 512Mi
 
 kube-state-metrics:
   # Высокий приоритет: мониторинг не должен вытесняться apps-нагрузкой стенда.
