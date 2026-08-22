@@ -95,7 +95,7 @@ CHART_PATH = os.environ.get("CHART_PATH", os.path.join(REPO_ROOT, "chart"))
 NAMES_FILE = os.environ.get("NAMES_FILE", os.path.join(SCRIPT_DIR, "app-names.txt"))
 IMAGE_REPO = os.environ.get(
     "IMAGE_REPO", "ghcr.io/patsevanton/performance-test-alerts-victoriametrics")
-IMAGE_TAG = os.environ.get("IMAGE_TAG", "1.8.1")
+IMAGE_TAG = os.environ.get("IMAGE_TAG", "1.9.0")
 ALERTS_PER_APP = int(os.environ.get("ALERTS_PER_APP", "50"))
 BASE_ALERTS_COUNT = int(os.environ.get("BASE_ALERTS_COUNT", "10"))
 EXTRA_ALERTS_COUNT = int(os.environ.get(
