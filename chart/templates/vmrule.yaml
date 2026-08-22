@@ -164,13 +164,13 @@ spec:
             {{- /* 25% joins (5 правил: i=6..10) */}}
             {{- else if lt $i 11 }}
             {{- if eq (mod $i 2) 0 }}
-            rate(app_errors_total{job="{{ $appName }}"}[5m]) * on(route,tenant_id) group_left(region) rate(app_requests_total{job="{{ $appName }}"}[5m]) > {{ add 40 $i }}
+            rate(app_errors_total{job="{{ $appName }}"}[5m]) * on(route,tenant_id) group_left(region) sum by(route,tenant_id,region) (rate(app_requests_total{job="{{ $appName }}"}[5m])) > {{ add 40 $i }}
             {{- else if eq $i 7 }}
             rate(app_errors_total{job="{{ $appName }}"}[5m]) or on(route,tenant_id) rate(app_requests_total{job="{{ $appName }}"}[5m])
             {{- else if eq $i 9 }}
             (rate(app_errors_total{job="{{ $appName }}"}[5m]) > 0) and on(route,tenant_id) (rate(app_requests_total{job="{{ $appName }}"}[5m]) > 0)
             {{- else }}
-            rate(app_errors_total{job="{{ $appName }}"}[5m]) * on(route,tenant_id) group_left(region,version) rate(app_requests_total{job="{{ $appName }}"}[5m]) > {{ add 50 $i }}
+            rate(app_errors_total{job="{{ $appName }}"}[5m]) * on(route,tenant_id) group_left(region,version) sum by(route,tenant_id,region,version) (rate(app_requests_total{job="{{ $appName }}"}[5m])) > {{ add 50 $i }}
             {{- end }}
             {{- /* 15% label_replace и label_join (3 правила: i=11..13) */}}
             {{- else if lt $i 14 }}

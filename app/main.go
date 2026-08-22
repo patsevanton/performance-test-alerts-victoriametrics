@@ -69,6 +69,8 @@ func main() {
 	tenants := makeTenants(envInt("APP_TENANTS", 5))
 	routes := makeRoutes(envInt("APP_ROUTES", 10))
 	histBuckets := envInt("APP_HIST_BUCKETS", 5)
+	region := envStr("APP_REGION", "unknown")
+	version := envStr("APP_VERSION", "unknown")
 
 	labelNames := []string{"method", "endpoint", "status_code", "route", "tenant_id", "region", "version"}
 

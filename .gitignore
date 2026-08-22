@@ -44,3 +44,4 @@ scripts/app-names.txt
 
 # Values генерируются из *.tftpl через terraform (monitoring.tf)
 vmks-values.yaml
+app/main
