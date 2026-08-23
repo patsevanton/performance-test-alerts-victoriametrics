@@ -1,13 +1,13 @@
 # Создание сервисного аккаунта для управления Kubernetes
 resource "yandex_iam_service_account" "sa_k8s_editor" {
-  folder_id = local.folder_id
+  folder_id = var.folder_id
   name      = "sa-k8s-editor" # Имя сервисного аккаунта
 }
 
 # Назначение роли "editor" сервисному аккаунту на уровне папки
 resource "yandex_resourcemanager_folder_iam_member" "sa_k8s_editor_permissions" {
   role      = "editor" # Роль, дающая полные права на ресурсы папки
-  folder_id = local.folder_id
+  folder_id = var.folder_id
   member    = "serviceAccount:${yandex_iam_service_account.sa_k8s_editor.id}" # Назначаемый участник
 }
 
@@ -23,7 +23,7 @@ resource "time_sleep" "wait_sa" {
 # Создание Kubernetes-кластера в Yandex Cloud
 resource "yandex_kubernetes_cluster" "vmalert" {
   name       = "vmalert" # Имя кластера
-  folder_id  = local.folder_id
+  folder_id  = var.folder_id
   network_id = local.network_id # Сеть, к которой подключается кластер
 
   master {

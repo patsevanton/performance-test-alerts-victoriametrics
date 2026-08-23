@@ -1,7 +1,4 @@
-data "yandex_client_config" "client" {}
-
 locals {
-  folder_id  = data.yandex_client_config.client.folder_id
   network_id = yandex_vpc_network.vmalert.id
 
   subnet_b_id   = yandex_vpc_subnet.vmalert-b.id
