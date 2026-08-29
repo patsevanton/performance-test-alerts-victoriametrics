@@ -33,7 +33,7 @@ Ctrl-C — будут выгружены снимки, собранные к э�
   SETTLE_WAIT       по умолчанию 600  — пауза (с) после установки TARGET_APPS
                     app перед финальным снимком «после через 10 мин».
   VMSELECT_URL      по умолчанию берётся из `terraform output -raw vmselect_url`
-                    (FQDN формируется через sslip.io из публичного IP ingress-nginx).
+                    (FQDN формируется через sslip.io из публичного IP Traefik).
   RELEASE_NAME      по умолчанию vmks — имя release, которым установлен чарт
                     victoria-metrics-k8s-stack (helm install <RELEASE_NAME> ...).
                     От него зависят имена подов и scrape-job'ов компонент vmks.

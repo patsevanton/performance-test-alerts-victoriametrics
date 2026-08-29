@@ -8,7 +8,7 @@ VictoriaMetrics часто применяют как единый бэкенд �
 
 ## Стенд: Yandex Managed K8s + vmks
 
-Инфраструктура разворачивается Terraform в Yandex Cloud. Кластер Managed Kubernetes (`k8s.tf`, версия 1.33) состоит из master (управляемый, вне кластера) и группы из 32 узлов `standard-v3`, 4 vCPU / 8 ГБ каждый, preemptible, с распределением по трём зонам (`ru-central1-b/-d/-e`). Ноды не имеют публичных IP: `network_interface.nat = false`, исходящий трафик из приватных подсетей идёт через NAT-шлюз и Route Table (`net.tf`). Публичный адрес есть только у балансировщика `ingress-nginx`, из которого через `sslip.io` формируются FQDN Grafana и vmselect. Исходники инфраструктуры: [`k8s.tf`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/k8s.tf), [`net.tf`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/net.tf), [`ip-dns.tf`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/ip-dns.tf), [`monitoring.tf`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/monitoring.tf).
+Инфраструктура разворачивается Terraform в Yandex Cloud. Кластер Managed Kubernetes (`k8s.tf`, версия 1.33) состоит из master (управляемый, вне кластера) и группы из 32 узлов `standard-v3`, 4 vCPU / 8 ГБ каждый, preemptible, с распределением по трём зонам (`ru-central1-b/-d/-e`). Ноды не имеют публичных IP: `network_interface.nat = false`, исходящий трафик из приватных подсетей идёт через NAT-шлюз и Route Table (`net.tf`). Публичный адрес есть только у балансировщика Traefik, из которого через `sslip.io` формируются FQDN Grafana и vmselect. Исходники инфраструктуры: [`k8s.tf`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/k8s.tf), [`net.tf`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/net.tf), [`ip-dns.tf`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/ip-dns.tf), [`monitoring.tf`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/monitoring.tf).
 
 Сам стек мониторинга установлен через Helm-чарт `victoria-metrics-k8s-stack` (версия 0.90.2) в namespace `vmks`:
 
@@ -19,7 +19,7 @@ helm upgrade --install vmks oci://ghcr.io/victoriametrics/helm-charts/victoria-m
   --wait --values vmks-values.yaml
 ```
 
-Values генерируются из шаблона [`vmks-values.yaml.tftpl`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/vmks-values.yaml.tftpl) через Terraform `templatefile` (`monitoring.tf`); FQDN Grafana формируется из публичного IP ingress-nginx (`terraform output grafana_url`). Пароль Grafana извлекается из секрета:
+Values генерируются из шаблона [`vmks-values.yaml.tftpl`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/vmks-values.yaml.tftpl) через Terraform `templatefile` (`monitoring.tf`); FQDN Grafana формируется из публичного IP Traefik (`terraform output grafana_url`). Пароль Grafana извлекается из секрета:
 
 ```bash
 kubectl get secret vmks-grafana -n vmks -o jsonpath='{.data.admin-password}' | base64 --decode; echo

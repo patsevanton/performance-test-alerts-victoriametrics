@@ -2,10 +2,8 @@ grafana:
   # Высокий приоритет: мониторинг не должен вытесняться apps-нагрузкой стенда.
   priorityClassName: vmks-critical
   ingress:
-    ingressClassName: nginx
+    ingressClassName: traefik
     enabled: true
-    annotations:
-      nginx.ingress.kubernetes.io/ssl-redirect: "false"
     hosts:
       - grafana.${ingress_public_ip}.sslip.io
 
@@ -183,9 +181,7 @@ vmcluster:
   ingress:
     select:
       enabled: true
-      ingressClassName: nginx
-      annotations:
-        nginx.ingress.kubernetes.io/ssl-redirect: "false"
+      ingressClassName: traefik
       hosts:
         - vmselect.${ingress_public_ip}.sslip.io
 
@@ -197,9 +193,7 @@ prometheus-node-exporter:
 alertmanager:
   ingress:
     enabled: true
-    ingressClassName: nginx
-    annotations:
-      nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    ingressClassName: traefik
     hosts:
       - alertmanager.${ingress_public_ip}.sslip.io
   spec:
@@ -239,9 +233,7 @@ kube-state-metrics:
 vmalert:
   ingress:
     enabled: true
-    ingressClassName: nginx
-    annotations:
-      nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    ingressClassName: traefik
     hosts:
       - vmalert.${ingress_public_ip}.sslip.io
   spec:

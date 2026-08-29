@@ -130,12 +130,13 @@ provider "helm" {
   }
 }
 
-# Установка ingress-nginx через Helm
-resource "helm_release" "ingress_nginx" {
-  name             = "ingress-nginx"
-  chart            = "oci://cr.yandex/yc-marketplace/yandex-cloud/ingress-nginx/chart/ingress-nginx"
-  version          = "4.13.0"
-  namespace        = "ingress-nginx"
+# Установка Traefik через Helm
+resource "helm_release" "traefik" {
+  name             = "traefik"
+  chart            = "traefik"
+  repository       = "https://traefik.github.io/charts"
+  version          = "41.3.0"
+  namespace        = "traefik"
   create_namespace = true
 
   depends_on = [
@@ -146,21 +147,33 @@ resource "helm_release" "ingress_nginx" {
 
   values = [
     yamlencode({
-      controller = {
-        replicaCount = 2
-        podDisruptionBudget = {
-          enabled      = true
-          minAvailable = 1
-        }
-        service = {
+      image = {
+        registry   = "ghcr.io"
+        repository = "traefik/traefik"
+      }
+      service = {
+        spec = {
+          type           = "LoadBalancer"
           loadBalancerIP = local.ingress_public_ip
         }
-        config = {
-          log-format-escape-json = "true"
-          log-format-upstream = trimspace(<<-EOT
-            {"ts":"$time_iso8601","http":{"request_id":"$req_id","method":"$request_method","status_code":$status,"url":"$host$request_uri","host":"$host","uri":"$request_uri","request_time":$request_time,"user_agent":"$http_user_agent","protocol":"$server_protocol","trace_session_id":"$http_trace_session_id","server_protocol":"$server_protocol","content_type":"$sent_http_content_type","bytes_sent":"$bytes_sent"},"nginx":{"x-forward-for":"$proxy_add_x_forwarded_for","remote_addr":"$proxy_protocol_addr","http_referrer":"$http_referer"}}
-          EOT
-          )
+      }
+      # Таймауты для больших загрузок, аналог proxy-read/send-timeout у nginx.
+      ports = {
+        web = {
+          transport = {
+            respondingTimeouts = {
+              readTimeout  = "600s"
+              writeTimeout = "0s"
+            }
+          }
+        }
+        websecure = {
+          transport = {
+            respondingTimeouts = {
+              readTimeout  = "600s"
+              writeTimeout = "0s"
+            }
+          }
         }
       }
     })
@@ -173,12 +186,12 @@ output "k8s_cluster_credentials_command" {
 }
 
 output "ingress_public_ip" {
-  description = "External ingress-nginx IP"
+  description = "External Traefik IP"
   value       = local.ingress_public_ip
 }
 
 output "grafana_url" {
-  description = "URL Grafana (сформирован через sslip.io из публичного IP балансировщика ingress-nginx)"
+  description = "URL Grafana (сформирован через sslip.io из публичного IP балансировщика Traefik)"
   value       = "http://grafana.${local.ingress_public_ip}.sslip.io"
 }
 
@@ -188,21 +201,21 @@ output "grafana_admin_password_command" {
 }
 
 output "vmselect_url" {
-  description = "URL vmselect / VictoriaMetrics query API (сформирован через sslip.io из публичного IP балансировщика ingress-nginx)"
+  description = "URL vmselect / VictoriaMetrics query API (сформирован через sslip.io из публичного IP балансировщика Traefik)"
   value       = "http://vmselect.${local.ingress_public_ip}.sslip.io"
 }
 
 output "vmselect_vmui_url" {
-  description = "URL vmselect UI (сформирован через sslip.io из публичного IP балансировщика ingress-nginx)"
+  description = "URL vmselect UI (сформирован через sslip.io из публичного IP балансировщика Traefik)"
   value       = "http://vmselect.${local.ingress_public_ip}.sslip.io/select/0/vmui/"
 }
 
 output "vmalert_url" {
-  description = "URL vmalert UI (сформирован через sslip.io из публичного IP балансировщика ingress-nginx)"
+  description = "URL vmalert UI (сформирован через sslip.io из публичного IP балансировщика Traefik)"
   value       = "http://vmalert.${local.ingress_public_ip}.sslip.io"
 }
 
 output "alertmanager_url" {
-  description = "URL alertmanager UI (сформирован через sslip.io из публичного IP балансировщика ingress-nginx)"
+  description = "URL alertmanager UI (сформирован через sslip.io из публичного IP балансировщика Traefik)"
   value       = "http://alertmanager.${local.ingress_public_ip}.sslip.io"
 }
