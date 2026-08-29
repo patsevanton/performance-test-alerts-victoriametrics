@@ -2,7 +2,7 @@
 """Сбор снимков Capacity Planning из VictoriaMetrics во время живого теста.
 
 Запускается ОДИН раз в начале теста (параллельно с scripts/deploy-apps.sh). Скрипт
-опрашивает `count(ALERTS)` каждые POLL_INTERVAL секунд и, как только значение
+опрашивает число rules в VMRule каждые POLL_INTERVAL секунд и, как только значение
 пересекает очередной порог из TARGETS (500, 5000, ..., 85000), фиксирует снимок всех
 метрик из QUERIES через instant-запрос с `time=now`. Последний порог равен
 TARGET_APPS*ALERTS_PER_APP, поэтому скрипт собирает снимки вплоть до завершения
@@ -27,7 +27,7 @@ Ctrl-C — будут выгружены снимки, собранные к э�
   TARGET_APPS       по умолчанию 1700 — число разворачиваемых приложений
   ALERTS_PER_APP    по умолчанию 50   — алертов на одно приложение
   BASE_ALERTS_COUNT по умолчанию 10   — базовых алертов на приложение (информационно)
-  POLL_INTERVAL     по умолчанию 10   — секунды между опросами count(ALERTS)
+   POLL_INTERVAL     по умолчанию 10   — секунды между опросами VMRule
   MIN_SNAPSHOT_GAP  по умолчанию 120  — минимальная пауза (с) между снимками,
                     чтобы rate-метрики успели устаканиться после фиксации порога
   SETTLE_WAIT       по умолчанию 600  — пауза (с) после установки TARGET_APPS
@@ -82,7 +82,7 @@ def _resolve_base() -> str:
 
 BASE = _resolve_base()
 
-# Пороги (count(ALERTS)), при достижении которых фиксируется снимок.
+# Пороги количества rules, при достижении которых фиксируется снимок.
 # Последний порог равен ожидаемому максимуму алертов (TARGET_APPS*ALERTS_PER_APP),
 # чтобы скрипт продолжал сбор до фактического завершения деплоя всех приложений,
 # а не выходил раньше на промежуточном пороге.
@@ -164,8 +164,6 @@ QUERIES.update({
     ),
 })
 
-COUNT_QUERY = "count(ALERTS)"
-
 # Куда писать результаты (рядом со скриптом).
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 JSON_PATH = os.path.join(SCRIPT_DIR, "capacity_snapshots.json")
@@ -220,6 +218,25 @@ def fetch_snapshot(t: int) -> dict:
     with ThreadPoolExecutor(max_workers=16) as ex:
         futs = {k: ex.submit(fetch_one, t, q) for k, q in QUERIES.items()}
         return {k: futs[k].result() for k in QUERIES}
+
+
+def count_vmrule_alerts() -> int | None:
+    """Считает rules во всех VMRule через Kubernetes API."""
+    try:
+        out = subprocess.run(
+            ["kubectl", "get", "vmrule", "-A", "-o", "json"],
+            capture_output=True, text=True, timeout=60,
+        )
+        if out.returncode != 0:
+            return None
+        items = json.loads(out.stdout).get("items", [])
+        return sum(
+            sum(len(group.get("rules", []))
+                for group in item.get("spec", {}).get("groups", []))
+            for item in items
+        )
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        return None
 
 
 def fmt_cpu_m(x: float | None) -> str:
@@ -367,7 +384,7 @@ def write_outputs(snapshots: list) -> None:
 
 
 def main() -> None:
-    print(f"Опрашиваю count(ALERTS) каждые {POLL_INTERVAL}s. "
+    print(f"Опрашиваю VMRule каждые {POLL_INTERVAL}s. "
           f"TARGETS={TARGETS} "
           f"expected_max_alerts={EXPECTED_MAX_ALERTS} "
           f"(TARGET_APPS={TARGET_APPS} ALERTS_PER_APP={ALERTS_PER_APP})")
@@ -389,20 +406,20 @@ def main() -> None:
     while next_idx < len(TARGETS) and not interrupted["flag"]:
         now = int(time.time())
         try:
-            count_val = fetch_one(now, COUNT_QUERY)
+            count_val = count_vmrule_alerts()
         except Exception as e:
-            print(f"[{fmt_rel(int(now - start_ts))}] count(ALERTS) query failed: {e}", file=sys.stderr)
+            print(f"[{fmt_rel(int(now - start_ts))}] VMRule query failed: {e}", file=sys.stderr)
             time.sleep(POLL_INTERVAL)
             continue
 
         rel = int(now - start_ts)
         if count_val is None:
-            print(f"[{fmt_rel(rel)}] count(ALERTS)=<нет данных>")
+            print(f"[{fmt_rel(rel)}] VMRule=<нет данных>")
             time.sleep(POLL_INTERVAL)
             continue
 
         target = TARGETS[next_idx]
-        print(f"[{fmt_rel(rel)}] count(ALERTS)={int(count_val)} (next target={target})")
+        print(f"[{fmt_rel(rel)}] VMRule rules={int(count_val)} (next target={target})")
 
         if count_val >= target:
             # Фиксируем снимок в текущий момент.
@@ -479,9 +496,9 @@ def main() -> None:
             now = int(time.time())
             rel = int(now - start_ts)
             try:
-                count_val = fetch_one(now, COUNT_QUERY)
+                count_val = count_vmrule_alerts()
             except Exception as e:
-                print(f"[{fmt_rel(rel)}] count(ALERTS) query failed before settle snapshot: {e}",
+                print(f"[{fmt_rel(rel)}] VMRule query failed before settle snapshot: {e}",
                       file=sys.stderr)
                 count_val = None
             try:

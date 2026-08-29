@@ -9,30 +9,18 @@
   2. Устанавливает app по одному через `helm upgrade --install --wait`
      (с ретраями до 3 раз при ошибке). Счётчик `installed` — это номер
      завершённого релиза в цикле (детерминирован, не зависит от kubectl).
-  3. Калибрует коэффициент `k` двумя реальными замерами `count(ALERTS)`:
-       - при `installed == 10`: `k1 = count(ALERTS) / (10 * ALERTS_PER_APP)`;
-       - при `installed == 20`: `k2 = count(ALERTS) / (20 * ALERTS_PER_APP)`;
-       После app-20 `k = (k1 + k2) / 2` (или удвоенный успешный, или 1.0 при
-       неудаче обоих). Замер делается сразу после завершения helm install
-       соответствующего app (с ретраями до 3 раз с паузой POLL_INTERVAL).
-  4. После app-20 оценивает число алертов как `installed * ALERTS_PER_APP * k`
-     и больше не запрашивает `count(ALERTS)`.
-  5. При `alerts_count >= TARGETS[next_idx]` делает instant-снимок всех
-     метрик из QUERIES через `ThreadPoolExecutor(max_workers=16)`. В снимок
-     записываются `alerts_count`, `alerts_count_estimated=True`, `k`,
-     `installed`.
-  6. Пороги < `20 * ALERTS_PER_APP` (например 500 = 10*50) фиксируются
-     ретроспективно после калибровки (на момент app-20) с пометкой
-     `retrospective=True`.
-  7. После последнего порога выжидает SETTLE_WAIT секунд (по умолчанию 600)
-     и делает финальный снимок «после через 10 мин установки N app».
+   3. После каждого успешного helm install получает VMRule через Kubernetes API.
+      Число алертов считается как количество VMRule, умноженное на число rules
+      внутри VMRule (для неодинаковых объектов используется точная сумма rules).
+   4. При `alerts_count >= TARGETS[next_idx]` делает instant-снимок всех
+      метрик из QUERIES через `ThreadPoolExecutor(max_workers=16)`. В снимок
+      записываются `alerts_count`, `alerts_count_estimated=False`,
+      `installed`.
+   5. После последнего порога выжидает SETTLE_WAIT секунд (по умолчанию 600)
+      и делает финальный снимок «после через 10 мин установки N app».
 
-Логика `count(ALERTS)`-опроса из старого `fetch_capacity_snapshots.py`
-(непрерывный poll каждые POLL_INTERVAL) намеренно удалена: на росте числа
-алертов `count(ALERTS)` упирается в таймауты vmselect (120с) из-за перегрузки
-vmstorage/vmselect оценкой ~1700 VMRule и ingestion'ом ALERTS. Оценка через
-`installed * ALERTS_PER_APP * k`, откалиброванная двумя замерами на малой
-нагрузке, заменяет непрерывный опрос.
+Подсчёт через `count(ALERTS)` и экстраполяция намеренно не используются.
+Источник числа правил — Kubernetes API, где operator хранит исходные VMRule.
 
 Переменные окружения (deploy, из scripts/deploy-apps.sh):
   CHART_PATH         по умолчанию <repo>/chart
@@ -48,8 +36,7 @@ vmstorage/vmselect оценкой ~1700 VMRule и ingestion'ом ALERTS. Оце�
                      cardinality-параметры (передаются в Helm только при явном задании)
 
 Переменные окружения (snapshot, из scripts/fetch_capacity_snapshots.py):
-  POLL_INTERVAL      по умолчанию 10  — секунды между ретраями count(ALERTS)
-                     при калибровке
+   POLL_INTERVAL      по умолчанию 10  — секунды между ретраями запроса VMRule
   MIN_SNAPSHOT_GAP    по умолчанию 120 — ЗАДАНО, НО НЕ ПРИМЕНЯЕТСЯ при --wait.
   # TODO: проверить, нужна ли пауза между снимками при --wait.
                      #       Сохранено как env для совместимости; намеренно не используется.
@@ -153,7 +140,7 @@ def _resolve_base() -> str:
 
 BASE = _resolve_base()
 
-# Пороги (count(ALERTS)), при достижении которых фиксируется снимок.
+# Пороги количества rules, при достижении которых фиксируется снимок.
 # Последний порог равен ожидаемому максимуму алертов (TARGET_APPS*ALERTS_PER_APP),
 # чтобы скрипт продолжал сбор до фактического завершения deploys всех приложений.
 TARGETS = [500, 5000, 10000, 15000, 20000, 25000, 30000, 35000,
@@ -210,13 +197,8 @@ QUERIES.update({
     ),
 })
 
-COUNT_QUERY = "count(ALERTS)"
-
 # Метка финального снимка «после через 10 мин установки N app».
 SETTLE_LABEL = f"после через 10 мин установки {TARGET_APPS} app"
-
-# Точки калибровки (номер установленного app, после которого делается замер).
-CALIB_POINTS = (10, 20)
 
 # Мягкая обработка Ctrl-C: прекратить deploys/опрос, выгрузить собранные снимки.
 _INTERRUPTED = {"flag": False}
@@ -310,8 +292,8 @@ def render_table(snapshots: list, calibration: dict | None = None) -> str:
                  f"expected_max_alerts={EXPECTED_MAX_ALERTS}")
     if calibration:
         lines.append(
-            f"calibration: k1={calibration.get('k1')} "
-            f"k2={calibration.get('k2')} k={calibration.get('k')}"
+            f"vmrule_count={calibration.get('vmrule_count')} "
+            f"rules_per_vmrule={calibration.get('rules_per_vmrule')}"
         )
     lines.append("")
     for snap in snapshots:
@@ -481,68 +463,48 @@ def deploy_app(name: str, set_args: list[str]) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Калибровка k.
+# Подсчёт rules в VMRule.
 # ---------------------------------------------------------------------------
-def count_alerts_with_retry(rel_start: int) -> float | None:
-    """До 3 попыток запросить count(ALERTS) с паузой POLL_INTERVAL."""
+def count_vmrule_alerts(rel_start: int, state: dict) -> int | None:
+    """Считает rules во всех VMRule через Kubernetes API с тремя ретраями."""
     for attempt in range(1, 4):
         if _INTERRUPTED["flag"]:
             return None
-        now = int(time.time())
         try:
-            val = fetch_one(now, COUNT_QUERY)
+            out = subprocess.run(
+                ["kubectl", "get", "vmrule", "-A", "-o", "json"],
+                capture_output=True, text=True, timeout=60,
+            )
+            if out.returncode != 0:
+                raise RuntimeError((out.stderr or "kubectl failed").strip())
+            items = json.loads(out.stdout).get("items", [])
+            rules_per_vmrule = [
+                sum(len(group.get("rules", []))
+                    for group in item.get("spec", {}).get("groups", []))
+                for item in items
+            ]
+            rules_per_vmrule_value = rules_per_vmrule[0] if rules_per_vmrule else 0
+            total = (len(items) * rules_per_vmrule_value
+                     if all(value == rules_per_vmrule_value for value in rules_per_vmrule)
+                     else sum(rules_per_vmrule))
+            state["vmrule_count"] = len(items)
+            state["rules_per_vmrule"] = rules_per_vmrule_value
+            if total:
+                return total
+            raise RuntimeError("VMRule objects contain no rules yet")
         except Exception as e:
-            print(f"[{fmt_rel(rel_start)}] count(ALERTS) query failed "
+            print(f"[{fmt_rel(rel_start)}] VMRule query failed "
                   f"(attempt {attempt}/3): {e}", file=sys.stderr)
-            val = None
-        if val is not None:
-            return val
-        print(f"[{fmt_rel(rel_start)}] count(ALERTS)=<нет данных> "
-              f"(attempt {attempt}/3)", file=sys.stderr)
         if attempt < 3 and not _INTERRUPTED["flag"]:
             time.sleep(POLL_INTERVAL)
     return None
-
-
-def calibrate_k(installed: int, rel_start: int, cal: dict) -> None:
-    """Запрашивает count(ALERTS) и заполняет k1/k2 в cal по точкам 10/20."""
-    val = count_alerts_with_retry(rel_start)
-    key = f"k{CALIB_POINTS.index(installed) + 1}"
-    cal[key] = None
-    cal[f"{key}_installed"] = installed
-    cal[f"{key}_count_alerts"] = None
-    if val is not None:
-        cal[key] = val / (installed * ALERTS_PER_APP)
-        cal[f"{key}_count_alerts"] = int(val)
-        print(f"[{fmt_rel(rel_start)}] calibration {key}: count(ALERTS)="
-              f"{int(val)} → {key}={cal[key]:.4f}")
-    else:
-        print(f"[{fmt_rel(rel_start)}] calibration {key}: count(ALERTS) failed",
-              file=sys.stderr)
-
-
-def finalize_k(cal: dict) -> None:
-    k1, k2 = cal.get("k1"), cal.get("k2")
-    if k1 is not None and k2 is not None:
-        cal["k"] = (k1 + k2) / 2
-    elif k1 is not None:
-        cal["k"] = k1 * 2
-        print("k2 failed — использую удвоенный k1", file=sys.stderr)
-    elif k2 is not None:
-        cal["k"] = k2 * 2
-        print("k1 failed — использую удвоенный k2", file=sys.stderr)
-    else:
-        cal["k"] = 1.0
-        print("Оба замера калибровки не удались — k=1.0 (оценка = installed*"
-              "ALERTS_PER_APP)", file=sys.stderr)
-    print(f"calibration: k1={cal.get('k1')} k2={cal.get('k2')} k={cal['k']:.4f}")
 
 
 # ---------------------------------------------------------------------------
 # Снимки по порогам.
 # ---------------------------------------------------------------------------
 def capture_snapshot(target, installed: int, alerts_count: float,
-                      rel_start: int, k: float, *,
+                       rel_start: int, *,
                       retrospective: bool = False) -> dict:
     now = int(time.time())
     rel = now - rel_start
@@ -557,8 +519,7 @@ def capture_snapshot(target, installed: int, alerts_count: float,
         "timestamp": now,
         "rel_seconds": rel,
         "alerts_count": int(alerts_count),
-        "alerts_count_estimated": True,
-        "k": float(k) if k is not None else None,
+        "alerts_count_estimated": False,
         "installed": installed,
         "metrics": metrics,
     }
@@ -571,7 +532,7 @@ def capture_snapshot(target, installed: int, alerts_count: float,
 
 
 def capture_settle_snapshot(installed: int, alerts_count: float,
-                             rel_start: int, k: float) -> dict:
+                             rel_start: int) -> dict:
     now = int(time.time())
     rel = now - rel_start
     try:
@@ -585,8 +546,7 @@ def capture_settle_snapshot(installed: int, alerts_count: float,
         "timestamp": now,
         "rel_seconds": rel,
         "alerts_count": int(alerts_count),
-        "alerts_count_estimated": True,
-        "k": float(k) if k is not None else None,
+        "alerts_count_estimated": False,
         "installed": installed,
         "metrics": metrics,
     }
@@ -621,16 +581,14 @@ def main() -> None:
     apps = all_names[start_offset:start_offset + TARGET_APPS]
 
     snapshots: list = []
-    cal: dict = {"k1": None, "k1_installed": None, "k1_count_alerts": None,
-                 "k2": None, "k2_installed": None, "k2_count_alerts": None,
-                 "k": None}
+    cal: dict = {"vmrule_count": 0, "rules_per_vmrule": 0}
 
     print(f"Развёртывание app-{START_INDEX}..app-{required} ({TARGET_APPS} шт.) "
           f"через helm upgrade --install --wait (ретраи до 3)")
     print(f"VMSELECT_URL={BASE}")
     print(f"TARGETS={TARGETS} expected_max_alerts={EXPECTED_MAX_ALERTS} "
           f"(TARGET_APPS={TARGET_APPS} ALERTS_PER_APP={ALERTS_PER_APP})")
-    print(f"Калибровка k: замер count(ALERTS) при installed={CALIB_POINTS}")
+    print("Подсчёт алертов: количество VMRule × количество rules внутри VMRule")
     print("Нажмите Ctrl-C для досрочной остановки и выгрузки собранных снимков.")
     print()
 
@@ -638,8 +596,6 @@ def main() -> None:
     set_args = build_set_args()
 
     next_idx = 0
-    k_ready = False
-    threshold_floor = 20 * ALERTS_PER_APP  # пороги ниже этого — ретроспективно
     for i, name in enumerate(apps, start=1):
         if _INTERRUPTED["flag"]:
             break
@@ -654,42 +610,17 @@ def main() -> None:
             continue
         installed = i
 
-        # Калибровка k1/k2 в точках 10/20 (сразу после helm install).
-        if installed in CALIB_POINTS:
-            calibrate_k(installed, int(time.time() - start_ts), cal)
-            if installed == CALIB_POINTS[-1]:
-                finalize_k(cal)
-                k_ready = True
-                # Ретроспективные снимки для порогов < 20*ALERTS_PER_APP
-                # (например 500 = 10*50) — на момент app-20.
-                now = int(time.time())
-                for t in TARGETS:
-                    if t >= threshold_floor:
-                        break
-                    if _INTERRUPTED["flag"]:
-                        break
-                    est = installed * ALERTS_PER_APP * cal["k"]
-                    print(f"[{fmt_rel(int(now - start_ts))}] "
-                          f"retrospective threshold {t} "
-                          f"(estimated alerts={int(est)})")
-                    snap = capture_snapshot(
-                        t, installed, est, int(start_ts), cal["k"],
-                        retrospective=True)
-                    snapshots.append(snap)
-                    next_idx += 1
-
-        # Оценка числа алертов и проверка порогов (только после app-20).
-        if k_ready and not _INTERRUPTED["flag"]:
-            alerts_count = installed * ALERTS_PER_APP * cal["k"]
-            while next_idx < len(TARGETS) and TARGETS[next_idx] < threshold_floor:
-                # Эти пороги уже закрыты ретроспективно.
-                next_idx += 1
+        alerts_count = count_vmrule_alerts(
+            int(time.time() - start_ts), cal)
+        if alerts_count is not None and not _INTERRUPTED["flag"]:
+            print(f"[{fmt_rel(int(time.time() - start_ts))}] "
+                  f"VMRule={cal['vmrule_count']} rules={alerts_count}")
             while (next_idx < len(TARGETS)
                    and alerts_count >= TARGETS[next_idx]
                    and not _INTERRUPTED["flag"]):
                 target = TARGETS[next_idx]
                 snap = capture_snapshot(
-                    target, installed, alerts_count, int(start_ts), cal["k"])
+                    target, installed, alerts_count, int(start_ts))
                 snapshots.append(snap)
                 next_idx += 1
 
@@ -703,7 +634,7 @@ def main() -> None:
 
     # Финальный снимок «после через 10 мин установки N app».
     all_targets_reached = not missed and not _INTERRUPTED["flag"]
-    if all_targets_reached and k_ready:
+    if all_targets_reached:
         print(f"\nВсе пороги достигнуты. "
               f"Жду {SETTLE_WAIT}s ({SETTLE_WAIT // 60} мин) перед финальным "
               f"снимком...")
@@ -720,10 +651,10 @@ def main() -> None:
             time.sleep(min(60, remaining))
 
         if not _INTERRUPTED["flag"]:
-            est = TARGET_APPS * ALERTS_PER_APP * cal["k"]
-            snap = capture_settle_snapshot(TARGET_APPS, est, int(start_ts),
-                                            cal["k"])
-            snapshots.append(snap)
+            alerts_count = count_vmrule_alerts(int(time.time() - start_ts), cal)
+            if alerts_count is not None:
+                snap = capture_settle_snapshot(TARGET_APPS, alerts_count, int(start_ts))
+                snapshots.append(snap)
 
     write_outputs(snapshots, cal)
     print()
