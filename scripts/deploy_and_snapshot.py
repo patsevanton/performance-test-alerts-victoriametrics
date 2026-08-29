@@ -313,43 +313,43 @@ def render_table(snapshots: list, rule_state: dict | None = None) -> str:
         lines.append(
             "CPU "
             + " ".join([
-                fmt_cpu_m(m["vmalert_cpu"]),
-                fmt_cpu_m(m["vmstorage_cpu"]),
-                fmt_cpu_m(m["vmselect_cpu"]),
-                fmt_cpu_m(m["vminsert_cpu"]),
-                fmt_cpu_m(m["vmagent_cpu"]),
-                fmt_cpu_m(m["operator_cpu"]),
+                fmt_cpu_m(m.get("vmalert_cpu")),
+                fmt_cpu_m(m.get("vmstorage_cpu")),
+                fmt_cpu_m(m.get("vmselect_cpu")),
+                fmt_cpu_m(m.get("vminsert_cpu")),
+                fmt_cpu_m(m.get("vmagent_cpu")),
+                fmt_cpu_m(m.get("operator_cpu")),
             ])
         )
         lines.append(
             "MEM "
             + " ".join([
-                fmt_mem_mi(m["vmalert_mem"]),
-                fmt_mem_mi(m["vmstorage_mem"]),
-                fmt_mem_mi(m["vmselect_mem"]),
-                fmt_mem_mi(m["vminsert_mem"]),
-                fmt_mem_mi(m["vmagent_mem"]),
-                fmt_mem_mi(m["operator_mem"]),
+                fmt_mem_mi(m.get("vmalert_mem")),
+                fmt_mem_mi(m.get("vmstorage_mem")),
+                fmt_mem_mi(m.get("vmselect_mem")),
+                fmt_mem_mi(m.get("vminsert_mem")),
+                fmt_mem_mi(m.get("vmagent_mem")),
+                fmt_mem_mi(m.get("operator_mem")),
             ])
         )
-        p99 = m["apiserver_p99"]
+        p99 = m.get("apiserver_p99")
         lines.append(
             "RPS "
             + " ".join([
-                fmt_rps(m["apiserver_rps"]),
+                fmt_rps(m.get("apiserver_rps")),
                 fmt_p99_sec(p99),
-                fmt_cpu_m(m["apiserver_cpu"]),
-                fmt_rps(m["vmselect_rps"]),
-                fmt_rps(m["vmstorage_rps"], 1),
-                fmt_rps(m["vminsert_rps"]),
+                fmt_cpu_m(m.get("apiserver_cpu")),
+                fmt_rps(m.get("vmselect_rps")),
+                fmt_rps(m.get("vmstorage_rps"), 1),
+                fmt_rps(m.get("vminsert_rps")),
             ])
         )
         lines.append(
             "GROWTH "
             + " ".join([
-                fmt_sec(m["vmalert_iter_max"]),
-                fmt_count(m["vmselect_concurrent"]),
-                fmt_count(m["vmagent_scrape_samples_vmalert"]),
+                fmt_sec(m.get("vmalert_iter_max")),
+                fmt_count(m.get("vmselect_concurrent")),
+                fmt_count(m.get("vmagent_scrape_samples_vmalert")),
             ])
         )
         # Метрики высококардинального профиля (PLAN-high-cardinality.md, 5.4) — всегда.
@@ -371,7 +371,6 @@ def render_table(snapshots: list, rule_state: dict | None = None) -> str:
 
 
 def write_outputs(snapshots: list, rule_state: dict | None = None) -> None:
-    table = render_table(snapshots, rule_state)
     payload = {
         "params": {
             "TARGET_APPS": TARGET_APPS,
@@ -391,6 +390,7 @@ def write_outputs(snapshots: list, rule_state: dict | None = None) -> None:
     }
     with open(JSON_PATH, "w") as f:
         json.dump(payload, f, indent=2)
+    table = render_table(snapshots, rule_state)
     with open(TXT_PATH, "w") as f:
         f.write(table + "\n")
     print(table)
