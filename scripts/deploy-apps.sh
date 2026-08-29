@@ -7,7 +7,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CHART_PATH="${CHART_PATH:-$REPO_ROOT/chart}"
 NAMES_FILE="${NAMES_FILE:-$SCRIPT_DIR/app-names.txt}"
 IMAGE_REPO="${IMAGE_REPO:-ghcr.io/patsevanton/performance-test-alerts-victoriametrics}"
-IMAGE_TAG="${IMAGE_TAG:-1.9.0}"
+IMAGE_TAG="${IMAGE_TAG:-1.9.3}"
 ALERTS_PER_APP="${ALERTS_PER_APP:-50}"
 BASE_ALERTS_COUNT="${BASE_ALERTS_COUNT:-10}"
 
@@ -65,7 +65,7 @@ deploy_app() {
   helm upgrade --install "$name" "$CHART_PATH" \
     --namespace "$name" \
     "${set_args[@]}" \
-    --wait=false \
+    --wait \
     --timeout 2m \
     2>&1 | tail -1
 }

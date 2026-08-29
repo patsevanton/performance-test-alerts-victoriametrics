@@ -19,14 +19,15 @@
    5. После последнего порога выжидает SETTLE_WAIT секунд (по умолчанию 600)
       и делает финальный снимок «после через 10 мин установки N app».
 
-Подсчёт через `count(ALERTS)` и экстраполяция намеренно не используются.
-Источник числа правил — Kubernetes API, где operator хранит исходные VMRule.
+Источник числа алертов для порогов — Kubernetes API: количество VMRule,
+умноженное на количество rules внутри VMRule. Запросы к VictoriaMetrics для
+подсчёта `ALERTS` не выполняются.
 
 Переменные окружения (deploy, из scripts/deploy-apps.sh):
   CHART_PATH         по умолчанию <repo>/chart
   NAMES_FILE         по умолчанию <scripts>/app-names.txt
   IMAGE_REPO         по умолчанию ghcr.io/patsevanton/performance-test-alerts-victoriametrics
-  IMAGE_TAG          по умолчанию 1.7.0
+  IMAGE_TAG          по умолчанию 1.9.3
   ALERTS_PER_APP     по умолчанию 50  — алертов на одно приложение
   BASE_ALERTS_COUNT  по умолчанию 10  — базовых алертов на приложение
   EXTRA_ALERTS_COUNT по умолчанию ALERTS_PER_APP - BASE_ALERTS_COUNT
@@ -37,9 +38,8 @@
 
 Переменные окружения (snapshot, из scripts/fetch_capacity_snapshots.py):
    POLL_INTERVAL      по умолчанию 10  — секунды между ретраями запроса VMRule
-  MIN_SNAPSHOT_GAP    по умолчанию 120 — ЗАДАНО, НО НЕ ПРИМЕНЯЕТСЯ при --wait.
-  # TODO: проверить, нужна ли пауза между снимками при --wait.
-                     #       Сохранено как env для совместимости; намеренно не используется.
+  MIN_SNAPSHOT_GAP   по умолчанию 120 — сохранено как env для совместимости;
+                     при последовательном deploy не применяется.
   SETTLE_WAIT        по умолчанию 600 — пауза (с) после deploys всех app перед
                      финальным снимком «после через 10 мин»
   VMSELECT_URL       по умолчанию `terraform output -raw vmselect_url`
@@ -47,7 +47,7 @@
                      victoria-metrics-k8s-stack
 
 Результаты:
-  - capacity_snapshots.json : сырые значения метрик по порогам + calibration
+  - capacity_snapshots.json : сырые значения метрик по порогам + rule_count
   - capacity_snapshots.txt  : форматированная таблица
   - stdout                  : та же таблица
 
@@ -82,7 +82,7 @@ CHART_PATH = os.environ.get("CHART_PATH", os.path.join(REPO_ROOT, "chart"))
 NAMES_FILE = os.environ.get("NAMES_FILE", os.path.join(SCRIPT_DIR, "app-names.txt"))
 IMAGE_REPO = os.environ.get(
     "IMAGE_REPO", "ghcr.io/patsevanton/performance-test-alerts-victoriametrics")
-IMAGE_TAG = os.environ.get("IMAGE_TAG", "1.9.0")
+IMAGE_TAG = os.environ.get("IMAGE_TAG", "1.9.3")
 ALERTS_PER_APP = int(os.environ.get("ALERTS_PER_APP", "50"))
 BASE_ALERTS_COUNT = int(os.environ.get("BASE_ALERTS_COUNT", "10"))
 EXTRA_ALERTS_COUNT = int(os.environ.get(
@@ -103,9 +103,8 @@ APP_VERSION = os.environ.get("APP_VERSION", "")
 # ---------------------------------------------------------------------------
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "10"))
 # Минимальная пауза (с) между фиксацией снимков.
-# TODO: проверить, нужна ли пауза между снимками при --wait.
-#       Сохранено как env для совместимости; при --wait намеренно НЕ применяется
-#       (deploys блокирует цикл естественным образом, а пауза удлиняет тест).
+# Сохранено как env для совместимости. При последовательном deploy не применяется:
+# естественная длительность установки уже разделяет снимки.
 MIN_SNAPSHOT_GAP = int(os.environ.get("MIN_SNAPSHOT_GAP", "120"))
 SETTLE_WAIT = int(os.environ.get("SETTLE_WAIT", "600"))
 RELEASE_NAME = os.environ.get("RELEASE_NAME", "vmks")
@@ -285,15 +284,15 @@ def fmt_rel(seconds: int) -> str:
     return f"T+{h:02d}:{m:02d}:{s:02d}"
 
 
-def render_table(snapshots: list, calibration: dict | None = None) -> str:
+def render_table(snapshots: list, rule_state: dict | None = None) -> str:
     lines = []
     lines.append(f"TARGET_APPS={TARGET_APPS} ALERTS_PER_APP={ALERTS_PER_APP} "
                  f"BASE_ALERTS_COUNT={BASE_ALERTS_COUNT} "
                  f"expected_max_alerts={EXPECTED_MAX_ALERTS}")
-    if calibration:
+    if rule_state:
         lines.append(
-            f"vmrule_count={calibration.get('vmrule_count')} "
-            f"rules_per_vmrule={calibration.get('rules_per_vmrule')}"
+            f"vmrule_count={rule_state.get('vmrule_count')} "
+            f"rules_per_vmrule={rule_state.get('rules_per_vmrule')}"
         )
     lines.append("")
     for snap in snapshots:
@@ -371,8 +370,8 @@ def render_table(snapshots: list, calibration: dict | None = None) -> str:
     return "\n".join(lines)
 
 
-def write_outputs(snapshots: list, calibration: dict | None = None) -> None:
-    table = render_table(snapshots, calibration)
+def write_outputs(snapshots: list, rule_state: dict | None = None) -> None:
+    table = render_table(snapshots, rule_state)
     payload = {
         "params": {
             "TARGET_APPS": TARGET_APPS,
@@ -387,7 +386,7 @@ def write_outputs(snapshots: list, calibration: dict | None = None) -> None:
             "expected_max_alerts": EXPECTED_MAX_ALERTS,
         },
         "thresholds": TARGETS,
-        "calibration": calibration,
+        "rule_count": rule_state,
         "snapshots": snapshots,
     }
     with open(JSON_PATH, "w") as f:
@@ -435,14 +434,14 @@ def deploy_app(name: str, set_args: list[str]) -> bool:
         "--namespace", name,
         *set_args,
         "--wait",
-        "--timeout", "1m",
+        "--timeout", "2m",
     ]
     for attempt in range(1, 4):
         if _INTERRUPTED["flag"]:
             return False
         try:
             out = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=180,
+                cmd, capture_output=True, text=True, timeout=150,
             )
         except subprocess.TimeoutExpired:
             out = None
@@ -581,14 +580,15 @@ def main() -> None:
     apps = all_names[start_offset:start_offset + TARGET_APPS]
 
     snapshots: list = []
-    cal: dict = {"vmrule_count": 0, "rules_per_vmrule": 0}
+    rule_state: dict = {"vmrule_count": 0, "rules_per_vmrule": 0}
 
     print(f"Развёртывание app-{START_INDEX}..app-{required} ({TARGET_APPS} шт.) "
-          f"через helm upgrade --install --wait (ретраи до 3)")
+          f"через helm upgrade --install --wait --timeout 2m "
+          f"(ретраи до 3)")
     print(f"VMSELECT_URL={BASE}")
     print(f"TARGETS={TARGETS} expected_max_alerts={EXPECTED_MAX_ALERTS} "
           f"(TARGET_APPS={TARGET_APPS} ALERTS_PER_APP={ALERTS_PER_APP})")
-    print("Подсчёт алертов: количество VMRule × количество rules внутри VMRule")
+    print("Подсчёт порогов: количество VMRule × количество rules внутри VMRule")
     print("Нажмите Ctrl-C для досрочной остановки и выгрузки собранных снимков.")
     print()
 
@@ -611,10 +611,10 @@ def main() -> None:
         installed = i
 
         alerts_count = count_vmrule_alerts(
-            int(time.time() - start_ts), cal)
+            int(time.time() - start_ts), rule_state)
         if alerts_count is not None and not _INTERRUPTED["flag"]:
             print(f"[{fmt_rel(int(time.time() - start_ts))}] "
-                  f"VMRule={cal['vmrule_count']} rules={alerts_count}")
+                  f"VMRule={rule_state['vmrule_count']} rules={alerts_count}")
             while (next_idx < len(TARGETS)
                    and alerts_count >= TARGETS[next_idx]
                    and not _INTERRUPTED["flag"]):
@@ -651,12 +651,12 @@ def main() -> None:
             time.sleep(min(60, remaining))
 
         if not _INTERRUPTED["flag"]:
-            alerts_count = count_vmrule_alerts(int(time.time() - start_ts), cal)
+            alerts_count = count_vmrule_alerts(int(time.time() - start_ts), rule_state)
             if alerts_count is not None:
                 snap = capture_settle_snapshot(TARGET_APPS, alerts_count, int(start_ts))
                 snapshots.append(snap)
 
-    write_outputs(snapshots, cal)
+    write_outputs(snapshots, rule_state)
     print()
     print(f"JSON: {JSON_PATH}")
     print(f"TXT : {TXT_PATH}")

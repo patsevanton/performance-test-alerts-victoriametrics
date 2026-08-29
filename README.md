@@ -4,7 +4,7 @@
 
 Как 1700 приложений и 85 000 правил в `VMRule` нагружают кластер VictoriaMetrics, и какие ориентиры по CPU, памяти и параллелизму запросов это даёт для capacity planning.
 
-VictoriaMetrics часто применяют как единый бэкенд для метрик и алертов: один `VMCluster` хранит ряды, `vmalert` оценивает правила и пишет состояние алертов обратно в TSDB, а `victoria-metrics-operator` синхронизирует `VMRule` из Kubernetes API в ConfigMap'ы и пересобирает Pod'ы `vmalert`. При росте числа правил до десятков тысяч появляются конкретные вопросы: сохраняется ли оценка правил и состояние алертов (pending/firing) при рестартах `vmalert` и какова цена восстановления; где физически возникают узкие места по CPU и памяти в data plane (`vmalert`, `vmselect`, `vmstorage`, `vminsert`, `vmagent`) и в control plane (`victoria-metrics-operator`, `kube-apiserver`); как растут RPS, задержки и CPU `kube-apiserver` при массовом применении `VMRule` и reconcile operator'а. Ответы собраны в виде фиксированных снимков загрузки при прохождении порогов `count(ALERTS)` от ~500 до ~50 000 на живом стенде из 1700 приложений и 85 000 правил в `VMRule`, что даёт ориентиры по CPU, памяти и параллелизму запросов для capacity planning; измерения продолжают собираться, а нагрузочные скрипты работают в фоне и не перезапускаются.
+VictoriaMetrics часто применяют как единый бэкенд для метрик и алертов: один `VMCluster` хранит ряды, `vmalert` оценивает правила и пишет состояние алертов обратно в TSDB, а `victoria-metrics-operator` синхронизирует `VMRule` из Kubernetes API в ConfigMap'ы и пересобирает Pod'ы `vmalert`. При росте числа правил до десятков тысяч появляются конкретные вопросы: сохраняется ли оценка правил и состояние алертов (pending/firing) при рестартах `vmalert` и какова цена восстановления; где физически возникают узкие места по CPU и памяти в data plane (`vmalert`, `vmselect`, `vmstorage`, `vminsert`, `vmagent`) и в control plane (`victoria-metrics-operator`, `kube-apiserver`); как растут RPS, задержки и CPU `kube-apiserver` при массовом применении `VMRule` и reconcile operator'а. Снимки загрузки фиксируются при прохождении порогов расчётного числа настроенных правил от ~500 до ~85 000 на живом стенде из 1700 приложений. Для порога используется количество объектов `VMRule`, умноженное на количество rules внутри них.
 
 ## Стенд: Yandex Managed K8s + vmks
 
@@ -126,7 +126,7 @@ kubectl apply -f priority-class.yaml
 scripts/generate-app-names.sh 1700
 ```
 
-Шаг 2 — развёртывание и сбор снимков Capacity Planning одним скриптом [`scripts/deploy_and_snapshot.py`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/scripts/deploy_and_snapshot.py). Каждый app устанавливается как отдельный Helm release в отдельный namespace (имя namespace = имя приложения) через `helm upgrade --install --wait` с ретраями до 3 раз при ошибке. Скрипт совмещает деплой и снятие метрик:
+Шаг 2 — развёртывание и сбор снимков Capacity Planning одним скриптом [`scripts/deploy_and_snapshot.py`](https://github.com/patsevanton/performance-test-alerts-victoriametrics/blob/main/scripts/deploy_and_snapshot.py). Каждый app устанавливается как отдельный Helm release в отдельный namespace (имя namespace = имя приложения) через `helm upgrade --install --wait --timeout 2m` с ретраями до 3 раз при ошибке. Скрипт совмещает деплой и снятие метрик:
 
 ```bash
 python3 scripts/deploy_and_snapshot.py
@@ -137,10 +137,10 @@ python3 scripts/deploy_and_snapshot.py
 - Читает `app-names.txt`, формирует список `apps[START_INDEX-1 : START_INDEX-1+TARGET_APPS]`.
 - Устанавливает app по одному; счётчик `installed` — это номер завершённого релиза в цикле (детерминирован, не зависит от `kubectl get pod`).
 - После каждого успешного `helm install` получает VMRule через Kubernetes API и считает число алертов как `количество VMRule × количество rules внутри VMRule`. Для неодинаковых VMRule используется точная сумма rules по объектам.
-- Подсчёт через `count(ALERTS)` и экстраполяция удалены: на росте числа алертов запрос упирается в таймауты vmselect (120 с) из-за перегрузки vmstorage/vmselect оценкой ~1700 VMRule и ingestion'ом `ALERTS`/`ALERTS_FOR_STATE`.
-- При `alerts_count >= TARGETS[next_idx]` делает instant-запрос всех метрик из `QUERIES` через Prometheus API vmselect (CPU, память подов `vmks`, нагрузка на `kube-apiserver`, `vm_http_requests_total` компонент, `vmalert_iteration_duration_seconds`, `vm_concurrent_select_current`, `scrape_samples_scraped`) через `ThreadPoolExecutor(max_workers=16)`. В снимок записываются `alerts_count`, `alerts_count_estimated=False`, `installed`.
+- Важно различать количество настроенных rules и фактически созданных временных рядов `ALERTS`: один rule может создать несколько series в зависимости от результата его выражения и набора labels. Для порогов используется только количество настроенных rules.
+- При `alerts_count >= TARGETS[next_idx]` делает instant-запрос всех метрик из `QUERIES` через Prometheus API vmselect (CPU, память pod'ов `vmks`, нагрузка на `kube-apiserver`, `vm_http_requests_total` компонент, `vmalert_iteration_duration_seconds`, `vm_concurrent_select_current`, `scrape_samples_scraped`) через `ThreadPoolExecutor(max_workers=16)`. В снимок записываются расчётное число правил, `alerts_count_estimated=False`, `installed`.
 - После последнего порога выжидает `SETTLE_WAIT` (по умолчанию 600 с) и делает финальный снимок «после через 10 мин установки N app».
-- `MIN_SNAPSHOT_GAP` сохранён как env для совместимости, но при `--wait` не применяется (деплой блокирует цикл естественным образом).
+- `MIN_SNAPSHOT_GAP` сохранён как env для совместимости, но не применяется при последовательном деплое.
 
 Результаты — `capacity_snapshots.json` (сырые значения + число `VMRule` и rules) и `capacity_snapshots.txt` (форматированная таблица). Пороги скрипта: 500, 5000, 10000, 15000, 20000, 25000, 30000, 35000, 40000, 45000, 50000, 55000, 60000, 65000, 70000, 75000, 80000, 85000 (последний равен `TARGET_APPS * ALERTS_PER_APP`). Скрипт использует только стандартную библиотеку Python 3. Для досрочной остановки — Ctrl-C, будут выгружены собранные снимки.
 
@@ -194,11 +194,13 @@ Reconcile-цикл operator'а (порядка 60 с) собирает все `V
 
 ## Результаты замеров
 
-Ниже — зафиксированные снимки загрузки по порогам `count(ALERTS)`. Столбец `~50000 + 1h` — снимок, сделанный примерно через 1 час после прохождения порога ~50 000 `ALERTS`. Все значения — средние на pod (`avg(...)`), кроме явно отмеченных (`max(...)`).
+> Числовые таблицы ниже относятся к старому прогону и не являются результатом текущей версии скриптов. Новый прогон следует запускать после удаления старых `capacity_snapshots.json` и `capacity_snapshots.txt`; пороги в нём считаются по количеству настроенных rules в `VMRule`.
+
+Ниже приведены исторические значения для ориентира. Столбец `~50000 + 1h` — снимок, сделанный примерно через 1 час после прохождения порога ~50 000 настроенных rules.
 
 ### CPU (в среднем на pod)
 
-| ALERTS        | vmalert | vmstorage | vmselect | vminsert | vmagent | operator |
+| RULES         | vmalert | vmstorage | vmselect | vminsert | vmagent | operator |
 | ------------- | ------- | --------- | -------- | -------- | ------- | -------- |
 | ~500          | 14m     | 77m       | 13m      | 15m      | 28m     | 6m       |
 | ~5000         | 33m     | 58m       | 55m      | 11m      | 33m     | 17m      |
@@ -217,7 +219,7 @@ Reconcile-цикл operator'а (порядка 60 с) собирает все `V
 
 ### Memory (в среднем на pod)
 
-| ALERTS        | vmalert | vmstorage | vmselect | vminsert | vmagent | operator |
+| RULES         | vmalert | vmstorage | vmselect | vminsert | vmagent | operator |
 | ------------- | ------- | --------- | -------- | -------- | ------- | -------- |
 | ~500          | 45Mi    | 243Mi     | 32Mi     | 116Mi    | 55Mi    | 42Mi     |
 | ~5000         | 33Mi    | 370Mi     | 72Mi     | 57Mi     | 72Mi    | 63Mi     |
@@ -236,7 +238,7 @@ Reconcile-цикл operator'а (порядка 60 с) собирает все `V
 
 ### RPS и операционные метрики
 
-| ALERTS        | API Server RPS | API Server p99 lat | API Server CPU | vmselect HTTP RPS | vmstorage HTTP RPS | vminsert HTTP RPS |
+| RULES         | API Server RPS | API Server p99 lat | API Server CPU | vmselect HTTP RPS | vmstorage HTTP RPS | vminsert HTTP RPS |
 | ------------- | -------------- | ------------------ | -------------- | ----------------- | ------------------ | ----------------- |
 | ~500          | 15.2           | 37 ms              | 94m            | 22.9              | 0.1                | 5                 |
 | ~5000         | 12.7           | 37 ms              | 82m            | 42.1              | 0.1                | 5.2               |
@@ -255,7 +257,7 @@ RPS API server практически не чувствителен к числ�
 
 ### Метрики компонентов, выросшие при нагрузке
 
-| ALERTS        | vmalert_iteration_duration (max) | vm_concurrent_select_current | vmagent scrape_samples (vmalert) |
+| RULES         | vmalert_iteration_duration (max) | vm_concurrent_select_current | vmagent scrape_samples (vmalert) |
 | ------------- | -------------------------------- | ---------------------------- | -------------------------------- |
 | ~500          | 0.97s                            | 2                            | 3463                             |
 | ~5000         | 0.85s                            | 1                            | 21025                            |
@@ -274,7 +276,7 @@ RPS API server практически не чувствителен к числ�
 
 ### Насыщение vmselect: concurrent select и limit reached
 
-| ALERTS        | vm_concurrent_select_current | vm_concurrent_select_limit_reached_total (increase[5m]) |
+| RULES         | vm_concurrent_select_current | vm_concurrent_select_limit_reached_total (increase[5m]) |
 | ------------- | ---------------------------- | ------------------------------------------------------- |
 | ~500          | 2                            | 0                                                       |
 | ~5000         | 1                            | 0                                                       |
@@ -377,7 +379,7 @@ Grafana доступна по адресу `http://grafana.<ingress_public_ip>.s
 - **Линейные ориентиры по `vmalert`:** в прогоне рост `ALERTS` давал примерно ~10 m CPU и ~27.9 MiB RAM на каждые 1000 `ALERTS`.
 - **Линейные ориентиры по `vmstorage`:** на каждые 1000 `ALERTS` приходилось примерно ~57.8 MiB RAM (`container_memory_working_set_bytes`) и ~7.7 m CPU (`container_cpu_usage_seconds_total`).
 - **Линейные ориентиры по `operator`:** в прогоне на каждые 1000 `ALERTS` приходилось примерно ~2.6 m CPU (`process_cpu_seconds_total`) и ~3.7 MiB RAM (`process_resident_memory_bytes`).
-- **Control plane выдержал нагрузку:** при росте `count(ALERTS)` с ~500 до ~50 000 RPS API server оставался умеренным (~12.3–15.2 req/s), p99 задержки — 37–72 ms, CPU `kube-apiserver` — ~81–108m; в этом прогоне API server не стал главным узким местом относительно data plane.
+- **Control plane выдержал нагрузку:** при росте расчётного числа правил с ~500 до ~50 000 RPS API server оставался умеренным (~12.3–15.2 req/s), p99 задержки — 37–72 ms, CPU `kube-apiserver` — ~81–108m; в этом прогоне API server не стал главным узким местом относительно data plane.
 - **Нагрузка на `vmselect`:** ориентир — около ~12.6 req/s на каждую 1000 `ALERTS`; при дальнейшем росте нужны ранний мониторинг таймаутов и масштабирование `vmselect` (при необходимости — `vmstorage`).
 - **Косвенный ориентир нагрузки на `vmselect`:** около ~6.8 req/s на 1000 `ALERTS` по `vm_http_requests_total`; с ростом показателя ожидаемо увеличивается занятость параллелизма.
 
