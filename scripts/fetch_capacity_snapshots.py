@@ -3,17 +3,17 @@
 
 Запускается ОДИН раз в начале теста (параллельно с scripts/deploy-apps.sh). Скрипт
 опрашивает число rules в VMRule каждые POLL_INTERVAL секунд и, как только значение
-пересекает очередной порог из TARGETS (500, 5000, ..., 85000), фиксирует снимок всех
+пересекает очередной порог из TARGETS (500, 5000, ..., 40000), фиксирует снимок всех
 метрик из QUERIES через instant-запрос с `time=now`. Последний порог равен
 TARGET_APPS*ALERTS_PER_APP, поэтому скрипт собирает снимки вплоть до завершения
 деплоя всех приложений, а не выходит раньше на промежуточном пороге. После каждого
 снимка скрипт выдерживает MIN_SNAPSHOT_GAP секунд, чтобы rate-метрики устаканились.
 
-После достижения последнего порога (85000) скрипт:
+После достижения последнего порога (40000) скрипт:
   1) дожидается установки TARGET_APPS приложений (через `kubectl get pod -A | grep app | wc -l`);
   2) выжидает SETTLE_WAIT секунд (по умолчанию 600 = 10 минут);
   3) делает дополнительный снимок с меткой
-     «после через 10 мин установки 1700 app».
+     «после через 10 мин установки 800 app».
 
 Скрипт ожидает достижения всех порогов бесконечно; для досрочной остановки нажмите
 Ctrl-C — будут выгружены снимки, собранные к этому моменту.
@@ -24,7 +24,7 @@ Ctrl-C — будут выгружены снимки, собранные к э�
   - stdout                  : та же таблица
 
 Переменные окружения (значения по умолчанию взяты из scripts/deploy-apps.sh):
-  TARGET_APPS       по умолчанию 1700 — число разворачиваемых приложений
+  TARGET_APPS       по умолчанию 800  — число разворачиваемых приложений
   ALERTS_PER_APP    по умолчанию 50   — алертов на одно приложение
   BASE_ALERTS_COUNT по умолчанию 10   — базовых алертов на приложение (информационно)
    POLL_INTERVAL     по умолчанию 10   — секунды между опросами VMRule
@@ -86,11 +86,10 @@ BASE = _resolve_base()
 # Последний порог равен ожидаемому максимуму алертов (TARGET_APPS*ALERTS_PER_APP),
 # чтобы скрипт продолжал сбор до фактического завершения деплоя всех приложений,
 # а не выходил раньше на промежуточном пороге.
-TARGETS = [500, 5000, 10000, 15000, 20000, 25000, 30000, 35000,
-           40000, 45000, 50000, 55000, 60000, 65000, 70000, 75000, 80000, 85000]
+TARGETS = [500, 5000, 10000, 15000, 20000, 25000, 30000, 35000, 40000]
 
 # Параметры деплоя (значения по умолчанию из scripts/deploy-apps.sh).
-TARGET_APPS = int(os.environ.get("TARGET_APPS", "1700"))
+TARGET_APPS = int(os.environ.get("TARGET_APPS", "800"))
 ALERTS_PER_APP = int(os.environ.get("ALERTS_PER_APP", "50"))
 BASE_ALERTS_COUNT = int(os.environ.get("BASE_ALERTS_COUNT", "10"))
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "10"))
@@ -102,7 +101,7 @@ POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "10"))
 MIN_SNAPSHOT_GAP = int(os.environ.get("MIN_SNAPSHOT_GAP", "120"))
 
 # Пауза (с) между подтверждением установки TARGET_APPS app и финальным снимком
-# «после через 10 мин установки 1700 app». По умолчанию 600 = 10 минут.
+# «после через 10 мин установки 800 app». По умолчанию 600 = 10 минут.
 SETTLE_WAIT = int(os.environ.get("SETTLE_WAIT", "600"))
 
 EXPECTED_MAX_ALERTS = TARGET_APPS * ALERTS_PER_APP
@@ -145,18 +144,26 @@ QUERIES = {
 
 # Дополнительные метрики для высококардинального профиля (PLAN-high-cardinality.md, 5.4).
 # Собираются всегда — тяжёлая часть всегда активна.
+#
+# Замечание: `vm_rows_scanned_total`, `vmalert_evaluation_duration_seconds`,
+# `vmalert_evaluations_total` и `vm_search_latency_seconds` НЕ экспортируются
+# VictoriaMetrics. Используем существующие аналоги:
+#   - vm_rows_scanned_per_query_sum — счётчик сканированных рядов на запрос;
+#   - vm_request_duration_seconds   — summary длительности запросов;
+#   - vmalert_iteration_duration_seconds — summary длительности итерации группы;
+#   - vmalert_execution_total       — счётчик выполненных оценок правил.
 QUERIES.update({
     # Сканирование рядов при тяжёлом PromQL.
-    "vm_rows_scanned_total": f'sum(rate(vm_rows_scanned_total{{job="vmselect-{_VMKS_STACK_PREFIX}"}}[5m]))',
-    "vm_rows_scanned_vmstorage": f'sum(rate(vm_rows_scanned_total{{job="vmstorage-{_VMKS_STACK_PREFIX}"}}[5m]))',
+    "vm_rows_scanned_total": f'sum(rate(vm_rows_scanned_per_query_sum{{job="vmselect-{_VMKS_STACK_PREFIX}"}}[5m]))',
+    "vm_rows_scanned_vmstorage": f'sum(rate(vm_rows_scanned_per_query_sum{{job="vmstorage-{_VMKS_STACK_PREFIX}"}}[5m]))',
     # Cache miss по компонентам кэша.
     "vm_cache_misses_vmselect": f'sum(rate(vm_cache_misses_total{{job="vmselect-{_VMKS_STACK_PREFIX}"}}[5m]))',
     "vm_cache_misses_vmstorage": f'sum(rate(vm_cache_misses_total{{job="vmstorage-{_VMKS_STACK_PREFIX}"}}[5m]))',
     # Latency поиска по рядам.
-    "vm_search_latency_max": f'max(vm_search_latency_seconds{{job=~"vmselect-{_VMKS_STACK_PREFIX}|vmstorage-{_VMKS_STACK_PREFIX}"}})',
-    # Нагрузка на evaluation-движок vmalert по тяжёлой группе.
-    "vm_evaluation_duration_max": f'max(vmalert_evaluation_duration_seconds{{job="vmalert-{_VMKS_STACK_PREFIX}"}})',
-    "vm_evaluation_count_rate": f'sum(rate(vmalert_evaluations_total{{job="vmalert-{_VMKS_STACK_PREFIX}"}}[5m]))',
+    "vm_search_latency_max": f'max(vm_request_duration_seconds{{job=~"vmselect-{_VMKS_STACK_PREFIX}|vmstorage-{_VMKS_STACK_PREFIX}"}})',
+    # Нагрузка на evaluation-движок vmalert по группе правил.
+    "vm_evaluation_duration_max": f'max(vmalert_iteration_duration_seconds{{job="vmalert-{_VMKS_STACK_PREFIX}"}})',
+    "vm_evaluation_count_rate": f'sum(rate(vmalert_execution_total{{job="vmalert-{_VMKS_STACK_PREFIX}"}}[5m]))',
     # p99 длительности итерации vmalert.
     "vmalert_iter_p99": (
         f'histogram_quantile(0.99, '
@@ -456,7 +463,7 @@ def main() -> None:
     if missed:
         print(f"Thresholds not reached: {missed}", file=sys.stderr)
 
-    # После достижения последнего порога (85000):
+    # После достижения последнего порога (40000):
     # 1) ждём установки TARGET_APPS приложений (kubectl get pod -A | grep app | wc -l);
     # 2) выжидаем SETTLE_WAIT секунд (по умолчанию 10 минут);
     # 3) делаем финальный снимок «после через 10 мин установки N app».

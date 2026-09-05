@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 NAMES_FILE="${NAMES_FILE:-$SCRIPT_DIR/app-names.txt}"
 PARALLEL="${PARALLEL:-10}"
-TARGET_APPS="${TARGET_APPS:-1000}"
+TARGET_APPS="${TARGET_APPS:-800}"
 DELETE_NAMESPACES="${DELETE_NAMESPACES:-true}"
 
 if [ ! -f "$NAMES_FILE" ]; then

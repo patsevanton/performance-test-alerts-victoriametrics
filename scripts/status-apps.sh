@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NAMES_FILE="${NAMES_FILE:-$SCRIPT_DIR/app-names.txt}"
-TARGET_APPS="${TARGET_APPS:-1000}"
+TARGET_APPS="${TARGET_APPS:-800}"
 
 if [ ! -f "$NAMES_FILE" ]; then
   echo "Error: $NAMES_FILE not found."

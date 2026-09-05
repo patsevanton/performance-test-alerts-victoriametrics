@@ -32,7 +32,9 @@
   BASE_ALERTS_COUNT  по умолчанию 10  — базовых алертов на приложение
   EXTRA_ALERTS_COUNT по умолчанию ALERTS_PER_APP - BASE_ALERTS_COUNT
   START_INDEX        по умолчанию 1   — индекс первого app в app-names.txt
-  TARGET_APPS        по умолчанию 1700 — число разворачиваемых приложений
+  TARGET_APPS        по умолчанию 800  — число разворачиваемых приложений
+                     (снижено с 1700: 800 × 50 = 40 000 алертов — целевой
+                     уровень из TODO, выше которого vmselect упирался в 429)
   APP_TENANTS/APP_ROUTES/APP_HIST_BUCKETS/APP_REGION/APP_VERSION —
                      cardinality-параметры (передаются в Helm только при явном задании)
 
@@ -60,6 +62,7 @@ import ssl
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -88,7 +91,7 @@ BASE_ALERTS_COUNT = int(os.environ.get("BASE_ALERTS_COUNT", "10"))
 EXTRA_ALERTS_COUNT = int(os.environ.get(
     "EXTRA_ALERTS_COUNT", str(ALERTS_PER_APP - BASE_ALERTS_COUNT)))
 START_INDEX = int(os.environ.get("START_INDEX", "1"))
-TARGET_APPS = int(os.environ.get("TARGET_APPS", "1700"))
+TARGET_APPS = int(os.environ.get("TARGET_APPS", "800"))
 
 # Кардинальность метрик генератора (PLAN-high-cardinality.md, этап 3).
 # Передаются в Helm как app.cardinality.* только при явном задании через env.
@@ -142,8 +145,8 @@ BASE = _resolve_base()
 # Пороги количества rules, при достижении которых фиксируется снимок.
 # Последний порог равен ожидаемому максимуму алертов (TARGET_APPS*ALERTS_PER_APP),
 # чтобы скрипт продолжал сбор до фактического завершения deploys всех приложений.
-TARGETS = [500, 5000, 10000, 15000, 20000, 25000, 30000, 35000,
-           40000, 45000, 50000, 55000, 60000, 65000, 70000, 75000, 80000, 85000]
+# Целевой максимум — 40 000 (800 app × 50), см. TODO.
+TARGETS = [500, 5000, 10000, 15000, 20000, 25000, 30000, 35000, 40000]
 
 # Префиксы имён подов и job'ов компонент vmks для подстановки в PromQL.
 _VMKS_STACK_PREFIX = f"{RELEASE_NAME}-victoria-metrics-k8s-stack"
@@ -177,18 +180,26 @@ QUERIES = {
 
 # Дополнительные метрики для высококардинального профиля (PLAN-high-cardinality.md, 5.4).
 # Собираются всегда — тяжёлая часть всегда активна.
+#
+# Замечание: `vm_rows_scanned_total`, `vmalert_evaluation_duration_seconds`,
+# `vmalert_evaluations_total` и `vm_search_latency_seconds` НЕ экспортируются
+# VictoriaMetrics (см. /metrics компонентов). Используем существующие аналоги:
+#   - vm_rows_scanned_per_query_sum   — счётчик сканированных рядов на запрос (histogram);
+#   - vm_request_duration_seconds     — summary длительности запросов (вместо vm_search_latency_seconds);
+#   - vmalert_iteration_duration_seconds — summary длительности итерации группы (per-rule duration не экспортируется);
+#   - vmalert_execution_total         — счётчик выполненных оценок правил (вместо vmalert_evaluations_total).
 QUERIES.update({
     # Сканирование рядов при тяжёлом PromQL.
-    "vm_rows_scanned_total": f'sum(rate(vm_rows_scanned_total{{job="vmselect-{_VMKS_STACK_PREFIX}"}}[5m]))',
-    "vm_rows_scanned_vmstorage": f'sum(rate(vm_rows_scanned_total{{job="vmstorage-{_VMKS_STACK_PREFIX}"}}[5m]))',
+    "vm_rows_scanned_total": f'sum(rate(vm_rows_scanned_per_query_sum{{job="vmselect-{_VMKS_STACK_PREFIX}"}}[5m]))',
+    "vm_rows_scanned_vmstorage": f'sum(rate(vm_rows_scanned_per_query_sum{{job="vmstorage-{_VMKS_STACK_PREFIX}"}}[5m]))',
     # Cache miss по компонентам кэша.
     "vm_cache_misses_vmselect": f'sum(rate(vm_cache_misses_total{{job="vmselect-{_VMKS_STACK_PREFIX}"}}[5m]))',
     "vm_cache_misses_vmstorage": f'sum(rate(vm_cache_misses_total{{job="vmstorage-{_VMKS_STACK_PREFIX}"}}[5m]))',
-    # Latency поиска по рядам.
-    "vm_search_latency_max": f'max(vm_search_latency_seconds{{job=~"vmselect-{_VMKS_STACK_PREFIX}|vmstorage-{_VMKS_STACK_PREFIX}"}})',
-    # Нагрузка на evaluation-движок vmalert по тяжёлой группе.
-    "vm_evaluation_duration_max": f'max(vmalert_evaluation_duration_seconds{{job="vmalert-{_VMKS_STACK_PREFIX}"}})',
-    "vm_evaluation_count_rate": f'sum(rate(vmalert_evaluations_total{{job="vmalert-{_VMKS_STACK_PREFIX}"}}[5m]))',
+    # Latency поиска по рядам (summary-квантиль vm_request_duration_seconds).
+    "vm_search_latency_max": f'max(vm_request_duration_seconds{{job=~"vmselect-{_VMKS_STACK_PREFIX}|vmstorage-{_VMKS_STACK_PREFIX}"}})',
+    # Нагрузка на evaluation-движок vmalert по группе правил.
+    "vm_evaluation_duration_max": f'max(vmalert_iteration_duration_seconds{{job="vmalert-{_VMKS_STACK_PREFIX}"}})',
+    "vm_evaluation_count_rate": f'sum(rate(vmalert_execution_total{{job="vmalert-{_VMKS_STACK_PREFIX}"}}[5m]))',
     # p99 длительности итерации vmalert.
     "vmalert_iter_p99": (
         f'histogram_quantile(0.99, '
@@ -231,9 +242,37 @@ def fetch_one(t: int, query: str) -> float | None:
         return qval(json.load(resp))
 
 
+def fetch_one_retry(t: int, query: str, attempts: int = 3) -> float | None:
+    """Запрос метрики с ретраями и backoff против 429/5xx от vmselect.
+
+    При параллельном сборе снимков vmselect под нагрузкой отвечает 429
+    (search.maxConcurrentRequests) — одна неудачная метрика не должна
+    ронять весь снимок. Повторяем с растущей паузой; по исчерпании попыток
+    возвращаем None (не бросаем исключение наружу).
+    """
+    last_err = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return fetch_one(t, query)
+        except urllib.error.HTTPError as e:
+            last_err = e
+            if e.code not in (429, 500, 502, 503, 504):
+                break
+        except Exception as e:  # noqa: BLE001 — сеть/таймаут, тоже ретраим
+            last_err = e
+        if attempt < attempts:
+            time.sleep(2 * attempt)
+    print(f"  fetch failed after {attempts} attempts: {query[:80]}... -> {last_err}",
+          file=sys.stderr)
+    return None
+
+
 def fetch_snapshot(t: int) -> dict:
+    # Каждую метрику собираем независимо с ретраями: один упавший 429 не
+    # обнуляет весь снимок. max_workers=16 сохранён — параллелизм поднимается
+    # отдельно через search.maxConcurrentRequests на vmselect/vmstorage.
     with ThreadPoolExecutor(max_workers=16) as ex:
-        futs = {k: ex.submit(fetch_one, t, q) for k, q in QUERIES.items()}
+        futs = {k: ex.submit(fetch_one_retry, t, q) for k, q in QUERIES.items()}
         return {k: futs[k].result() for k in QUERIES}
 
 
@@ -477,6 +516,13 @@ def count_vmrule_alerts(rel_start: int, state: dict) -> int | None:
             if out.returncode != 0:
                 raise RuntimeError((out.stderr or "kubectl failed").strip())
             items = json.loads(out.stdout).get("items", [])
+            # Считаем только app-релизы: системные VMRule самого стека vmks
+            # (в namespace vmks) не относятся к нагрузке и иначе прибавляют
+            # постоянное смещение к measured (напр. +243 rules).
+            items = [
+                item for item in items
+                if (item.get("metadata", {}).get("namespace") or "").startswith("app-")
+            ]
             rules_per_vmrule = [
                 sum(len(group.get("rules", []))
                     for group in item.get("spec", {}).get("groups", []))

@@ -20,7 +20,7 @@ APP_REGION="${APP_REGION:-}"
 APP_VERSION="${APP_VERSION:-}"
 
 START_INDEX="${START_INDEX:-1}"
-TARGET_APPS="${TARGET_APPS:-1700}"
+TARGET_APPS="${TARGET_APPS:-800}"
 
 if [ ! -f "$NAMES_FILE" ]; then
   echo "Ошибка: файл $NAMES_FILE не найден. Сначала выполните generate-app-names.sh."
