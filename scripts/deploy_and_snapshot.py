@@ -111,6 +111,12 @@ POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "10"))
 MIN_SNAPSHOT_GAP = int(os.environ.get("MIN_SNAPSHOT_GAP", "120"))
 SETTLE_WAIT = int(os.environ.get("SETTLE_WAIT", "600"))
 RELEASE_NAME = os.environ.get("RELEASE_NAME", "vmks")
+# Сдвиг времени запроса метрик в прошлое (сек). Instant-запрос по «сейчас»
+# может вернуть пустой вектор, если свежие семплы ещё не доингестились
+# (бэкпрешн vmagent→vminsert→vmstorage, dedup.minScrapeInterval=20s, рестарты
+# vmstorage). Запрашиваем метрики на SNAPSHOT_LOOKBACK секунд назад, чтобы
+# попасть в уже записанные данные.
+SNAPSHOT_LOOKBACK = int(os.environ.get("SNAPSHOT_LOOKBACK", "60"))
 
 EXPECTED_MAX_ALERTS = TARGET_APPS * ALERTS_PER_APP
 
@@ -243,23 +249,32 @@ def fetch_one(t: int, query: str) -> float | None:
 
 
 def fetch_one_retry(t: int, query: str, attempts: int = 3) -> float | None:
-    """Запрос метрики с ретраями и backoff против 429/5xx от vmselect.
+    """Запрос метрики с ретраями и backoff против 429/5xx и пустых ответов vmselect.
 
     При параллельном сборе снимков vmselect под нагрузкой отвечает 429
-    (search.maxConcurrentRequests) — одна неудачная метрика не должна
-    ронять весь снимок. Повторяем с растущей паузой; по исчерпании попыток
-    возвращаем None (не бросаем исключение наружу).
+    (search.maxConcurrentRequests), а при отставании ingestion возвращает
+    200 с пустым вектором — и то, и другое даёт None. Повторяем с растущей
+    паузой (смещая время запроса назад), чтобы дождаться доингеста данных;
+    по исчерпании попыток возвращаем None (не бросаем исключение наружу).
     """
     last_err = None
     for attempt in range(1, attempts + 1):
+        # Каждая следующая попытка смотрит дальше в прошлое: если данные
+        # отстают, сдвиг назад повышает шанс попасть в уже записанные семплы.
+        query_t = t - SNAPSHOT_LOOKBACK * attempt
         try:
-            return fetch_one(t, query)
+            value = fetch_one(query_t, query)
         except urllib.error.HTTPError as e:
             last_err = e
             if e.code not in (429, 500, 502, 503, 504):
                 break
         except Exception as e:  # noqa: BLE001 — сеть/таймаут, тоже ретраим
             last_err = e
+        else:
+            if value is not None:
+                return value
+            # 200 с пустым вектором: ретраим со сдвигом времени назад.
+            last_err = "empty result"
         if attempt < attempts:
             time.sleep(2 * attempt)
     print(f"  fetch failed after {attempts} attempts: {query[:80]}... -> {last_err}",

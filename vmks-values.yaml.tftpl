@@ -86,8 +86,10 @@ vmcluster:
                 storage: 65Gi
       # Поиск выполняется на vmstorage; дефолт maxConcurrentRequests=2 даёт 429 «couldn't start executing in 10s»
       # при параллельных запросах от vmselect/vmalert (см. также vmselect.extraArgs).
+      # Поднято с 64 до 128: на прогоне 40 000 правил 64 стало узким местом —
+      # vmalert получал массовые 429 «couldn't start executing the request in 60s».
       extraArgs:
-        search.maxConcurrentRequests: "64"
+        search.maxConcurrentRequests: "128"
         search.maxQueueDuration: "60s"
         # С v1.105.0 лимит вычисляется автоматически и может быть слишком мал при 16 concurrent + 4Gi;
         # фиксируем явно, чтобы запросы вроде topk(5, sum(vmalert_alerts_firing{…}) by(…)) не падали с 422.
@@ -111,13 +113,17 @@ vmcluster:
       # CPU: при насыщении вставки usage уперся в limits 6 (2.1–3.0 ядер по kubectl top),
       # vminsert-очередь vmagent переполнялась и дропала данные. Поднимаем до 8 под merge,
       # а requests.cpu 500m→2 резервируют ядра под CPU-bound merge частей.
+      # Memory: на прогоне 40 000 правил все три vmstorage уходили в OOMKilled (exit 137)
+      # при limits 6Gi (working set доходил до ~6.0 GiB на vmstorage-2 и ~6.1 GiB на vmstorage-0).
+      # Ноды 16 GiB (allocatable ~14 GiB) позволяют поднять запас: limits 6Gi→10Gi,
+      # requests 4Gi→6Gi — под merge частей и пик ingestion без OOM.
       resources:
         limits:
           cpu: "8"
-          memory: 6Gi
+          memory: 10Gi
         requests:
           cpu: "2"
-          memory: 4Gi
+          memory: 6Gi
 
     vmselect:
       useDefaultResources: false
@@ -139,9 +145,10 @@ vmcluster:
               app.kubernetes.io/name: vmselect
       # При большом числе VMRule vmalert шлёт много запросов (restore ALERTS_FOR_STATE + eval).
       # Дефолт maxConcurrentRequests=2 даёт 429 и "couldn't start executing in 10s".
-      # Поднято с 32 до 64: на ~15 000 правил лимит 32 стал узким местом (429 на снимках).
+      # Поднято с 64 до 128: на прогоне 40 000 правил 64 стало узким местом —
+      # массовые 429 «couldn't start executing the request in 60.000 seconds».
       extraArgs:
-        search.maxConcurrentRequests: "64"
+        search.maxConcurrentRequests: "128"
         search.maxQueueDuration: "60s"
         # Согласовать с queryTimeout в defaultDatasources (иначе vmselect обрежет раньше Grafana).
         search.maxQueryDuration: 300s
