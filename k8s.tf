@@ -74,8 +74,11 @@ resource "yandex_kubernetes_node_group" "k8s_node_group" {
 
   scale_policy {
     fixed_scale {
-      # kubectl показал Pending у vmalert из-за `Insufficient cpu` (request=4 core на pod, на части нод уже ~96% по requests).
-      size = 32 # увеличить кол-во нод
+      # 16 нод по 8 vCPU / 16 ГБ (C1). При 800 app + DaemonSet хватает с запасом:
+      # 16 × 110 = 1760 pod slots против ~850 нужных. Крупнее нода — vmstorage
+      # (4-6 Gi) и apps не давят друг друга по памяти, а 16 нод смягчают
+      # последствия остановки одной preemptible-ноды (~6% мощностей).
+      size = 16 # кол-во нод
     }
   }
 
@@ -105,9 +108,12 @@ resource "yandex_kubernetes_node_group" "k8s_node_group" {
     }
 
     resources {
-      # 4 vCPU / 8GB на ноду. Bottleneck по памяти (requests RAM на ноде ~99% при 64Mi/app),
-      cores  = 4 # vCPU # уменьшить
-      memory = 8 # ГБ # уменьшить
+      # 8 vCPU / 16 ГБ на ноду (C1). На 8 ГБ allocatable ~5.76 GiB, из-за чего
+      # vmstorage (limits 6Gi) вытеснялся по memory pressure и vminsert терял
+      # запись. На 16 ГБ allocatable ~14 GiB — vmstorage + apps влезают с запасом.
+      # vCPU удвоены и под CPU-bound профиль vmstorage/vmalert.
+      cores  = 8  # vCPU
+      memory = 16 # ГБ
     }
 
     boot_disk {
