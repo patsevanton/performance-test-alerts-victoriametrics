@@ -33,8 +33,8 @@
   EXTRA_ALERTS_COUNT по умолчанию ALERTS_PER_APP - BASE_ALERTS_COUNT
   START_INDEX        по умолчанию 1   — индекс первого app в app-names.txt
   TARGET_APPS        по умолчанию 800  — число разворачиваемых приложений
-                     (снижено с 1700: 800 × 50 = 40 000 алертов — целевой
-                     уровень из TODO, выше которого vmselect упирался в 429)
+                     (800 × 50 = 40 000 алертов — целевой уровень из TODO,
+                     выше которого vmselect упирался в 429)
   APP_TENANTS/APP_ROUTES/APP_HIST_BUCKETS/APP_REGION/APP_VERSION —
                      cardinality-параметры (передаются в Helm только при явном задании)
 

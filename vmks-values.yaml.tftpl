@@ -100,7 +100,7 @@ vmcluster:
       # Memory: при 50000 ALERTS пик container_memory_working_set_bytes ~3106Mi (линейно ~57,8 MiB / 1000 ALERTS).
       # 4Gi (4096Mi) покрывали пик с небольшим остатком, но при росте за 50k ALERTS лимит исчерпывается
       # (~70k ALERTS → ~4Gi). Поднимаем до 5Gi без production-запаса — только под измеренный профиль теста.
-      # Memory: при насыщении вставки (1700+ app) working set дошел до ~4.9Gi при limits 5Gi — впритык
+      # Memory: при насыщении вставки working set дошел до ~4.9Gi при limits 5Gi — впритык
       # к OOM. Поднимаем до 6Gi под merge частей при высоком ingestion.
       # Memory: на preemptible-нодах 8GB pod memory pressure evict'ил vmstorage (The node was low on
       # resource: memory). Целевой профиль теперь 40 000 ALERTS (800 app), но под merge частей при
@@ -252,7 +252,7 @@ vmalert:
     # при limits 4–5 всё ещё был rate(container_cpu_cfs_throttled_seconds_total) > 0 на нагруженных подах.
     # limits 6 + requests 4 (было 3): при ~113% от request подняли гарантию под фактическую оценку правил.
     # Memory: 5Gi давало OOMKilled (Exit 137) — после рестарта vmalert восстанавливает тысячи состояний
-    # алертов (ExtraAlert0xx restored to state) для ~1700 app × несколько правил → рост памяти → OOM.
+    # алертов (ExtraAlert0xx restored to state) для сотен app × несколько правил → рост памяти → OOM.
     resources:
       limits:
         cpu: "6"
@@ -274,7 +274,7 @@ vmagent:
     extraArgs:
       promscrape.maxScrapeSize: "134217728"
     # 768Mi давало OOMKilled: kubernetes_sd + сотни/тысячи целей держат метаданные в памяти.
-    # CPU: при насыщении (1700+ app, ~2k целей) usage уперся в limits 2 (~1.95 ядер/под),
+    # CPU: при насыщении (сотни app, ~2k целей) usage уперся в limits 2 (~1.95 ядер/под),
     # scrape-таймауты (request canceled while reading body) и переполнение persistent queue.
     # Поднимаем до 4. Memory: 3Gi → 4Gi под рост SD-метаданных и буферов.
     resources:
@@ -295,7 +295,7 @@ victoria-metrics-operator:
     enabled: true
     minAvailable: 1
   # Memory: 2Gi давало OOMKilled (Exit 137) — оператор держит in-memory кэш client-go
-  # для ~1700 namespace × CRD (15+ контроллеров с worker count: 15 каждый).
+  # для ~800 namespace × CRD (15+ контроллеров с worker count: 15 каждый).
   resources:
     limits:
       cpu: "2"
