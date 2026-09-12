@@ -1,7 +1,7 @@
 # Создание сервисного аккаунта для управления Kubernetes
 resource "yandex_iam_service_account" "sa_k8s_editor" {
   folder_id = var.folder_id
-  name      = "sa-k8s-editor" # Имя сервисного аккаунта
+  name      = "sa-performance-test-alerts-victoriametrics" # Имя сервисного аккаунта (с префиксом проекта, так как имя глобально в облаке)
 }
 
 # Назначение роли "editor" сервисному аккаунту на уровне папки
@@ -135,7 +135,7 @@ resource "helm_release" "traefik" {
   name             = "traefik"
   chart            = "traefik"
   repository       = "https://traefik.github.io/charts"
-  version          = "41.3.0"
+  version          = "41.4.0"
   namespace        = "traefik"
   create_namespace = true
 
