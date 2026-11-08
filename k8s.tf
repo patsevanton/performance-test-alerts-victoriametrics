@@ -31,9 +31,12 @@ resource "yandex_kubernetes_cluster" "vmalert" {
     regional {
       region = "ru-central1" # Регион размещения мастера (3 зоны отказоустойчивости)
 
+      # Региональный master требует ровно три зоны. Берём a/d/e, как в остальных
+      # кластерах этого облака: ru-central1-b выключена и не принимает новые
+      # ресурсы, а мастер в ru-central1-e создаётся штатно.
       location {
-        zone      = local.subnet_b_zone # Зона размещения мастера
-        subnet_id = local.subnet_b_id   # Подсеть для мастера
+        zone      = local.subnet_a_zone # Зона размещения мастера
+        subnet_id = local.subnet_a_id   # Подсеть для мастера
       }
 
       location {
@@ -84,9 +87,8 @@ resource "yandex_kubernetes_node_group" "k8s_node_group" {
 
   allocation_policy {
     # Распределение нод по зонам отказоустойчивости
-    location { zone = local.subnet_b_zone }
+    location { zone = local.subnet_a_zone }
     location { zone = local.subnet_d_zone }
-    location { zone = local.subnet_e_zone }
   }
 
   instance_template {
@@ -101,9 +103,8 @@ resource "yandex_kubernetes_node_group" "k8s_node_group" {
     network_interface {
       nat = false # Публичные IP на нодах выключены; исходящий трафик через NAT-шлюз (см. net.tf)
       subnet_ids = [
-        local.subnet_b_id,
-        local.subnet_d_id,
-        local.subnet_e_id
+        local.subnet_a_id,
+        local.subnet_d_id
       ]
     }
 
